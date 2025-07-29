@@ -1,0 +1,1830 @@
+/* Reset and mobile viewport handling */
+* {
+  box-sizing: border-box;
+}
+
+html {
+  height: 100%;
+  height: 100dvh; /* Dynamic viewport height for modern browsers */
+  height: -webkit-fill-available; /* Fallback for older browsers */
+}
+
+/* Support for iOS Safari */
+@supports (-webkit-touch-callout: none) {
+  html {
+    height: -webkit-fill-available;
+  }
+  
+  /* Safari-specific flexbox fixes */
+  .main-split-container {
+    min-height: -webkit-fill-available;
+  }
+  
+  .left-panel,
+  .right-panel {
+    min-height: 0;
+  }
+  
+  /* Force Safari to properly handle the right panel scrolling */
+  .right-panel {
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  .right-panel > *:not(h4):not(.panel-toggle-btn) {
+    height: 0; /* Safari needs explicit height for flex child to scroll */
+    min-height: 0;
+  }
+}
+
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  height: 100%;
+  height: 100dvh; /* Dynamic viewport height */
+  height: -webkit-fill-available; /* iOS Safari fallback */
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  overflow: hidden; /* Prevent page-level scrolling */
+}
+
+/* Counter section should be fixed height */
+.counter {
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1000;
+  background: white;
+  border-bottom: 1px solid #dee2e6;
+  padding: 8px 16px;
+}
+
+.counter strong {
+  color: #0d6efd;
+}
+
+.leaflet-popup-content {
+  position: relative;
+  min-width: 300px;
+  max-width: 400px;
+  width: auto;
+  padding: 10px;
+  box-sizing: border-box;
+  overflow: visible;
+}
+
+.leaflet-popup-content-wrapper {
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+}
+
+.leaflet-popup {
+  margin-bottom: 20px;
+}
+
+.leaflet-popup-content .btn {
+  margin-top: 5px;
+  margin-right: 5px;
+}
+
+.leaflet-popup-content .completed-marker {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  background-color: #28a745;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: bold;
+  z-index: 1000; /* Add this line to ensure it stays on top */
+  pointer-events: none;
+}
+
+.leaflet-popup-content .marker-card {
+  position: relative;
+  transition: all 0.3s ease;
+}
+
+.leaflet-popup-content .marker-card.completed {
+  opacity: 0.7;
+  background-color: #f8f9fa;
+  border-radius: 5px;
+  padding: 5px;
+}
+
+.loading-indicator {
+  display: none;
+  margin-left: 5px;
+  border: 2px solid #f3f3f3;
+  border-top: 2px solid #3498db;
+  border-radius: 50%;
+  width: 12px;
+  height: 12px;
+  animation: spin 1s linear infinite;
+  vertical-align: middle;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.comment-container {
+  margin: 10px 0;
+  padding: 10px;
+  background-color: #f8f9fa;
+  border-radius: 5px;
+}
+
+.comment-label {
+  font-weight: 600;
+  margin-bottom: 5px;
+}
+
+/* Completely new comment content styling */
+.comment-display-box {
+  background: white;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  padding: 8px;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.3;
+  min-height: 32px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Clean, simple comment styling */
+.comment-display-box .text-muted {
+  color: #6c757d;
+  font-style: italic;
+}
+
+.comment-timestamp {
+  font-size: 12px;
+  color: #6c757d;
+  font-style: italic;
+}
+
+.image-upload-section {
+  margin: 10px 0;
+  padding: 10px;
+  background-color: #f8f9fa;
+  border-radius: 5px;
+}
+
+.image-display {
+  margin-top: 10px;
+}
+
+.documents-display {
+  margin-top: 10px;
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.document-list {
+  margin-top: 10px;
+}
+
+.document-list ol {
+  margin-bottom: 0;
+  padding-left: 20px;
+  list-style-type: decimal;
+}
+
+.document-list li {
+  display: flex !important;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid #f0f0f0;
+  font-size: 0.85rem;
+}
+
+.document-list li:last-child {
+  border-bottom: none;
+}
+
+.document-list a {
+  color: #007bff;
+  text-decoration: none;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.document-list a:hover {
+  text-decoration: underline;
+}
+
+.image-preview {
+  max-width: 100%;
+  max-height: 200px;
+  margin-top: 10px;
+  border-radius: 4px;
+  border: 1px solid #dee2e6;
+}
+
+.image-list {
+  margin-top: 10px;
+}
+
+.image-list ol {
+  list-style-type: none;
+  counter-reset: item;
+  padding-left: 0;
+  margin-bottom: 0;
+}
+
+.image-list li {
+  counter-increment: item;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px;
+  background-color: white;
+  border-radius: 4px;
+  border: 1px solid #dee2e6;
+}
+
+.image-list li:before {
+  content: counter(item) ".";
+  margin-right: 8px;
+  font-weight: bold;
+  color: #495057;
+}
+
+.image-list a {
+  color: #0d6efd;
+  text-decoration: none;
+  flex-grow: 1;
+}
+
+.image-list a:hover {
+  text-decoration: underline;
+}
+
+.map-toggle {
+  position: absolute !important;
+  top: 10px !important; /* Match routing control position */
+  right: 44px !important; /* Move left to avoid routing control */
+  z-index: 1000 !important;
+  background: white !important;
+  padding: 6px !important; /* Reduced padding for icon-only button */
+  border-radius: 4px !important;
+  box-shadow: 0 1px 5px rgba(0,0,0,0.2) !important;
+  cursor: pointer !important;
+  font-size: 14px !important;
+  border: 1px solid #dee2e6 !important;
+  width: 30px !important; /* Fixed width for square button */
+  height: 30px !important; /* Fixed height for square button */
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  margin: 0 !important;
+  /* Safari-specific fixes */
+  -webkit-transform: translateZ(0) !important;
+  transform: translateZ(0) !important;
+  -webkit-backface-visibility: hidden !important;
+  backface-visibility: hidden !important;
+}
+
+.map-toggle:hover {
+  background-color: #f8f9fa;
+}
+
+.btn-sm {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.875rem;
+}
+
+.btn-group-sm .btn {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.875rem;
+}
+
+.btn i {
+  margin-right: 5px;
+}
+
+#file-input {
+  display: none;
+}
+
+.upload-button .loading-indicator {
+  margin-left: 5px;
+}
+
+.popup-header {
+  border-bottom: 1px solid #dee2e6;
+  padding-bottom: 8px;
+  margin-bottom: 10px;
+  position: relative;
+}
+
+.popup-footer {
+  border-top: 1px solid #dee2e6;
+  padding-top: 10px;
+  margin-top: 10px;
+}
+
+.info-item {
+  margin-bottom: 5px;
+}
+
+.info-label {
+  font-weight: 600;
+  color: #495057;
+}
+
+.auth-container {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  z-index: 1000;
+  background: white;
+  padding: 5px;
+  border-radius: 4px;
+  box-shadow: 0 1px 5px rgba(0,0,0,0.2);
+  max-width: 300px;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.user-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.logout-btn {
+  margin-left: auto;
+}
+
+#loading-screen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.loading-container {
+  text-align: center;
+  max-width: 400px;
+  width: 90%;
+  padding: 2rem;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+}
+
+.app-logo {
+  margin-bottom: 2rem;
+}
+
+.progress-container {
+  width: 100%;
+}
+
+.spinner {
+  width: 50px;
+  height: 50px;
+  border: 5px solid #f3f3f3;
+  border-top: 5px solid #3498db;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 15px;
+}
+
+/* New styles for disabled state */
+.disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.marker-card.completed {
+  background-color: #f8f9fa;
+  color: #6c757d;
+}
+
+.marker-card.completed .info-label {
+  color: #adb5bd;
+}
+
+.marker-card.completed .comment-content {
+  background-color: #f1f1f1;
+}
+
+.marker-card.completed .image-upload-section {
+  background-color: #e9ecef;
+}
+
+.legend {
+  display: flex;
+  gap: 10px;
+  margin-left: 20px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+}
+
+.legend-icon {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid #dee2e6;
+}
+
+.legend-icon.airport {
+  background-color: #2A81CB; /* Blue marker color */
+}
+
+.legend-icon.done {
+  background-color: #CB2B3E; /* Red marker color */
+}
+
+.legend-icon.landingsplass {
+  background-color: #2AAD27; /* Green marker color */
+}
+
+.legend-icon.kalk {
+  background-color: #FFA500; /* Orange marker color */
+}
+
+.counter {
+    padding: 8px;
+    background: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
+    position: relative;
+}
+
+.counter-container {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 20px;
+}
+  
+.counters {
+    font-size: 12px;
+    text-align: center;  /* Changed from left to center */
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+  justify-content: center;
+  align-items: center;
+}
+
+@media (min-width: 768px) {
+.counter-container {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+    }
+    
+    .counters {
+        text-align: center;
+    }
+    
+      .legend {
+    justify-content: flex-end;
+    gap: 20px;
+  }
+  
+  .legend-item {
+    font-size: 11px;
+  }
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+}
+
+.legend-icon {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Adjust the icon size in the legend */
+.legend-icon .awesome-marker {
+  transform: scale(0.8);
+}
+
+.legend-icon.airport {
+  background-color: #2A81CB; /* Blue marker color */
+  color: white;
+  border-radius: 50%;
+  padding: 4px;
+  text-align: center;
+  width: 16px;
+  height: 16px;
+  line-height: 16px;
+  font-size: 10px;
+}
+
+.legend-icon.done {
+  background-color: #CB2B3E; /* Red marker color */
+  color: white;
+  border-radius: 50%;
+  padding: 4px;
+  text-align: center;
+  width: 16px;
+  height: 16px;
+  line-height: 16px;
+  font-size: 10px;
+}
+
+.legend-icon.landingsplass {
+  background-color: #2AAD27; /* Green marker color */
+  color: white;
+  border-radius: 50%;
+  padding: 4px;
+  text-align: center;
+  width: 16px;
+  height: 16px;
+  line-height: 16px;
+  font-size: 10px;
+}
+
+.legend-icon.kalk {
+  background-color: #FFA500; /* Orange marker color */
+  color: white;
+  border-radius: 50%;
+  padding: 4px;
+  text-align: center;
+  width: 16px;
+  height: 16px;
+  line-height: 16px;
+  font-size: 10px;
+}
+
+/* Styles for landingsplass labels */
+.landingsplass-label {
+  background-color: rgba(255, 255, 255, 0.8);
+  border: 1px solid #2AAD27;
+  border-radius: 4px;
+  padding: 2px 5px;
+  font-size: 12px;
+  font-weight: bold;
+  color: #000000;
+  text-shadow: 0 0 2px white;
+  margin-top: 5px;
+}
+
+/* Styles for airport tooltips */
+.airport-tooltip {
+  background-color: rgba(255, 255, 255, 0.9);
+  border: 1px solid #2A81CB;
+  border-radius: 4px;
+  padding: 3px 6px;
+  font-size: 12px;
+  font-weight: bold;
+  color: #000000;
+  text-shadow: 0 0 2px white;
+  margin-bottom: 5px;
+}
+
+/* For completed airports (red markers) */
+.airport-tooltip.completed {
+  border-color: #CB2B3E;
+  color: #CB2B3E;
+}
+
+/* New styles for associations */
+.association-section {
+  margin: 10px 0;
+  padding: 4px;
+  background-color: #f8f9fa;
+  border-radius: 5px;
+}
+
+.association-list {
+  margin-top: 5px;
+  padding-left: 3px;
+}
+
+.association-list li {
+  margin-bottom: 3px;
+}
+
+.association-list ul {
+  padding-left: 20px;
+}
+
+.association-list li {
+  padding: 3px 0;
+  margin-left: 0;
+  text-align: left;
+}
+
+.association-list li:last-child {
+  border-bottom: none;
+}
+
+.association-list .text-muted {
+  font-size: 0.9em;
+  color: #6c757d;
+  margin-left: 5px;
+}
+
+/* Add this to your existing CSS */
+.delete-association-btn {
+  padding: 0.15rem 0.3rem !important;
+  font-size: 0.7rem !important;
+  border: 1px solid #dc3545 !important;
+  color: #dc3545 !important;
+  background-color: transparent !important;
+  border-radius: 4px;
+  margin-left: 8px;
+  opacity: 0.7;
+  transition: all 0.2s;
+}
+
+.delete-association-btn:hover {
+  opacity: 1;
+  background-color: rgba(220, 53, 69, 0.1) !important;
+}
+
+.delete-association-btn i {
+  margin-right: 0 !important;
+}
+
+.connection-line {
+      stroke: #CB2B3E !important;
+      stroke-width: 3px !important;
+      stroke-dasharray: 5, 5 !important;
+      opacity: 0.6 !important;
+    }
+    
+.user-location-icon {
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: 50%;
+  padding: 4px;
+  box-shadow: 0 0 5px rgba(0,0,0,0.3);
+  transform: translate(-16px, -32px);
+}
+
+/* Connection toggle button styling */
+#toggle-all-connections {
+  font-size: 0.7rem !important;
+  padding: 0.25rem 0.5rem !important;
+  white-space: nowrap;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+#toggle-all-connections:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* Removed - now using unified .comment-content class */
+
+/* Main split container should take remaining space */
+.main-split-container {
+  display: flex;
+  flex-direction: row;
+  flex: 1;
+  min-height: 400px;
+  overflow: hidden; /* Prevent container-level scrolling */
+}
+
+.left-panel {
+  flex: 0 0 70%;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.right-panel {
+  flex: 0 0 30%;
+  min-width: 280px;
+  background: #f8f9fa;
+  border-left: 1px solid #dee2e6;
+  padding: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.right-panel h4 {
+  flex-shrink: 0;
+  margin: 0;
+  padding: 16px 0 8px 16px;
+  border-bottom: 1px solid #dee2e6;
+  background: #f8f9fa;
+}
+
+.right-panel > *:not(h4):not(.panel-toggle-btn) {
+  flex: 1;
+  min-height: 0; /* Important for Safari flexbox */
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0 0 16px 16px;
+  /* Add webkit scrolling for smooth scrolling on iOS */
+  -webkit-overflow-scrolling: touch;
+}
+
+#map {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  min-height: 400px;
+  background: #f0f0f0;
+}
+
+/* Mobile specific adjustments (tablets and phones) */
+@media (max-width: 900px) {
+  html, body {
+    height: 100vh;
+    height: 100dvh;
+    height: -webkit-fill-available;
+  }
+  
+  .main-split-container {
+    flex-direction: column;
+    height: calc(100vh - 70px) !important; /* Fixed height calculation */
+    max-height: calc(100vh - 70px) !important;
+    overflow: hidden;
+  }
+  
+  /* Map section - 50% of available space on mobile */
+  .left-panel {
+    flex: 1 !important; /* Equal flex weight for 50/50 split */
+    height: auto !important;
+    min-height: 200px; /* Minimum height as fallback */
+    overflow: hidden;
+  }
+  
+  /* List section - 50% of available space on mobile */
+  .right-panel {
+    flex: 1 !important; /* Equal flex weight for 50/50 split */
+    height: auto !important;
+    min-width: 0;
+    max-width: 100%;
+    border-left: none;
+    border-top: 1px solid #dee2e6;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  
+  .right-panel h4 {
+    flex-shrink: 0;
+    padding: 12px 0 8px 16px; /* Reduced top padding for mobile */
+    margin: 0;
+    border-bottom: 1px solid #dee2e6;
+    font-size: 1.1rem; /* Slightly smaller on mobile */
+  }
+  
+  /* Mobile scrolling for right panel content */
+  .right-panel .fremdriftsplan-content {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    padding: 0 0 12px 12px; /* Reduced padding for mobile */
+  }
+  
+  .right-panel > div:not(h4) {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    padding: 0 0 12px 12px;
+  }
+  
+  .counter-container {
+    flex-direction: column;
+    gap: 8px; /* Reduced gap for mobile */
+    align-items: center;
+  }
+  
+  .counter {
+    position: relative;
+    transition: all 0.3s ease;
+    overflow: hidden;
+  }
+  
+  .counter.collapsed {
+    height: 40px !important;
+    padding: 4px 8px !important;
+  }
+  
+  .counter.collapsed .counter-container {
+    opacity: 0;
+    transform: translateY(-10px);
+    pointer-events: none;
+  }
+  
+  .mobile-collapse-toggle {
+    position: absolute;
+    top: 50%;
+    right: 8px;
+    transform: translateY(-50%);
+    background: rgba(0, 123, 255, 0.8);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    cursor: pointer;
+    z-index: 1001;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  }
+  
+  .mobile-collapse-toggle:hover {
+    background: rgba(0, 123, 255, 1);
+    transform: translateY(-50%) scale(1.05);
+  }
+  
+  .mobile-collapse-toggle i {
+    transition: transform 0.3s ease;
+  }
+  
+  .counter.collapsed .mobile-collapse-toggle i {
+    transform: rotate(180deg);
+  }
+  
+  /* Adjust main container height when counter is collapsed */
+  .counter.collapsed ~ .main-split-container {
+    height: calc(100vh - 40px) !important;
+    max-height: calc(100vh - 40px) !important;
+  }
+  
+  /* When collapsed, both panels still share 50/50 but in expanded container */
+  .counter.collapsed ~ .main-split-container .left-panel {
+    flex: 1 !important; /* Still 50/50 split */
+    height: auto !important;
+  }
+  
+  .counter.collapsed ~ .main-split-container .right-panel {
+    flex: 1 !important; /* Still 50/50 split */
+    height: auto !important;
+  }
+}
+
+/* Specific iPad adjustments */
+@media (min-width: 768px) and (max-width: 1024px) {
+  /* iPad portrait and landscape */
+  html, body {
+    height: 100vh;
+    height: 100dvh;
+    height: -webkit-fill-available;
+  }
+  
+  .main-split-container {
+    height: 100%;
+  }
+  
+  /* iPad specific: better split for larger screen */
+  .left-panel {
+    flex: 0 0 65%;
+  }
+  
+  .right-panel {
+    flex: 0 0 35%;
+    min-width: 320px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  
+  .right-panel h4 {
+    flex-shrink: 0;
+  }
+  
+  /* iPad-specific scrolling fix for right panel content */
+  .right-panel .fremdriftsplan-content {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    height: calc(100vh - 120px);
+    max-height: calc(100vh - 120px);
+  }
+  
+  /* Fallback for any other content in right panel */
+  .right-panel > div:not(h4) {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* Mobile UI Toggle Button */
+.mobile-ui-toggle {
+  transition: all 0.3s ease !important;
+}
+
+.mobile-ui-toggle:hover {
+  transform: scale(1.1) !important;
+  background: #0056b3 !important;
+}
+
+.mobile-ui-toggle:active {
+  transform: scale(0.95) !important;
+}
+
+/* Enhanced mobile layout when UI is minimized */
+@media (max-width: 900px) {
+  .main-split-container.panel-minimized {
+    height: 100vh !important;
+    max-height: 100vh !important;
+  }
+
+  .main-split-container.panel-minimized .left-panel {
+    height: 100vh !important;
+    flex: 1 !important;
+  }
+
+  /* Ensure map container expands to fill available space */
+  .main-split-container.panel-minimized .left-panel > div {
+    height: 100vh !important;
+    min-height: 100vh !important;
+  }
+
+  /* Override MapContainer's inline minHeight style specifically */
+  .main-split-container.panel-minimized .left-panel > div[style*="minHeight"] {
+    min-height: 100vh !important;
+  }
+
+  /* Force Leaflet container to full height when UI is minimized */
+  .main-split-container.panel-minimized .left-panel .leaflet-container {
+    height: 100vh !important;
+    min-height: 100vh !important;
+  }
+
+  /* Also target the map wrapper div specifically */
+  .main-split-container.panel-minimized .left-panel > div[style] {
+    height: 100vh !important;
+    min-height: 100vh !important;
+  }
+
+  /* Aggressive override - force all direct children in left-panel to full height */
+  .main-split-container.panel-minimized .left-panel > * {
+    height: 100vh !important;
+    min-height: 100vh !important;
+    max-height: 100vh !important;
+  }
+
+  /* Force the Leaflet map pane to full height as well */
+  .main-split-container.panel-minimized .left-panel .leaflet-map-pane {
+    height: 100vh !important;
+  }
+
+  .main-split-container.panel-minimized .right-panel {
+    display: none !important;
+  }
+
+  /* Handle case where counter is also collapsed (if that functionality exists) */
+  .counter.collapsed ~ .main-split-container.panel-minimized {
+    height: 100vh !important;
+  }
+
+  .counter.collapsed ~ .main-split-container.panel-minimized .left-panel {
+    height: 100vh !important;
+  }
+
+  /* Override map container's minHeight when UI is minimized */
+  .counter.collapsed ~ .main-split-container.panel-minimized .left-panel > div {
+    height: 100vh !important;
+    min-height: 100vh !important;
+  }
+}
+
+/* iPhone and small mobile devices */
+@media (max-width: 767px) {
+  html, body {
+    height: 100vh;
+    height: 100dvh;
+    height: -webkit-fill-available;
+  }
+  
+  .counter {
+    padding: 4px 8px; /* More compact on iPhone */
+    font-size: 0.9rem;
+  }
+  
+  .counter-container {
+    gap: 6px;
+    flex-direction: column;
+  }
+  
+  /* Compact legend for iPhone */
+  .legend {
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+  }
+  
+  .legend-item {
+    font-size: 0.75rem;
+  }
+  
+  .main-split-container {
+    height: calc(100vh - 60px) !important; /* More precise height for iPhone */
+    max-height: calc(100vh - 60px) !important;
+    overflow: hidden !important;
+  }
+  
+  /* Map section - 50% of available space on iPhone */
+  .left-panel {
+    flex: 1 !important; /* Equal flex weight for 50/50 split */
+    height: auto !important;
+    min-height: 180px !important; /* Smaller minimum for iPhone */
+    overflow: hidden !important;
+  }
+  
+  /* List section - 50% of available space on iPhone */
+  .right-panel {
+    flex: 1 !important; /* Equal flex weight for 50/50 split */
+    height: auto !important;
+    overflow: hidden !important;
+  }
+  
+  .right-panel h4 {
+    padding: 8px 0 6px 12px !important; /* Even more compact */
+    font-size: 1rem !important;
+    background: #f8f9fa;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  
+  /* iPhone-optimized scrolling */
+  .right-panel .fremdriftsplan-content {
+    padding: 0 0 8px 8px !important; /* Tighter padding */
+  }
+  
+  .right-panel > div:not(h4) {
+    padding: 0 0 8px 8px !important;
+  }
+  
+  /* Optimize cards for iPhone */
+  .draggable-card {
+    margin-bottom: 0.75rem !important;
+    font-size: 0.8rem !important;
+  }
+  
+  .draggable-card .card-body {
+    padding: 0.75rem !important;
+  }
+  
+  .counter.collapsed {
+    height: 36px !important;
+    padding: 2px 6px !important;
+  }
+  
+  .mobile-collapse-toggle {
+    width: 28px;
+    height: 28px;
+    font-size: 12px;
+    right: 6px;
+  }
+  
+  .counter.collapsed ~ .main-split-container {
+    height: calc(100vh - 36px) !important;
+    max-height: calc(100vh - 36px) !important;
+  }
+  
+  /* When collapsed on iPhone, both panels still share 50/50 but in expanded container */
+  .counter.collapsed ~ .main-split-container .left-panel {
+    flex: 1 !important; /* Still 50/50 split */
+    height: auto !important;
+  }
+  
+  .counter.collapsed ~ .main-split-container .right-panel {
+    flex: 1 !important; /* Still 50/50 split */
+    height: auto !important;
+  }
+}
+
+/* Drag and drop styles */
+.drag-handle {
+  cursor: grab;
+  color: #6c757d;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+  font-size: 1rem;
+  padding: 0.25rem;
+  margin-right: 0.5rem;
+}
+
+.drag-handle:hover {
+  opacity: 1;
+  color: #495057;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.sortable-ghost {
+  opacity: 0.5;
+  background: #f8f9fa;
+  border: 2px dashed #dee2e6;
+}
+
+.sortable-chosen {
+  transform: rotate(2deg);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.sortable-drag {
+  transform: rotate(5deg);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.25);
+  z-index: 1000;
+}
+
+.fremdriftsplan-content {
+  /* This will be the scrollable container */
+  transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), 
+              opacity 0.3s ease;
+  transform: translateX(0);
+}
+
+.fremdriftsplan-list {
+  min-height: 100px;
+}
+
+.draggable-card {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.draggable-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+/* Safari Desktop-only fixes - exclude touch devices like iPad */
+@supports (-webkit-appearance: none) and (not (-ms-ime-align: auto)) {
+  
+  /* Only target desktop Safari - exclude iPads and other touch devices */
+  @media (min-width: 1025px) and (hover: hover) and (pointer: fine) {
+    html, body {
+      height: 100vh !important;
+      height: 100dvh !important;
+      height: -webkit-fill-available !important;
+    }
+    
+    body .main-split-container {
+      height: calc(100vh - 60px) !important;
+      flex-direction: row !important;
+      display: flex !important;
+      overflow: hidden !important;
+    }
+    
+    body .left-panel {
+      flex: 0 0 70% !important;
+      height: calc(100vh - 60px) !important;
+      display: flex !important;
+      flex-direction: column !important;
+      overflow: hidden !important;
+    }
+    
+    body .right-panel {
+      flex: 0 0 30% !important;
+      height: calc(100vh - 60px) !important;
+      display: flex !important;
+      flex-direction: column !important;
+      overflow: hidden !important;
+    }
+    
+    body .right-panel h4 {
+      flex-shrink: 0 !important;
+      margin: 0 !important;
+      padding: 16px 0 16px 16px !important;
+      border-bottom: 1px solid #dee2e6 !important;
+    }
+    
+    /* Target the specific content container that gets added dynamically */
+    body .right-panel .fremdriftsplan-content {
+      flex: 1 !important;
+      height: calc(100vh - 120px) !important;
+      max-height: calc(100vh - 120px) !important;
+      overflow-y: scroll !important;
+      overflow-x: hidden !important;
+      -webkit-overflow-scrolling: touch !important;
+      position: relative !important;
+    }
+    
+    /* Fallback for any other direct children of right-panel */
+    body .right-panel > div:not(h4) {
+      flex: 1 !important;
+      height: calc(100vh - 120px) !important;
+      max-height: calc(100vh - 120px) !important;
+      overflow-y: scroll !important;
+      overflow-x: hidden !important;
+      -webkit-overflow-scrolling: touch !important;
+    }
+    
+    body #map {
+      flex: 1 !important;
+      height: calc(100vh - 60px) !important;
+      width: 100% !important;
+      min-height: calc(100vh - 60px) !important;
+      max-height: calc(100vh - 60px) !important;
+    }
+  }
+}
+
+/* Hide toggle button on desktop */
+@media (min-width: 901px) {
+  .mobile-collapse-toggle {
+    display: none !important;
+  }
+}
+
+/* Fremdriftsplan Panel Toggle Styles */
+.panel-toggle-btn {
+  position: absolute;
+  background: rgba(108, 117, 125, 0.7);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  cursor: pointer;
+  z-index: 1002;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  opacity: 0.8;
+}
+
+.panel-toggle-btn:hover {
+  background: rgba(108, 117, 125, 0.9);
+  opacity: 1;
+}
+
+.panel-toggle-btn i {
+  transition: none;
+}
+
+/* Mobile View - Panel moves down/up */
+@media (max-width: 900px) {
+  .panel-toggle-btn {
+    top: 6px;
+    right: 6px;
+    width: 20px;
+    height: 20px;
+    font-size: 10px;
+  }
+  
+
+  
+  .right-panel.panel-minimized {
+    transform: translateY(calc(100% - 40px)) !important;
+    transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  .right-panel.panel-minimized h4 {
+    background: rgba(248, 249, 250, 0.95);
+    backdrop-filter: blur(10px);
+    margin: 0;
+    padding: 8px 0 8px 12px;
+    border-radius: 6px 6px 0 0;
+    font-size: 0.85rem;
+    box-shadow: 0 -2px 6px rgba(0, 0, 0, 0.1);
+    position: relative;
+  }
+  
+  .right-panel.panel-minimized .fremdriftsplan-content {
+    opacity: 0;
+    pointer-events: none;
+    height: 0;
+    overflow: hidden;
+    transform: translateY(100%);
+  }
+  
+  /* When panel is minimized, left panel (map) takes most of the space */
+  .main-split-container.panel-minimized .left-panel {
+    flex: 1 !important;
+  }
+  
+  /* When panel is minimized, right panel should be very small */
+  .main-split-container.panel-minimized .right-panel {
+    flex: 0 0 40px !important;
+    min-height: 40px !important;
+    max-height: 40px !important;
+    overflow: visible !important;
+  }
+  
+  /* Handle interaction with collapsed counter */
+  .counter.collapsed ~ .main-split-container.panel-minimized .left-panel {
+    height: calc(100vh - 80px) !important;
+  }
+  
+  .main-split-container.panel-minimized .left-panel {
+    height: calc(100vh - 110px) !important;
+  }
+  
+  .panel-minimized .panel-toggle-btn {
+    top: 10px;
+    right: 8px;
+  }
+  
+  .panel-minimized .panel-toggle-btn i {
+    transform: none;
+  }
+}
+
+/* Tablet and Desktop View - Panel moves right/left */
+@media (min-width: 901px) {
+  .panel-toggle-btn {
+    top: 50%;
+    left: 6px;
+    transform: translateY(-50%);
+  }
+  
+  .right-panel.panel-minimized {
+    flex: 0 0 40px !important;
+    min-width: 40px !important;
+    max-width: 40px !important;
+    overflow: hidden;
+  }
+  
+  .right-panel.panel-minimized h4 {
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    padding: 12px 4px;
+    margin: 0;
+    font-size: 0.75rem;
+    text-align: center;
+    background: rgba(248, 249, 250, 0.95);
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0 6px 6px 0;
+    white-space: nowrap;
+  }
+  
+  .right-panel.panel-minimized .fremdriftsplan-content {
+    opacity: 0;
+    pointer-events: none;
+    overflow: hidden;
+    width: 0;
+    height: 0;
+    transform: translateX(100%);
+    transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), 
+                opacity 0.3s ease;
+  }
+  
+  /* When panel is minimized, left panel (map) expands to take available space */
+  .main-split-container.panel-minimized .left-panel {
+    flex: 1 !important;
+  }
+  
+  .panel-minimized .panel-toggle-btn {
+    left: 10px;
+  }
+  
+  .panel-minimized .panel-toggle-btn i {
+    transform: none;
+  }
+}
+
+/* ========== USER LOGS MODAL STYLES ========== */
+#userLogsModal .modal-dialog {
+  max-width: 95vw;
+}
+
+#userLogsModal .modal-header {
+  background: linear-gradient(135deg, #2c3e50, #34495e);
+  color: white;
+  border-bottom: none;
+  padding: 1rem 1.5rem;
+}
+
+#userLogsModal .modal-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+#userLogsModal .btn-close {
+  filter: invert(1);
+}
+
+#userLogsModal .modal-body {
+  padding: 1.5rem;
+  background: #f8f9fa;
+}
+
+/* Filter section styling */
+#userLogsModal .row.mb-3 .form-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #495057;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 0.25rem;
+}
+
+#userLogsModal .form-select,
+#userLogsModal .form-control {
+  font-size: 0.8rem;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  padding: 0.375rem 0.75rem;
+  height: auto;
+}
+
+#userLogsModal .form-select:focus,
+#userLogsModal .form-control:focus {
+  border-color: #007bff;
+  box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.15);
+}
+
+/* Filter buttons */
+#userLogsModal #applyLogFilters,
+#userLogsModal #clearLogFilters {
+  font-size: 0.8rem;
+  padding: 0.5rem 1rem;
+  font-weight: 500;
+  border-radius: 6px;
+}
+
+/* Table styling */
+#userLogsModal .table-responsive {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
+}
+
+#userLogsModal .table {
+  margin-bottom: 0;
+  font-size: 0.75rem;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+#userLogsModal .table thead {
+  background: linear-gradient(135deg, #495057, #6c757d);
+}
+
+#userLogsModal .table thead th {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: white;
+  border: none;
+  padding: 0.75rem 0.5rem;
+  white-space: nowrap;
+}
+
+#userLogsModal .table tbody td {
+  font-size: 0.72rem;
+  padding: 0.6rem 0.5rem;
+  border-color: #f1f3f4;
+  color: #2c3e50;
+  line-height: 1.4;
+}
+
+#userLogsModal .table tbody tr:hover {
+  background-color: rgba(0, 123, 255, 0.04);
+}
+
+/* Badge styling in logs */
+#userLogsModal .badge {
+  font-size: 0.65rem;
+  font-weight: 500;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+/* Timestamp column */
+#userLogsModal .table tbody td:nth-child(1) {
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  color: #6c757d;
+  font-size: 0.7rem;
+}
+
+/* User email column */
+#userLogsModal .table tbody td:nth-child(2) {
+  font-weight: 500;
+  color: #495057;
+}
+
+/* Name and details columns with word wrapping */
+#userLogsModal .table tbody td:nth-child(5),
+#userLogsModal .table tbody td:nth-child(6) {
+  max-width: 150px;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  hyphens: auto;
+}
+
+/* Pagination styling */
+#userLogsModal #logsPagination {
+  background: white;
+  padding: 1rem;
+  border-radius: 0 0 8px 8px;
+  margin-top: 0 !important;
+  border-top: 1px solid #f1f3f4;
+}
+
+#userLogsModal #logsPagination .text-muted {
+  font-size: 0.75rem;
+  color: #6c757d !important;
+}
+
+#userLogsModal #loadMoreLogs {
+  font-size: 0.75rem;
+  padding: 0.4rem 0.8rem;
+  font-weight: 500;
+}
+
+/* Loading indicator */
+#userLogsModal #logsLoading {
+  padding: 2rem;
+}
+
+#userLogsModal #logsLoading .spinner-border {
+  width: 2rem;
+  height: 2rem;
+}
+
+/* Modal footer */
+#userLogsModal .modal-footer {
+  background: #f8f9fa;
+  border-top: 1px solid #dee2e6;
+  padding: 1rem 1.5rem;
+}
+
+#userLogsModal .modal-footer .btn {
+  font-size: 0.85rem;
+  padding: 0.5rem 1.25rem;
+  font-weight: 500;
+}
+
+/* Responsive adjustments for logs modal */
+@media (max-width: 768px) {
+  #userLogsModal .modal-dialog {
+    max-width: 98vw;
+    margin: 0.5rem;
+  }
+  
+  /* Enable horizontal scrolling on mobile */
+  #userLogsModal .table-responsive {
+    border-radius: 6px;
+    margin-bottom: 0.5rem;
+  }
+  
+  #userLogsModal .table {
+    font-size: 0.7rem;
+    min-width: 700px; /* Ensure table has minimum width to trigger horizontal scroll */
+    white-space: nowrap;
+  }
+  
+  #userLogsModal .table thead th {
+    font-size: 0.65rem;
+    padding: 0.5rem 0.4rem;
+    min-width: 80px; /* Minimum column width */
+  }
+  
+  #userLogsModal .table tbody td {
+    font-size: 0.68rem;
+    padding: 0.4rem 0.4rem;
+    min-width: 80px;
+  }
+  
+  /* Adjust specific columns for mobile */
+  #userLogsModal .table tbody td:nth-child(1) { /* Timestamp */
+    min-width: 120px;
+  }
+  
+  #userLogsModal .table tbody td:nth-child(2) { /* User email */
+    min-width: 140px;
+  }
+  
+  #userLogsModal .table tbody td:nth-child(3), /* Action */
+  #userLogsModal .table tbody td:nth-child(4) { /* Target type */
+    min-width: 100px;
+  }
+  
+  #userLogsModal .table tbody td:nth-child(5), /* Name */
+  #userLogsModal .table tbody td:nth-child(6) { /* Details */
+    min-width: 120px;
+    max-width: 200px;
+    white-space: normal;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+  }
+}
+
+/* ========== COLOR PICKER STYLES ========== */
+.color-picker-section {
+  background: #f8f9fa !important;
+  border-radius: 0.375rem !important;
+}
+
+.color-option {
+  transition: all 0.2s ease;
+  outline: none !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.color-option:hover {
+  transform: scale(1.1);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.color-option.active {
+  transform: scale(1.1);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.color-option:focus {
+  outline: 2px solid #007bff !important;
+  outline-offset: 2px;
+}
+
+/* Landingsplass permanent labels styling */
+.leaflet-tooltip.landingsplass-label {
+  background: rgba(255, 255, 255, 0.9) !important;
+  border: 1px solid #007bff !important;
+  color: #007bff !important;
+  font-weight: 600 !important;
+  font-size: 10px !important;
+  padding: 2px 4px !important;
+  border-radius: 3px !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2) !important;
+  white-space: nowrap !important;
+}
+
+.leaflet-tooltip.landingsplass-label::before {
+  border-bottom-color: #007bff !important;
+}
+
+/* Marker Cluster Styling */
+.marker-cluster-small {
+  background-color: rgba(181, 226, 140, 0.8) !important;
+  border: 2px solid rgba(110, 204, 57, 0.8) !important;
+  transition: all 0.2s ease !important;
+}
+
+.marker-cluster-small div {
+  background-color: rgba(110, 204, 57, 0.8) !important;
+  color: white !important;
+  font-weight: bold !important;
+  font-size: 12px !important;
+  transition: all 0.2s ease !important;
+}
+
+.marker-cluster-medium {
+  background-color: rgba(241, 211, 87, 0.8) !important;
+  border: 2px solid rgba(240, 194, 12, 0.8) !important;
+  transition: all 0.2s ease !important;
+}
+
+.marker-cluster-medium div {
+  background-color: rgba(240, 194, 12, 0.8) !important;
+  color: white !important;
+  font-weight: bold !important;
+  font-size: 13px !important;
+  transition: all 0.2s ease !important;
+}
+
+.marker-cluster-large {
+  background-color: rgba(253, 156, 115, 0.8) !important;
+  border: 2px solid rgba(241, 128, 23, 0.8) !important;
+  transition: all 0.2s ease !important;
+}
+
+.marker-cluster-large div {
+  background-color: rgba(241, 128, 23, 0.8) !important;
+  color: white !important;
+  font-weight: bold !important;
+  font-size: 14px !important;
+  transition: all 0.2s ease !important;
+}
+
+/* Safe cluster hover effects - no transforms to avoid Leaflet conflicts */
+.marker-cluster:hover {
+  cursor: pointer !important;
+  opacity: 0.9 !important;
+  filter: brightness(1.1) !important;
+}
+
+.marker-cluster-small:hover {
+  background-color: rgba(181, 226, 140, 1) !important;
+  border-color: rgba(110, 204, 57, 1) !important;
+  box-shadow: 0 2px 8px rgba(110, 204, 57, 0.4) !important;
+}
+
+.marker-cluster-small:hover div {
+  background-color: rgba(110, 204, 57, 1) !important;
+}
+
+.marker-cluster-medium:hover {
+  background-color: rgba(241, 211, 87, 1) !important;
+  border-color: rgba(240, 194, 12, 1) !important;
+  box-shadow: 0 2px 8px rgba(240, 194, 12, 0.4) !important;
+}
+
+.marker-cluster-medium:hover div {
+  background-color: rgba(240, 194, 12, 1) !important;
+}
+
+.marker-cluster-large:hover {
+  background-color: rgba(253, 156, 115, 1) !important;
+  border-color: rgba(241, 128, 23, 1) !important;
+  box-shadow: 0 2px 8px rgba(241, 128, 23, 0.4) !important;
+}
+
+.marker-cluster-large:hover div {
+  background-color: rgba(241, 128, 23, 1) !important;
+}
+
+/* Custom cluster colors for different zoom levels */
+.leaflet-cluster-anim .leaflet-marker-icon, .leaflet-cluster-anim .leaflet-marker-shadow {
+  transition: transform 0.3s ease-out, opacity 0.3s ease-in;
+}
+
+/* Loading spinner animation */
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Loading states */
+.loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(248, 249, 250, 0.9);
+  z-index: 1000;
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #007bff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 10px;
+}
+
+.loading-text {
+  color: #6c757d;
+  font-size: 14px;
+  text-align: center;
+}

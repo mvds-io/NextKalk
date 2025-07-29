@@ -1,0 +1,455 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { CounterData, FilterState, User } from '@/types';
+import { supabase } from '@/lib/supabase';
+import { exportCompletedLandingsplassToPDF } from '@/lib/pdfExport';
+import UserLogsModal from './UserLogsModal';
+
+interface CounterProps {
+  counterData: CounterData;
+  counties: string[];
+  filterState: FilterState;
+  onFilterChange: (newFilter: FilterState) => void;
+  user?: User | null;
+  onUserUpdate?: (user: User | null) => void;
+}
+
+export default function Counter({ 
+  counterData, 
+  counties, 
+  filterState, 
+  onFilterChange, 
+  user, 
+  onUserUpdate 
+}: CounterProps) {
+  
+  const [isLoadingConnections, setIsLoadingConnections] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [showUserLogsModal, setShowUserLogsModal] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [loginError, setLoginError] = useState('');
+  const [userPermissions, setUserPermissions] = useState<any>({});
+  const [isExportingPDF, setIsExportingPDF] = useState(false);
+
+  // Load user permissions when user changes
+  useEffect(() => {
+    if (user) {
+      getUserPermissions();
+    }
+  }, [user]);
+
+  const getUserPermissions = async () => {
+    if (!user) return {};
+    
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('email', user.email)
+        .single();
+
+      if (!error && data) {
+        const permissions = {
+          userRecord: data,
+          role: data.role || 'user',
+          canEditPriority: ['admin', 'manager'].includes(data.role),
+          canDeleteMarkers: ['admin', 'manager'].includes(data.role),
+          canViewLogs: ['admin', 'manager'].includes(data.role)
+        };
+        setUserPermissions(permissions);
+        return permissions;
+      }
+    } catch (error) {
+      console.warn('Error loading user permissions:', error);
+    }
+    
+    return {};
+  };
+
+  const handleCountyChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const county = e.target.value;
+    onFilterChange({
+      ...filterState,
+      county
+    });
+  };
+
+  const handleConnectionsToggle = async () => {
+    if (isLoadingConnections) return; // Prevent multiple clicks while loading
+    
+    setIsLoadingConnections(true);
+    
+    try {
+      // Toggle connections via global function
+      if (typeof window !== 'undefined' && (window as any).toggleAllConnections) {
+        await (window as any).toggleAllConnections();
+        onFilterChange({
+          ...filterState,
+          showConnections: !filterState.showConnections
+        });
+      }
+    } catch (error) {
+      console.error('Error toggling connections:', error);
+    } finally {
+      // Add a small delay to show the loading state
+      setTimeout(() => {
+        setIsLoadingConnections(false);
+      }, 300);
+    }
+  };
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoggingIn(true);
+    setLoginError('');
+
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
+
+      if (error) throw error;
+      setShowLoginModal(false);
+      setEmail('');
+      setPassword('');
+    } catch (error: any) {
+      setLoginError(error.message);
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    if (onUserUpdate) {
+      onUserUpdate(null);
+    }
+  };
+
+  const exportToPDF = async () => {
+    if (isExportingPDF) return;
+    
+    setIsExportingPDF(true);
+    
+    try {
+      const result = await exportCompletedLandingsplassToPDF();
+      
+      if (result.success) {
+        // Show success message (you could add a toast here)
+        console.log(`PDF rapport generert med ${result.itemsExported} utførte lasteplasser`);
+      } else {
+        // Show error message (you could add a toast here)
+        console.error('PDF export failed:', result.error);
+        alert(result.error || 'Kunne ikke generere PDF rapport');
+      }
+    } catch (error) {
+      console.error('Error exporting PDF:', error);
+      alert('Kunne ikke generere PDF rapport');
+    } finally {
+      setIsExportingPDF(false);
+    }
+  };
+
+  const showUserLogs = async () => {
+    // Check permissions first
+    if (!userPermissions.canViewLogs) {
+      alert('Du har ikke tilgang til å se logger');
+      return;
+    }
+    
+    setShowUserLogsModal(true);
+  };
+
+  // Create legend icon element like the original
+  const createLegendIcon = (color: string, iconClass: string) => (
+    <div
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: '16px',
+        height: '16px',
+        borderRadius: '50%',
+        color: 'white',
+        fontSize: '10px',
+        lineHeight: '16px',
+        textAlign: 'center',
+        backgroundColor: 
+          color === 'blue' ? '#2A81CB' :
+          color === 'red' ? '#CB2B3E' :
+          color === 'green' ? '#2AAD27' :
+          color === 'orange' ? '#FFA500' : color
+      }}
+    >
+      <i className={`fa ${iconClass}`}></i>
+    </div>
+  );
+
+  const getRoleBadgeClass = (role: string) => {
+    switch (role) {
+      case 'admin': return 'bg-danger';
+      case 'manager': return 'bg-warning';
+      default: return 'bg-secondary';
+    }
+  };
+
+  return (
+    <>
+      <div className="counter">
+        <div className="counter-container" style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
+          <div className="counters d-flex gap-3">
+            <div className="counter-item">
+              <div className="d-flex align-items-center gap-2 px-2 py-1 rounded-2" style={{ background: '#f8f9fa', border: '1px solid #e9ecef', color: '#495057', fontSize: '0.75rem', fontWeight: 500 }}>
+                <i className="fas fa-list-check" style={{ fontSize: '0.7rem', color: '#6c757d' }}></i>
+                <span>Gjenstående:</span>
+                <span className="badge bg-primary text-white" style={{ fontSize: '0.65rem', fontWeight: 500 }}>
+                  {counterData.remaining}
+                </span>
+              </div>
+            </div>
+            <div className="counter-item">
+              <div className="d-flex align-items-center gap-2 px-2 py-1 rounded-2" style={{ background: '#f8f9fa', border: '1px solid #e9ecef', color: '#495057', fontSize: '0.75rem', fontWeight: 500 }}>
+                <i className="fas fa-check-circle" style={{ fontSize: '0.7rem', color: '#6c757d' }}></i>
+                <span>Utført:</span>
+                <span className="badge bg-success text-white" style={{ fontSize: '0.65rem', fontWeight: 500 }}>
+                  {counterData.done}
+                </span>
+              </div>
+            </div>
+            <div className="counter-item">
+              <div className="d-flex align-items-center gap-2 px-2 py-1 rounded-2" style={{ background: '#f8f9fa', border: '1px solid #e9ecef', color: '#495057', fontSize: '0.75rem', fontWeight: 500 }}>
+                <i className="fas fa-map-marker-alt" style={{ fontSize: '0.7rem', color: '#6c757d' }}></i>
+                <span>Fylke:</span>
+                <select 
+                  value={filterState.county} 
+                  onChange={handleCountyChange}
+                  className="form-select form-select-sm" 
+                  style={{ fontSize: '0.7rem', minWidth: '120px', maxWidth: '150px', border: '1px solid #dee2e6' }}
+                >
+                  <option value="">Alle fylker</option>
+                  {counties.map(county => (
+                    <option key={county} value={county}>{county}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+          <div className="legend">
+            <div className="legend-item">
+              <div className="legend-icon">
+                {createLegendIcon('red', 'fa-water')}
+              </div>
+              <span>Vann</span>
+            </div>
+            <div className="legend-item">
+              <div className="legend-icon">
+                {createLegendIcon('green', 'fa-check')}
+              </div>
+              <span>Utført</span>
+            </div>
+            <div className="legend-item">
+              <div className="legend-icon">
+                {createLegendIcon('blue', 'fa-helicopter-symbol')}
+              </div>
+              <span>LP</span>
+            </div>
+            <div className="legend-item">
+              <div className="legend-icon">
+                {createLegendIcon('orange', 'fa-comment')}
+              </div>
+              <span>Kommentar</span>
+            </div>
+            <div className="legend-item">
+              <button 
+                className={`btn btn-outline-secondary btn-sm ${filterState.showConnections ? 'active' : ''}`}
+                style={{ 
+                  fontSize: '0.65rem', 
+                  padding: '0.2rem 0.4rem', 
+                  whiteSpace: 'nowrap', 
+                  borderColor: '#dee2e6',
+                  backgroundColor: filterState.showConnections ? '#007bff' : 'transparent',
+                  color: filterState.showConnections ? 'white' : '#6c757d',
+                  opacity: isLoadingConnections ? 0.7 : 1,
+                  cursor: isLoadingConnections ? 'not-allowed' : 'pointer'
+                }}
+                onClick={handleConnectionsToggle}
+                disabled={isLoadingConnections}
+              >
+                {isLoadingConnections ? (
+                  <>
+                    <span className="spinner-border spinner-border-sm me-1" style={{ width: '0.6rem', height: '0.6rem' }}></span>
+                    Laster...
+                  </>
+                ) : (
+                  <>
+                    <i className="fas fa-project-diagram" style={{ fontSize: '0.6rem' }}></i> 
+                    {filterState.showConnections ? 'Skjul forbindelser' : 'Vis forbindelser'}
+                  </>
+                )}
+              </button>
+            </div>
+            <div className="legend-item">
+              <div className="text-muted" style={{ fontSize: '0.6rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                <i className="fas fa-info-circle" style={{ fontSize: '0.55rem' }}></i>
+                <span>Høyreklikk for å legge til markør</span>
+              </div>
+            </div>
+          </div>
+
+          {/* User authentication UI in topbar */}
+          {user ? (
+            <div className="user-info-top d-flex align-items-center gap-2 ms-auto">
+              <div className="user-details d-flex align-items-center gap-2 px-2 py-1 rounded-2" style={{ background: 'rgba(255,255,255,0.1)', color: '#6c757d', fontSize: '0.75rem' }}>
+                <i className="fas fa-user-circle" style={{ fontSize: '16px' }}></i>
+                <span>{userPermissions.userRecord?.display_name || user.email?.split('@')[0]}</span>
+                {userPermissions.role && (
+                  <span className={`badge ${getRoleBadgeClass(userPermissions.role)}`} style={{ fontSize: '0.6rem', marginLeft: '0.25rem' }}>
+                    {userPermissions.role.toUpperCase()}
+                  </span>
+                )}
+              </div>
+              <button 
+                className="btn btn-sm btn-outline-success pdf-export-btn" 
+                style={{ 
+                  fontSize: '0.7rem', 
+                  padding: '0.2rem 0.5rem', 
+                  borderColor: '#28a745', 
+                  color: '#28a745',
+                  opacity: isExportingPDF ? 0.7 : 1,
+                  cursor: isExportingPDF ? 'not-allowed' : 'pointer'
+                }}
+                title="Eksporter utførte lasteplasser til PDF"
+                onClick={exportToPDF}
+                disabled={isExportingPDF}
+              >
+                {isExportingPDF ? (
+                  <span className="spinner-border spinner-border-sm" style={{ width: '0.6rem', height: '0.6rem' }}></span>
+                ) : (
+                  <i className="fas fa-file-pdf"></i>
+                )}
+              </button>
+              {userPermissions.canViewLogs && (
+                <button 
+                  className="btn btn-sm btn-outline-info logs-btn" 
+                  style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem', borderColor: '#17a2b8', color: '#17a2b8' }}
+                  title="Vis brukerlogger"
+                  onClick={showUserLogs}
+                >
+                  <i className="fas fa-history"></i>
+                </button>
+              )}
+              <button 
+                className="btn btn-sm btn-outline-secondary logout-btn" 
+                style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem', borderColor: '#dee2e6', color: '#6c757d' }}
+                title="Logg ut"
+                onClick={handleLogout}
+              >
+                <i className="fas fa-sign-out-alt"></i>
+              </button>
+            </div>
+          ) : (
+            <div className="user-info-top d-flex align-items-center gap-2 ms-auto">
+              <button 
+                className="btn btn-primary btn-sm" 
+                style={{ fontSize: '0.75rem', padding: '0.4rem 0.8rem' }}
+                onClick={() => setShowLoginModal(true)}
+              >
+                <i className="fas fa-sign-in-alt me-1"></i>Logg inn
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Login Modal */}
+      {showLoginModal && (
+        <div className="modal show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <div className="modal-dialog modal-sm">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">Logg inn</h5>
+                <button 
+                  type="button" 
+                  className="btn-close"
+                  onClick={() => setShowLoginModal(false)}
+                ></button>
+              </div>
+              <div className="modal-body">
+                <form onSubmit={handleLogin}>
+                  {loginError && (
+                    <div className="alert alert-danger" style={{ fontSize: '0.8rem' }}>
+                      {loginError}
+                    </div>
+                  )}
+                  
+                  <div className="mb-3">
+                    <label htmlFor="email" className="form-label" style={{ fontSize: '0.8rem' }}>
+                      E-post
+                    </label>
+                    <input
+                      type="email"
+                      className="form-control form-control-sm"
+                      id="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                    />
+                  </div>
+                  
+                  <div className="mb-3">
+                    <label htmlFor="password" className="form-label" style={{ fontSize: '0.8rem' }}>
+                      Passord
+                    </label>
+                    <input
+                      type="password"
+                      className="form-control form-control-sm"
+                      id="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                    />
+                  </div>
+                  
+                  <div className="d-grid gap-2">
+                    <button 
+                      type="submit" 
+                      className="btn btn-primary btn-sm"
+                      disabled={isLoggingIn}
+                    >
+                      {isLoggingIn ? (
+                        <>
+                          <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                          Logger inn...
+                        </>
+                      ) : (
+                        'Logg inn'
+                      )}
+                    </button>
+                    
+                    <button 
+                      type="button" 
+                      className="btn btn-outline-secondary btn-sm"
+                      onClick={() => setShowLoginModal(false)}
+                    >
+                      Avbryt
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* User Logs Modal */}
+      <UserLogsModal 
+        isOpen={showUserLogsModal}
+        onClose={() => setShowUserLogsModal(false)}
+      />
+    </>
+  );
+} 
