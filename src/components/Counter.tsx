@@ -5,6 +5,7 @@ import { CounterData, FilterState, User } from '@/types';
 import { supabase } from '@/lib/supabase';
 import { exportCompletedLandingsplassToPDF } from '@/lib/pdfExport';
 import UserLogsModal from './UserLogsModal';
+import { SkeletonCounter } from './SkeletonLoader';
 
 interface CounterProps {
   counterData: CounterData;
@@ -13,6 +14,7 @@ interface CounterProps {
   onFilterChange: (newFilter: FilterState) => void;
   user?: User | null;
   onUserUpdate?: (user: User | null) => void;
+  isLoading?: boolean;
 }
 
 export default function Counter({ 
@@ -21,7 +23,8 @@ export default function Counter({
   filterState, 
   onFilterChange, 
   user, 
-  onUserUpdate 
+  onUserUpdate,
+  isLoading = false
 }: CounterProps) {
   
   const [isLoadingConnections, setIsLoadingConnections] = useState(false);
@@ -197,11 +200,185 @@ export default function Counter({
     }
   };
 
+  if (isLoading) {
+    return <SkeletonCounter />;
+  }
+
   return (
     <>
-      <div className="counter">
-        <div className="counter-container" style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
-          <div className="counters d-flex gap-3">
+      <div className="counter" style={{ padding: '8px 12px', background: 'white', borderBottom: '1px solid #dee2e6', width: '100%', position: 'relative' }}>
+        {/* Mobile layout: Stack everything vertically */}
+        <div className="d-block d-md-none">
+          {/* Row 1: Counters */}
+          <div className="d-flex justify-content-center gap-2 mb-2" style={{ flexWrap: 'wrap' }}>
+            <div className="counter-item">
+              <div className="d-flex align-items-center gap-1 px-2 py-1 rounded" style={{ background: '#f8f9fa', border: '1px solid #e9ecef', color: '#495057', fontSize: '0.7rem', fontWeight: 500, minWidth: 0 }}>
+                <i className="fas fa-list-check" style={{ fontSize: '0.6rem', color: '#6c757d', flexShrink: 0 }}></i>
+                <span style={{ whiteSpace: 'nowrap' }}>Gjenstående:</span>
+                <span className="badge bg-primary text-white" style={{ fontSize: '0.6rem', fontWeight: 500, flexShrink: 0 }}>
+                  {counterData.remaining}
+                </span>
+              </div>
+            </div>
+            <div className="counter-item">
+              <div className="d-flex align-items-center gap-1 px-2 py-1 rounded" style={{ background: '#f8f9fa', border: '1px solid #e9ecef', color: '#495057', fontSize: '0.7rem', fontWeight: 500, minWidth: 0 }}>
+                <i className="fas fa-check-circle" style={{ fontSize: '0.6rem', color: '#6c757d', flexShrink: 0 }}></i>
+                <span style={{ whiteSpace: 'nowrap' }}>Utført:</span>
+                <span className="badge bg-success text-white" style={{ fontSize: '0.6rem', fontWeight: 500, flexShrink: 0 }}>
+                  {counterData.done}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Row 2: Fylke filter */}
+          <div className="d-flex justify-content-center mb-2">
+            <div className="counter-item">
+              <div className="d-flex align-items-center gap-2 px-2 py-1 rounded" style={{ background: '#f8f9fa', border: '1px solid #e9ecef', color: '#495057', fontSize: '0.7rem', fontWeight: 500 }}>
+                <i className="fas fa-map-marker-alt" style={{ fontSize: '0.6rem', color: '#6c757d' }}></i>
+                <span>Fylke:</span>
+                <select 
+                  value={filterState.county} 
+                  onChange={handleCountyChange}
+                  className="form-select form-select-sm" 
+                  style={{ fontSize: '0.65rem', minWidth: '100px', maxWidth: '140px', border: '1px solid #dee2e6', padding: '0.2rem 0.4rem' }}
+                >
+                  <option value="">Alle fylker</option>
+                  {counties.map(county => (
+                    <option key={county} value={county}>{county}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Row 3: Legend items - All items on one line */}
+          <div className="d-flex justify-content-center mb-2" style={{ flexWrap: 'wrap', gap: '4px' }}>
+            <div className="legend-item" style={{ display: 'flex !important', alignItems: 'center', gap: '2px', fontSize: '0.5rem', whiteSpace: 'nowrap', flex: '0 0 auto' }}>
+              <div className="legend-icon">
+                {createLegendIcon('red', 'fa-water')}
+              </div>
+              <span>Vann</span>
+            </div>
+            <div className="legend-item" style={{ display: 'flex !important', alignItems: 'center', gap: '2px', fontSize: '0.5rem', whiteSpace: 'nowrap', flex: '0 0 auto' }}>
+              <div className="legend-icon">
+                {createLegendIcon('green', 'fa-check')}
+              </div>
+              <span>Utført</span>
+            </div>
+            <div className="legend-item" style={{ display: 'flex !important', alignItems: 'center', gap: '2px', fontSize: '0.5rem', whiteSpace: 'nowrap', flex: '0 0 auto' }}>
+              <div className="legend-icon">
+                {createLegendIcon('blue', 'fa-helicopter-symbol')}
+              </div>
+              <span>LP</span>
+            </div>
+            <div className="legend-item" style={{ display: 'flex !important', alignItems: 'center', gap: '2px', fontSize: '0.5rem', whiteSpace: 'nowrap', flex: '0 0 auto' }}>
+              <div className="legend-icon">
+                {createLegendIcon('orange', 'fa-comment')}
+              </div>
+              <span>Info</span>
+            </div>
+          </div>
+
+          {/* Row 4: Connections button and user info */}
+          <div className="d-flex justify-content-between align-items-center">
+            <button 
+              className={`btn btn-outline-secondary btn-sm ${filterState.showConnections ? 'active' : ''}`}
+              style={{ 
+                fontSize: '0.65rem', 
+                padding: '0.2rem 0.4rem', 
+                whiteSpace: 'nowrap', 
+                borderColor: '#dee2e6',
+                backgroundColor: filterState.showConnections ? '#007bff' : 'transparent',
+                color: filterState.showConnections ? 'white' : '#6c757d',
+                opacity: isLoadingConnections ? 0.7 : 1,
+                cursor: isLoadingConnections ? 'not-allowed' : 'pointer',
+                borderRadius: '4px'
+              }}
+              onClick={handleConnectionsToggle}
+              disabled={isLoadingConnections}
+            >
+              {isLoadingConnections ? (
+                <>
+                  <span className="spinner-border spinner-border-sm me-1" style={{ width: '0.5rem', height: '0.5rem' }}></span>
+                  Laster...
+                </>
+              ) : (
+                <>
+                  <i className="fas fa-project-diagram me-1" style={{ fontSize: '0.6rem' }}></i> 
+                  {filterState.showConnections ? 'Skjul' : 'Vis'} forbindelser
+                </>
+              )}
+            </button>
+
+            {/* User authentication UI - mobile */}
+            {user ? (
+              <div className="user-info-mobile d-flex align-items-center gap-1">
+                <div className="user-details d-flex align-items-center gap-1 px-2 py-1 rounded" style={{ background: 'rgba(255,255,255,0.1)', color: '#6c757d', fontSize: '0.65rem' }}>
+                  <i className="fas fa-user-circle" style={{ fontSize: '12px' }}></i>
+                  <span>{userPermissions.userRecord?.display_name || user.email?.split('@')[0]}</span>
+                  {userPermissions.role && (
+                    <span className={`badge ${getRoleBadgeClass(userPermissions.role)}`} style={{ fontSize: '0.55rem', marginLeft: '0.2rem' }}>
+                      {userPermissions.role.charAt(0).toUpperCase()}
+                    </span>
+                  )}
+                </div>
+                <button 
+                  className="btn btn-sm btn-outline-success" 
+                  style={{ 
+                    fontSize: '0.6rem', 
+                    padding: '0.2rem 0.4rem', 
+                    borderColor: '#28a745', 
+                    color: '#28a745',
+                    opacity: isExportingPDF ? 0.7 : 1,
+                    cursor: isExportingPDF ? 'not-allowed' : 'pointer'
+                  }}
+                  title="PDF"
+                  onClick={exportToPDF}
+                  disabled={isExportingPDF}
+                >
+                  {isExportingPDF ? (
+                    <span className="spinner-border spinner-border-sm" style={{ width: '0.5rem', height: '0.5rem' }}></span>
+                  ) : (
+                    <i className="fas fa-file-pdf"></i>
+                  )}
+                </button>
+                {userPermissions.canViewLogs && (
+                  <button 
+                    className="btn btn-sm btn-outline-info" 
+                    style={{ fontSize: '0.6rem', padding: '0.2rem 0.4rem', borderColor: '#17a2b8', color: '#17a2b8' }}
+                    title="Vis brukerlogger"
+                    onClick={showUserLogs}
+                  >
+                    <i className="fas fa-history"></i>
+                  </button>
+                )}
+                <button 
+                  className="btn btn-sm btn-outline-secondary" 
+                  style={{ fontSize: '0.6rem', padding: '0.2rem 0.4rem', borderColor: '#dee2e6', color: '#6c757d' }}
+                  title="Logg ut"
+                  onClick={handleLogout}
+                >
+                  <i className="fas fa-sign-out-alt"></i>
+                </button>
+              </div>
+            ) : (
+              <div className="user-info-mobile">
+                <button 
+                  className="btn btn-primary btn-sm" 
+                  style={{ fontSize: '0.65rem', padding: '0.3rem 0.6rem' }}
+                  onClick={() => setShowLoginModal(true)}
+                >
+                  <i className="fas fa-sign-in-alt me-1"></i>Logg inn
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Desktop layout: Original horizontal layout */}
+        <div className="d-none d-md-flex counter-container" style={{ alignItems: 'center', justifyContent: 'space-between', gap: '16px', width: '100%', flexWrap: 'wrap' }}>
+          <div className="counters d-flex gap-3" style={{ flexShrink: 0 }}>
             <div className="counter-item">
               <div className="d-flex align-items-center gap-2 px-2 py-1 rounded-2" style={{ background: '#f8f9fa', border: '1px solid #e9ecef', color: '#495057', fontSize: '0.75rem', fontWeight: 500 }}>
                 <i className="fas fa-list-check" style={{ fontSize: '0.7rem', color: '#6c757d' }}></i>
@@ -238,43 +415,44 @@ export default function Counter({
               </div>
             </div>
           </div>
-          <div className="legend">
-            <div className="legend-item">
+          <div className="legend" style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap', flex: 1, justifyContent: 'center' }}>
+            <div className="legend-item" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem' }}>
               <div className="legend-icon">
                 {createLegendIcon('red', 'fa-water')}
               </div>
               <span>Vann</span>
             </div>
-            <div className="legend-item">
+            <div className="legend-item" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem' }}>
               <div className="legend-icon">
                 {createLegendIcon('green', 'fa-check')}
               </div>
               <span>Utført</span>
             </div>
-            <div className="legend-item">
+            <div className="legend-item" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem' }}>
               <div className="legend-icon">
                 {createLegendIcon('blue', 'fa-helicopter-symbol')}
               </div>
               <span>LP</span>
             </div>
-            <div className="legend-item">
+            <div className="legend-item" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem' }}>
               <div className="legend-icon">
                 {createLegendIcon('orange', 'fa-comment')}
               </div>
               <span>Kommentar</span>
             </div>
-            <div className="legend-item">
+            <div className="legend-item" style={{ display: 'flex', alignItems: 'center' }}>
               <button 
                 className={`btn btn-outline-secondary btn-sm ${filterState.showConnections ? 'active' : ''}`}
                 style={{ 
-                  fontSize: '0.65rem', 
-                  padding: '0.2rem 0.4rem', 
+                  fontSize: '0.7rem', 
+                  padding: '0.25rem 0.5rem', 
                   whiteSpace: 'nowrap', 
                   borderColor: '#dee2e6',
                   backgroundColor: filterState.showConnections ? '#007bff' : 'transparent',
                   color: filterState.showConnections ? 'white' : '#6c757d',
                   opacity: isLoadingConnections ? 0.7 : 1,
-                  cursor: isLoadingConnections ? 'not-allowed' : 'pointer'
+                  cursor: isLoadingConnections ? 'not-allowed' : 'pointer',
+                  borderRadius: '4px'
                 }}
                 onClick={handleConnectionsToggle}
                 disabled={isLoadingConnections}
@@ -286,23 +464,21 @@ export default function Counter({
                   </>
                 ) : (
                   <>
-                    <i className="fas fa-project-diagram" style={{ fontSize: '0.6rem' }}></i> 
+                    <i className="fas fa-project-diagram me-1" style={{ fontSize: '0.65rem' }}></i> 
                     {filterState.showConnections ? 'Skjul forbindelser' : 'Vis forbindelser'}
                   </>
                 )}
               </button>
             </div>
-            <div className="legend-item">
-              <div className="text-muted" style={{ fontSize: '0.6rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                <i className="fas fa-info-circle" style={{ fontSize: '0.55rem' }}></i>
-                <span>Høyreklikk for å legge til markør</span>
-              </div>
+            <div className="legend-item" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem', color: '#6c757d' }}>
+              <i className="fas fa-info-circle" style={{ fontSize: '0.65rem' }}></i>
+              <span>Høyreklikk for å legge til markør</span>
             </div>
           </div>
 
-          {/* User authentication UI in topbar */}
+          {/* User authentication UI - desktop */}
           {user ? (
-            <div className="user-info-top d-flex align-items-center gap-2 ms-auto">
+            <div className="user-info-top d-flex align-items-center gap-2" style={{ flexShrink: 0 }}>
               <div className="user-details d-flex align-items-center gap-2 px-2 py-1 rounded-2" style={{ background: 'rgba(255,255,255,0.1)', color: '#6c757d', fontSize: '0.75rem' }}>
                 <i className="fas fa-user-circle" style={{ fontSize: '16px' }}></i>
                 <span>{userPermissions.userRecord?.display_name || user.email?.split('@')[0]}</span>
@@ -352,7 +528,7 @@ export default function Counter({
               </button>
             </div>
           ) : (
-            <div className="user-info-top d-flex align-items-center gap-2 ms-auto">
+            <div className="user-info-top d-flex align-items-center gap-2" style={{ flexShrink: 0 }}>
               <button 
                 className="btn btn-primary btn-sm" 
                 style={{ fontSize: '0.75rem', padding: '0.4rem 0.8rem' }}

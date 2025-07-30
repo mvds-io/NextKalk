@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
+    "dev:https": "concurrently \"next dev --turbopack --port 3001\" \"local-ssl-proxy --source 3000 --target 3001\"",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"
@@ -33,8 +34,10 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "concurrently": "^9.2.0",
     "eslint": "^9",
     "eslint-config-next": "15.4.4",
+    "local-ssl-proxy": "^2.0.5",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

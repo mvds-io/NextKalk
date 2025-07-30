@@ -19,8 +19,32 @@ export default function LoadingScreen() {
   }, []);
 
   return (
-    <div id="loading-screen">
-      <div className="loading-container">
+    <div id="loading-screen" style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      width: '100vw',
+      height: '100vh',
+      background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)',
+      display: 'flex',
+      flexDirection: 'column',
+      justifyContent: 'center',
+      alignItems: 'center',
+      zIndex: 10000,
+      margin: 0,
+      padding: 0
+    }}>
+      <div className="loading-container" style={{
+        textAlign: 'center',
+        maxWidth: '400px',
+        width: '90%',
+        padding: '2rem',
+        background: 'rgba(255, 255, 255, 0.95)',
+        borderRadius: '12px',
+        boxShadow: '0 10px 30px rgba(0, 0, 0, 0.1)',
+        position: 'relative',
+        margin: 'auto'
+      }}>
         <div className="app-logo">
           <i className="fas fa-helicopter" style={{ fontSize: '3rem', color: '#0066cc', marginBottom: '1rem' }}></i>
           <h2 style={{ color: '#333', marginBottom: '2rem' }}>Kalk Planner 2025</h2>

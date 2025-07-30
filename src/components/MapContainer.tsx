@@ -28,6 +28,9 @@ export default function MapContainer({
   const connectionsLayerRef = useRef<any>(null);
   const [isMapReady, setIsMapReady] = useState(false);
   const [userPermissions, setUserPermissions] = useState<any>({});
+  const [isSatelliteView, setIsSatelliteView] = useState(false);
+  const tileLayerRef = useRef<any>(null);
+  const userLocationMarkerRef = useRef<any>(null);
 
   // Connection state
   const [allConnectionsVisible, setAllConnectionsVisible] = useState(false);
@@ -285,13 +288,24 @@ export default function MapContainer({
         });
 
         if (mapRef.current && !leafletMapRef.current) {
-          // Initialize map
+          // Initialize map with default center (will be updated with user location)
           const map = (L as any).map(mapRef.current).setView([61.5, 8.0], 6);
 
-          // Add tile layer
-          (L as any).tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap contributors'
-          }).addTo(map);
+          // Add default tile layer (OpenStreetMap)
+          const osmLayer = (L as any).tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors',
+            maxZoom: 19
+          });
+
+          // Add satellite tile layer (Esri World Imagery)
+          const satelliteLayer = (L as any).tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            attribution: 'Tiles © Esri — Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community',
+            maxZoom: 19
+          });
+
+          // Start with OSM layer
+          osmLayer.addTo(map);
+          tileLayerRef.current = { osm: osmLayer, satellite: satelliteLayer };
 
           // Create clustering groups for better performance
           const clusterGroup = (L as any).markerClusterGroup({
@@ -301,13 +315,51 @@ export default function MapContainer({
               console.log(`Loading markers: ${processed}/${total}`);
             },
             maxClusterRadius: 35, // Reduced from 50 to make smaller clusters
-            disableClusteringAtZoom: 12, // Disable clustering at zoom level 12 and higher
+            disableClusteringAtZoom: 8, // Disable clustering at zoom level 8 and higher (was 12)
             showCoverageOnHover: false,
             zoomToBoundsOnClick: true,
             spiderfyOnMaxZoom: true,
             removeOutsideVisibleBounds: true,
             animate: true,
-            animateAddingMarkers: false // Better performance
+            animateAddingMarkers: false, // Better performance
+            iconCreateFunction: function(cluster: any) {
+              const count = cluster.getChildCount();
+              let size = 'small';
+              let width = 40;
+              let height = 40;
+              
+              if (count >= 100) {
+                size = 'large';
+                width = 60;
+                height = 60;
+              } else if (count >= 10) {
+                size = 'medium';
+                width = 50;
+                height = 50;
+              }
+              
+              return (L as any).divIcon({
+                html: `<div style="
+                  background: rgba(108, 117, 125, 0.7);
+                  border: 2px solid rgba(90, 90, 90, 0.8);
+                  border-radius: 50%;
+                  color: white;
+                  font-weight: 600;
+                  font-size: ${size === 'large' ? '16px' : size === 'medium' ? '14px' : '12px'};
+                  text-align: center;
+                  line-height: ${width - 4}px;
+                  width: ${width - 4}px;
+                  height: ${height - 4}px;
+                  margin: 2px;
+                  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+                  text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+                  transition: none;
+                ">${count}</div>`,
+                className: 'custom-cluster-grey',
+                iconSize: [width, height],
+                iconAnchor: [width/2, height/2]
+              });
+            }
           });
           
           // Create regular layer for non-clustered items (connections, etc.)
@@ -326,6 +378,111 @@ export default function MapContainer({
 
           // Make global functions available for popup buttons
           setupGlobalFunctions(L, map);
+
+          // Try to get user's location and center map after everything is initialized
+          const getUserLocation = () => {
+            if (!navigator.geolocation) {
+              console.log('📍 Geolocation is not supported by this browser');
+              return;
+            }
+
+            console.log('📍 Requesting user location...');
+            
+            // Use different options for mobile vs desktop
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            const geolocationOptions = {
+              enableHighAccuracy: true,
+              timeout: isMobile ? 20000 : 10000, // Longer timeout for mobile
+              maximumAge: isMobile ? 60000 : 300000 // Shorter cache for mobile for more accurate results
+            };
+
+            console.log('📍 Using mobile-optimized settings:', isMobile);
+
+            navigator.geolocation.getCurrentPosition(
+              (position) => {
+                const { latitude, longitude, accuracy } = position.coords;
+                console.log('📍 User location found:', { latitude, longitude, accuracy });
+                
+                // Center map on user location with appropriate zoom based on accuracy
+                const zoomLevel = accuracy > 1000 ? 8 : accuracy > 100 ? 10 : 12;
+                map.setView([latitude, longitude], zoomLevel);
+                
+                // Remove existing user location marker if any
+                if (userLocationMarkerRef.current) {
+                  map.removeLayer(userLocationMarkerRef.current);
+                }
+                
+                // Add persistent marker to show user location
+                const userLocationMarker = (L as any).marker([latitude, longitude], {
+                  icon: (L as any).divIcon({
+                    html: `
+                      <div style="
+                        background: #007bff; 
+                        width: 18px; 
+                        height: 18px; 
+                        border-radius: 50%; 
+                        border: 3px solid white; 
+                        box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+                        position: relative;
+                        z-index: 1000;
+                      ">
+                        <div style="
+                          position: absolute;
+                          top: -4px;
+                          left: -4px;
+                          width: 22px;
+                          height: 22px;
+                          border-radius: 50%;
+                          background: rgba(0, 123, 255, 0.3);
+                          animation: pulse 2s infinite;
+                          z-index: 999;
+                        "></div>
+                      </div>
+                    `,
+                    className: 'user-location-marker persistent-marker',
+                    iconSize: [24, 24],
+                    iconAnchor: [12, 12]
+                  })
+                }).addTo(map);
+                
+                // Store reference to marker so it persists
+                userLocationMarkerRef.current = userLocationMarker;
+                
+                // Bind tooltip (shows on hover) instead of popup
+                userLocationMarker.bindTooltip('Your location', {
+                  permanent: false,
+                  direction: 'top',
+                  offset: [0, -10],
+                  className: 'user-location-tooltip'
+                });
+              },
+              (error) => {
+                console.log('📍 Could not get user location:', error.message);
+                console.log('📍 Error code:', error.code);
+                console.log('📍 Error details:', error);
+                
+                // Provide specific error messages
+                switch(error.code) {
+                  case error.PERMISSION_DENIED:
+                    console.log('📍 User denied the request for Geolocation');
+                    break;
+                  case error.POSITION_UNAVAILABLE:
+                    console.log('📍 Location information is unavailable');
+                    break;
+                  case error.TIMEOUT:
+                    console.log('📍 The request to get user location timed out');
+                    break;
+                  default:
+                    console.log('📍 An unknown error occurred');
+                    break;
+                }
+              },
+              geolocationOptions
+            );
+          };
+
+          // Call the function to get user location
+          getUserLocation();
         }
       } catch (error) {
         console.error('Error loading Leaflet:', error);
@@ -336,10 +493,17 @@ export default function MapContainer({
 
     return () => {
       if (leafletMapRef.current) {
+        // Clean up user location marker
+        if (userLocationMarkerRef.current) {
+          leafletMapRef.current.removeLayer(userLocationMarkerRef.current);
+          userLocationMarkerRef.current = null;
+        }
+        
         leafletMapRef.current.remove();
         leafletMapRef.current = null;
         markersLayerRef.current = null;
         clusterGroupRef.current = null;
+        tileLayerRef.current = null;
         setIsMapReady(false);
         
         // Clean up global map instance
@@ -1138,11 +1302,12 @@ export default function MapContainer({
 
       const markerColor = airport.marker_color || 'red';
       const iconColor = airport.is_done ? 'green' : markerColor;
+      const iconName = airport.is_done ? 'check' : 'water';
       
       try {
         const marker = L.marker([airport.latitude, airport.longitude], {
           icon: L.AwesomeMarkers.icon({
-            icon: 'water',
+            icon: iconName,
             markerColor: iconColor,
             prefix: 'fa'
           })
@@ -1180,7 +1345,7 @@ export default function MapContainer({
     filteredLandingsplasser.forEach(landingsplass => {
       if (!landingsplass.latitude || !landingsplass.longitude) return;
 
-      const iconColor = landingsplass.is_done ? 'green' : 'blue';
+      const iconColor = 'blue'; // Always blue for landingsplass
       
       try {
         const marker = L.marker([landingsplass.latitude, landingsplass.longitude], {
@@ -1237,6 +1402,26 @@ export default function MapContainer({
       }
     });
   }, [isMapReady, filteredAirports, filteredLandingsplasser, kalkMarkers, userPermissions, handleMarkerPopupOpen, handleLandingsplassPopupClose]);
+
+  // Toggle satellite view function
+  const toggleSatelliteView = () => {
+    if (!leafletMapRef.current || !tileLayerRef.current) return;
+
+    const map = leafletMapRef.current;
+    const { osm, satellite } = tileLayerRef.current;
+
+    if (isSatelliteView) {
+      // Switch to OSM view
+      map.removeLayer(satellite);
+      map.addLayer(osm);
+      setIsSatelliteView(false);
+    } else {
+      // Switch to Satellite view
+      map.removeLayer(osm);
+      map.addLayer(satellite);
+      setIsSatelliteView(true);
+    }
+  };
 
   const createAirportPopupContent = (airport: Airport): string => {
     const isDone = airport.is_done || airport.done;
@@ -1615,6 +1800,33 @@ export default function MapContainer({
           </div>
         </div>
       )}
+
+      {/* Satellite View Toggle Button */}
+      {isMapReady && (
+        <button
+          onClick={toggleSatelliteView}
+          style={{
+            position: 'absolute',
+            top: '10px',
+            right: '10px',
+            zIndex: 1000,
+            background: 'white',
+            border: '2px solid rgba(0,0,0,0.2)',
+            borderRadius: '4px',
+            padding: '8px',
+            cursor: 'pointer',
+            boxShadow: '0 1px 5px rgba(0,0,0,0.65)',
+            fontSize: '14px',
+            fontWeight: 'bold',
+            color: isSatelliteView ? '#28a745' : '#6c757d',
+            transition: 'all 0.2s ease'
+          }}
+          title={isSatelliteView ? 'Switch to Street View' : 'Switch to Satellite View'}
+        >
+          <i className={`fas ${isSatelliteView ? 'fa-map' : 'fa-satellite'}`}></i>
+        </button>
+      )}
+
       <div 
         id="map"
         ref={mapRef} 

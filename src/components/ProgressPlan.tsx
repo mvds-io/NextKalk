@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Landingsplass, User } from '@/types';
 import { supabase } from '@/lib/supabase';
+import { SkeletonProgressItem } from './SkeletonLoader';
 
 interface ProgressPlanProps {
   landingsplasser: Landingsplass[];
@@ -10,6 +11,8 @@ interface ProgressPlanProps {
   user: User | null;
   onDataUpdate: () => void;
   isLoading?: boolean;
+  isMobile?: boolean;
+  onMobileToggle?: () => void;
 }
 
 interface Association {
@@ -23,12 +26,28 @@ export default function ProgressPlan({
   filterState,
   user, 
   onDataUpdate,
-  isLoading = false
+  isLoading = false,
+  isMobile = false,
+  onMobileToggle
 }: ProgressPlanProps) {
   
   const [associations, setAssociations] = useState<Record<number, Association[]>>({});
   const [expandedComments, setExpandedComments] = useState<Set<number>>(new Set());
   const [associationsAvailable, setAssociationsAvailable] = useState<boolean | null>(null);
+  const [internalIsMobile, setInternalIsMobile] = useState(false);
+
+  // Internal mobile detection as fallback
+  useEffect(() => {
+    const checkMobile = () => {
+      if (typeof window !== 'undefined') {
+        setInternalIsMobile(window.innerWidth <= 900);
+      }
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   // Filter landingsplasser by county like original
   let filteredLandingsplasser = landingsplasser;
@@ -254,7 +273,53 @@ export default function ProgressPlan({
 
   if (isLoading) {
     return (
-      <div className="fremdriftsplan-content" style={{ padding: '16px 0 16px 16px' }}>
+      <div className="fremdriftsplan-content" style={{ position: 'relative', zIndex: 0 }}>
+        {/* Header integrated into content */}
+        <div className="fremdriftsplan-header d-flex justify-content-between align-items-center" style={{ 
+          padding: (isMobile || internalIsMobile) ? '0.05rem 0.5rem' : '8px 16px 4px 16px',
+          borderBottom: (isMobile || internalIsMobile) ? '1px solid #dee2e6' : 'none', 
+ 
+          background: '#f8f9fa',
+          marginTop: '0',
+          marginRight: '0',
+          marginLeft: '0',
+          marginBottom: '8px',
+          position: 'relative',
+          zIndex: 1,
+          minHeight: (isMobile || internalIsMobile) ? '28px' : 'auto',
+          maxHeight: (isMobile || internalIsMobile) ? '28px' : 'none',
+          height: (isMobile || internalIsMobile) ? '28px' : 'auto'
+        }}>
+          <h4 className="mb-0" style={{ 
+            fontSize: (isMobile || internalIsMobile) ? '0.85rem' : '1.1rem', 
+            lineHeight: (isMobile || internalIsMobile) ? '1' : '1.2',
+            marginTop: '0',
+          marginRight: '0',
+          marginLeft: '0',
+          marginBottom: '8px',
+          position: 'relative',
+          zIndex: 1,
+            padding: '0'
+          }}>Fremdriftsplan</h4>
+          {onMobileToggle && (
+            <button 
+              className="btn btn-sm btn-outline-secondary d-lg-none"
+              style={{ 
+                fontSize: '0.55rem', 
+                padding: '0.05rem 0.2rem',
+                borderColor: '#dee2e6',
+                color: '#6c757d',
+                lineHeight: '1',
+                height: '20px',
+                width: '24px'
+              }}
+              onClick={onMobileToggle}
+              title="Skjul/vis paneler"
+            >
+              <i className="fas fa-eye-slash"></i>
+            </button>
+          )}
+        </div>
         <div className="loading-overlay" style={{ position: 'relative', minHeight: '200px', backgroundColor: 'transparent' }}>
           <div style={{ textAlign: 'center' }}>
             <div className="loading-spinner"></div>
@@ -267,7 +332,53 @@ export default function ProgressPlan({
 
   if (sortedLandingsplasser.length === 0) {
     return (
-      <div className="fremdriftsplan-content">
+      <div className="fremdriftsplan-content" style={{ position: 'relative', zIndex: 0 }}>
+        {/* Header integrated into content */}
+        <div className="fremdriftsplan-header d-flex justify-content-between align-items-center" style={{ 
+          padding: (isMobile || internalIsMobile) ? '0.05rem 0.5rem' : '8px 16px 4px 16px',
+          borderBottom: (isMobile || internalIsMobile) ? '1px solid #dee2e6' : 'none', 
+ 
+          background: '#f8f9fa',
+          marginTop: '0',
+          marginRight: '0',
+          marginLeft: '0',
+          marginBottom: '8px',
+          position: 'relative',
+          zIndex: 1,
+          minHeight: (isMobile || internalIsMobile) ? '28px' : 'auto',
+          maxHeight: (isMobile || internalIsMobile) ? '28px' : 'none',
+          height: (isMobile || internalIsMobile) ? '28px' : 'auto'
+        }}>
+          <h4 className="mb-0" style={{ 
+            fontSize: (isMobile || internalIsMobile) ? '0.85rem' : '1.1rem', 
+            lineHeight: (isMobile || internalIsMobile) ? '1' : '1.2',
+            marginTop: '0',
+          marginRight: '0',
+          marginLeft: '0',
+          marginBottom: '8px',
+          position: 'relative',
+          zIndex: 1,
+            padding: '0'
+          }}>Fremdriftsplan</h4>
+          {onMobileToggle && (
+            <button 
+              className="btn btn-sm btn-outline-secondary d-lg-none"
+              style={{ 
+                fontSize: '0.55rem', 
+                padding: '0.05rem 0.2rem',
+                borderColor: '#dee2e6',
+                color: '#6c757d',
+                lineHeight: '1',
+                height: '20px',
+                width: '24px'
+              }}
+              onClick={onMobileToggle}
+              title="Skjul/vis paneler"
+            >
+              <i className="fas fa-eye-slash"></i>
+            </button>
+          )}
+        </div>
         <div className="text-center py-4 text-muted">
           <i className="fas fa-helicopter-symbol fa-2x mb-2"></i>
           <p>Ingen landingsplasser funnet</p>
@@ -280,7 +391,49 @@ export default function ProgressPlan({
   }
 
   return (
-    <div className="fremdriftsplan-content" style={{ padding: '16px 0 16px 16px' }}>
+    <div className="fremdriftsplan-content" style={{ position: 'relative', zIndex: 0 }}>
+      {/* Header integrated into content */}
+      <div className="fremdriftsplan-header d-flex justify-content-between align-items-center" style={{ 
+        padding: (isMobile || internalIsMobile) ? '0.05rem 0.5rem' : '8px 16px 4px 16px', 
+        borderBottom: (isMobile || internalIsMobile) ? '1px solid #dee2e6' : 'none', 
+        background: '#f8f9fa',
+        marginTop: '0',
+        marginRight: '0',
+        marginLeft: '0',
+        marginBottom: '8px',
+        position: 'relative',
+        zIndex: 1,
+        minHeight: (isMobile || internalIsMobile) ? '28px' : 'auto',
+        maxHeight: (isMobile || internalIsMobile) ? '28px' : 'none',
+        height: (isMobile || internalIsMobile) ? '28px' : 'auto'
+      }}>
+        <h4 className="mb-0" style={{ 
+          fontSize: (isMobile || internalIsMobile) ? '0.85rem' : '1.1rem', 
+          lineHeight: (isMobile || internalIsMobile) ? '1' : '1.2',
+          marginTop: '0',
+          marginRight: '0',
+          marginLeft: '0',
+          padding: '0'
+        }}>Fremdriftsplan</h4>
+        {onMobileToggle && (
+          <button 
+            className="btn btn-sm btn-outline-secondary d-lg-none"
+            style={{ 
+              fontSize: '0.55rem', 
+              padding: '0.05rem 0.2rem',
+              borderColor: '#dee2e6',
+              color: '#6c757d',
+              lineHeight: '1',
+              height: '20px',
+              width: '24px'
+            }}
+            onClick={onMobileToggle}
+            title="Skjul/vis paneler"
+          >
+            <i className="fas fa-eye-slash"></i>
+          </button>
+        )}
+      </div>
       <div className="fremdriftsplan-list">
         {sortedLandingsplasser.map((lp) => {
           const isDone = lp.done;

@@ -28,7 +28,8 @@ export default function Home() {
 
   // Mobile UI state
   const [isMobileUIMinimized, setIsMobileUIMinimized] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
+  const [isMobileTopBarHidden, setIsMobileTopBarHidden] = useState(false);
+  const [isMobile, setIsMobile] = useState(false); // Default to desktop layout
 
   useEffect(() => {
     initializeApp();
@@ -314,11 +315,14 @@ export default function Home() {
   // Detect mobile device and handle resize
   useEffect(() => {
     const checkIfMobile = () => {
-      const isMobileDevice = window.innerWidth <= 900; // Match CSS breakpoint
-      setIsMobile(isMobileDevice);
-      // Reset minimized state when switching between mobile/desktop
-      if (!isMobileDevice) {
+      // Mobile detection based on screen size
+      const isSmallScreen = window.innerWidth <= 900;
+      setIsMobile(isSmallScreen);
+      
+      // Reset mobile UI state when switching between mobile/desktop
+      if (!isSmallScreen) {
         setIsMobileUIMinimized(false);
+        setIsMobileTopBarHidden(false);
       }
     };
 
@@ -328,7 +332,16 @@ export default function Home() {
   }, []);
 
   const toggleMobileUI = () => {
-    setIsMobileUIMinimized(!isMobileUIMinimized);
+    // Toggle between showing everything and hiding everything
+    if (!isMobileUIMinimized && !isMobileTopBarHidden) {
+      // Hide both panels immediately (full map)
+      setIsMobileUIMinimized(true);
+      setIsMobileTopBarHidden(true);
+    } else {
+      // Show everything again
+      setIsMobileUIMinimized(false);
+      setIsMobileTopBarHidden(false);
+    }
     
     // Trigger a custom event to notify the map to resize
     setTimeout(() => {
@@ -364,50 +377,28 @@ export default function Home() {
 
   return (
     <>
-      {/* Show counter unless on mobile and minimized */}
-      {(!isMobile || !isMobileUIMinimized) && (
-        <Counter 
-          counterData={counterData}
-          counties={counties}
-          filterState={filterState}
-          onFilterChange={setFilterState}
-          user={user}
-          onUserUpdate={setUser}
-        />
+      {/* Show counter unless hidden on mobile */}
+      {(!isMobile || !isMobileTopBarHidden) && (
+        <div className={`${isMobile && isMobileTopBarHidden ? 'mobile-hidden' : ''}`}>
+          <Counter 
+            counterData={counterData}
+            counties={counties}
+            filterState={filterState}
+            onFilterChange={setFilterState}
+            user={user}
+            onUserUpdate={setUser}
+            isLoading={loadingStates.initialLoad}
+          />
+        </div>
       )}
       
-      {/* Mobile toggle button */}
-      {isMobile && (
-        <button
-          className="mobile-ui-toggle"
-          onClick={toggleMobileUI}
-          style={{
-            position: 'fixed',
-            top: isMobileUIMinimized ? '10px' : 'auto',
-            bottom: isMobileUIMinimized ? 'auto' : '10px',
-            right: '10px',
-            zIndex: 1001,
-            background: '#007bff',
-            color: 'white',
-            border: 'none',
-            borderRadius: '50%',
-            width: '50px',
-            height: '50px',
-            fontSize: '18px',
-            boxShadow: '0 2px 10px rgba(0,0,0,0.3)',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}
-          title={isMobileUIMinimized ? 'Vis toppbar og fremdriftsplan' : 'Skjul for større kart'}
-        >
-          <i className={isMobileUIMinimized ? 'fas fa-eye' : 'fas fa-eye-slash'}></i>
-        </button>
-      )}
       
-      <div className={`main-split-container ${isMobile && isMobileUIMinimized ? 'panel-minimized' : ''}`}>
-        <div className="left-panel">
+      <div className={`main-split-container ${isMobile && isMobileUIMinimized ? 'panel-minimized' : ''}`} style={{ 
+        display: 'flex', 
+        flexDirection: isMobile ? 'column' : 'row', 
+        height: isMobile ? (isMobileTopBarHidden ? '100vh' : 'calc(100vh - 60px)') : 'calc(100vh - 70px)' 
+      }}>
+        <div className="left-panel" style={{ flex: '0 0 70%', height: '100%' }}>
           <MapContainer 
             airports={airports}
             landingsplasser={landingsplasser}
@@ -421,13 +412,14 @@ export default function Home() {
             }}
           />
         </div>
-        <div className={`right-panel ${isMobile && isMobileUIMinimized ? 'panel-minimized' : ''}`}>
-          <h4>Fremdriftsplan</h4>
+        <div className={`right-panel ${isMobile && isMobileUIMinimized ? 'panel-minimized' : ''}`} style={{ flex: '0 0 30%', height: '100%', borderLeft: '1px solid #dee2e6', background: '#f8f9fa' }}>
           <ProgressPlan 
             landingsplasser={landingsplasser}
             filterState={filterState}
             user={user}
             isLoading={loadingStates.landingsplasser}
+            isMobile={isMobile}
+            onMobileToggle={toggleMobileUI}
             onDataUpdate={() => {
               loadAirports();
               loadLandingsplasser();
@@ -438,6 +430,30 @@ export default function Home() {
       </div>
 
       <DatabaseInspector />
+
+      {/* Floating show button when everything is hidden on mobile */}
+      {isMobile && isMobileUIMinimized && isMobileTopBarHidden && (
+        <button
+          className="btn btn-primary"
+          style={{
+            position: 'fixed',
+            bottom: '20px',
+            right: '20px',
+            zIndex: 1000,
+            borderRadius: '50%',
+            width: '50px',
+            height: '50px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '0 4px 8px rgba(0,0,0,0.3)'
+          }}
+          onClick={toggleMobileUI}
+          title="Vis paneler"
+        >
+          <i className="fas fa-eye" style={{ fontSize: '18px' }}></i>
+        </button>
+      )}
     </>
   );
 }
