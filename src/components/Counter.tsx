@@ -6,6 +6,8 @@ import { supabase } from '@/lib/supabase';
 import { exportCompletedLandingsplassToPDF } from '@/lib/pdfExport';
 import UserLogsModal from './UserLogsModal';
 import { SkeletonCounter } from './SkeletonLoader';
+import SearchModal from './SearchModal';
+import SearchResultModal from './SearchResultModal';
 
 interface CounterProps {
   counterData: CounterData;
@@ -36,6 +38,9 @@ export default function Counter({
   const [loginError, setLoginError] = useState('');
   const [userPermissions, setUserPermissions] = useState<any>({});
   const [isExportingPDF, setIsExportingPDF] = useState(false);
+  const [showSearchModal, setShowSearchModal] = useState(false);
+  const [showResultModal, setShowResultModal] = useState(false);
+  const [selectedSearchResult, setSelectedSearchResult] = useState<any>(null);
 
   // Load user permissions when user changes
   useEffect(() => {
@@ -167,6 +172,12 @@ export default function Counter({
     setShowUserLogsModal(true);
   };
 
+  const handleSearchResultSelect = (result: any) => {
+    setSelectedSearchResult(result);
+    setShowSearchModal(false);
+    setShowResultModal(true);
+  };
+
   // Create legend icon element like the original
   const createLegendIcon = (color: string, iconClass: string) => (
     <div
@@ -280,10 +291,25 @@ export default function Counter({
             </div>
           </div>
 
-          {/* Row 4: Connections button and user info */}
+          {/* Row 4: Search and Connections buttons and user info */}
           <div className="d-flex justify-content-between align-items-center">
-            <button 
-              className={`btn btn-outline-secondary btn-sm ${filterState.showConnections ? 'active' : ''}`}
+            <div className="d-flex gap-1">
+              <button 
+                className="btn btn-outline-primary btn-sm"
+                style={{ 
+                  fontSize: '0.65rem', 
+                  padding: '0.2rem 0.4rem', 
+                  whiteSpace: 'nowrap',
+                  borderColor: '#007bff',
+                  color: '#007bff'
+                }}
+                onClick={() => setShowSearchModal(true)}
+                title="Søk i database"
+              >
+                <i className="fas fa-search" style={{ fontSize: '0.6rem' }}></i>
+              </button>
+              <button 
+                className={`btn btn-outline-secondary btn-sm ${filterState.showConnections ? 'active' : ''}`}
               style={{ 
                 fontSize: '0.65rem', 
                 padding: '0.2rem 0.4rem', 
@@ -310,6 +336,7 @@ export default function Counter({
                 </>
               )}
             </button>
+            </div>
 
             {/* User authentication UI - mobile */}
             {user ? (
@@ -440,7 +467,22 @@ export default function Counter({
               </div>
               <span>Kommentar</span>
             </div>
-            <div className="legend-item" style={{ display: 'flex', alignItems: 'center' }}>
+            <div className="legend-item" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <button 
+                className="btn btn-outline-primary btn-sm"
+                style={{ 
+                  fontSize: '0.7rem', 
+                  padding: '0.25rem 0.5rem', 
+                  whiteSpace: 'nowrap',
+                  borderColor: '#007bff',
+                  color: '#007bff'
+                }}
+                onClick={() => setShowSearchModal(true)}
+                title="Søk i database"
+              >
+                <i className="fas fa-search me-1" style={{ fontSize: '0.65rem' }}></i>
+                Søk
+              </button>
               <button 
                 className={`btn btn-outline-secondary btn-sm ${filterState.showConnections ? 'active' : ''}`}
                 style={{ 
@@ -625,6 +667,20 @@ export default function Counter({
       <UserLogsModal 
         isOpen={showUserLogsModal}
         onClose={() => setShowUserLogsModal(false)}
+      />
+
+      {/* Search Modal */}
+      <SearchModal
+        isOpen={showSearchModal}
+        onClose={() => setShowSearchModal(false)}
+        onResultSelect={handleSearchResultSelect}
+      />
+
+      {/* Search Result Details Modal */}
+      <SearchResultModal
+        isOpen={showResultModal}
+        onClose={() => setShowResultModal(false)}
+        result={selectedSearchResult}
       />
     </>
   );
