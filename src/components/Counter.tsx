@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { CounterData, FilterState, User } from '@/types';
-import { supabase } from '@/lib/supabase';
+import { supabase, completeLogout } from '@/lib/supabase';
 import { exportCompletedLandingsplassToPDF } from '@/lib/pdfExport';
 import UserLogsModal from './UserLogsModal';
 import { SkeletonCounter } from './SkeletonLoader';
@@ -132,10 +132,10 @@ export default function Counter({
   };
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
     if (onUserUpdate) {
       onUserUpdate(null);
     }
+    await completeLogout();
   };
 
   const exportToPDF = async () => {

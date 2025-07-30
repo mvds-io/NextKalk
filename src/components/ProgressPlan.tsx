@@ -13,6 +13,8 @@ interface ProgressPlanProps {
   isLoading?: boolean;
   isMobile?: boolean;
   onMobileToggle?: () => void;
+  isMinimized?: boolean;
+  onToggleMinimized?: () => void;
 }
 
 interface Association {
@@ -28,7 +30,9 @@ export default function ProgressPlan({
   onDataUpdate,
   isLoading = false,
   isMobile = false,
-  onMobileToggle
+  onMobileToggle,
+  isMinimized = false,
+  onToggleMinimized
 }: ProgressPlanProps) {
   
   const [associations, setAssociations] = useState<Record<number, Association[]>>({});
@@ -40,14 +44,21 @@ export default function ProgressPlan({
   useEffect(() => {
     const checkMobile = () => {
       if (typeof window !== 'undefined') {
-        setInternalIsMobile(window.innerWidth <= 900);
+        const isMobileScreen = window.innerWidth <= 900;
+        setInternalIsMobile(isMobileScreen);
+        console.log('Mobile check:', { 
+          windowWidth: window.innerWidth, 
+          isMobileScreen, 
+          isMobile, 
+          onToggleMinimized: !!onToggleMinimized 
+        });
       }
     };
     
     checkMobile();
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
-  }, []);
+  }, [isMobile, onToggleMinimized]);
 
   // Filter landingsplasser by county like original
   let filteredLandingsplasser = landingsplasser;
@@ -301,24 +312,44 @@ export default function ProgressPlan({
           zIndex: 1,
             padding: '0'
           }}>Fremdriftsplan</h4>
-          {onMobileToggle && (
-            <button 
-              className="btn btn-sm btn-outline-secondary d-lg-none"
-              style={{ 
-                fontSize: '0.55rem', 
-                padding: '0.05rem 0.2rem',
-                borderColor: '#dee2e6',
-                color: '#6c757d',
-                lineHeight: '1',
-                height: '20px',
-                width: '24px'
-              }}
-              onClick={onMobileToggle}
-              title="Skjul/vis paneler"
-            >
-              <i className="fas fa-eye-slash"></i>
-            </button>
-          )}
+          <div className="d-flex gap-1">
+            {onToggleMinimized && !isMobile && (
+              <button 
+                className="btn btn-sm btn-outline-secondary panel-toggle-btn"
+                style={{ 
+                  fontSize: '0.65rem', 
+                  padding: '0.2rem 0.4rem',
+                  borderColor: '#dee2e6',
+                  color: '#6c757d',
+                  lineHeight: '1',
+                  height: '24px',
+                  width: '28px'
+                }}
+                onClick={onToggleMinimized}
+                title={isMinimized ? "Vis Fremdriftsplan" : "Skjul Fremdriftsplan"}
+              >
+                <i className={`fas fa-chevron-${isMinimized ? 'left' : 'right'}`}></i>
+              </button>
+            )}
+            {onMobileToggle && (
+              <button 
+                className="btn btn-sm btn-outline-secondary d-lg-none"
+                style={{ 
+                  fontSize: '0.55rem', 
+                  padding: '0.05rem 0.2rem',
+                  borderColor: '#dee2e6',
+                  color: '#6c757d',
+                  lineHeight: '1',
+                  height: '20px',
+                  width: '24px'
+                }}
+                onClick={onMobileToggle}
+                title="Skjul/vis paneler"
+              >
+                <i className="fas fa-eye-slash"></i>
+              </button>
+            )}
+          </div>
         </div>
         <div className="loading-overlay" style={{ position: 'relative', minHeight: '200px', backgroundColor: 'transparent' }}>
           <div style={{ textAlign: 'center' }}>
@@ -360,24 +391,44 @@ export default function ProgressPlan({
           zIndex: 1,
             padding: '0'
           }}>Fremdriftsplan</h4>
-          {onMobileToggle && (
-            <button 
-              className="btn btn-sm btn-outline-secondary d-lg-none"
-              style={{ 
-                fontSize: '0.55rem', 
-                padding: '0.05rem 0.2rem',
-                borderColor: '#dee2e6',
-                color: '#6c757d',
-                lineHeight: '1',
-                height: '20px',
-                width: '24px'
-              }}
-              onClick={onMobileToggle}
-              title="Skjul/vis paneler"
-            >
-              <i className="fas fa-eye-slash"></i>
-            </button>
-          )}
+          <div className="d-flex gap-1">
+            {onToggleMinimized && !isMobile && (
+              <button 
+                className="btn btn-sm btn-outline-secondary panel-toggle-btn"
+                style={{ 
+                  fontSize: '0.65rem', 
+                  padding: '0.2rem 0.4rem',
+                  borderColor: '#dee2e6',
+                  color: '#6c757d',
+                  lineHeight: '1',
+                  height: '24px',
+                  width: '28px'
+                }}
+                onClick={onToggleMinimized}
+                title={isMinimized ? "Vis Fremdriftsplan" : "Skjul Fremdriftsplan"}
+              >
+                <i className={`fas fa-chevron-${isMinimized ? 'left' : 'right'}`}></i>
+              </button>
+            )}
+            {onMobileToggle && (
+              <button 
+                className="btn btn-sm btn-outline-secondary d-lg-none"
+                style={{ 
+                  fontSize: '0.55rem', 
+                  padding: '0.05rem 0.2rem',
+                  borderColor: '#dee2e6',
+                  color: '#6c757d',
+                  lineHeight: '1',
+                  height: '20px',
+                  width: '24px'
+                }}
+                onClick={onMobileToggle}
+                title="Skjul/vis paneler"
+              >
+                <i className="fas fa-eye-slash"></i>
+              </button>
+            )}
+          </div>
         </div>
         <div className="text-center py-4 text-muted">
           <i className="fas fa-helicopter-symbol fa-2x mb-2"></i>
@@ -391,7 +442,12 @@ export default function ProgressPlan({
   }
 
   return (
-    <div className="fremdriftsplan-content" style={{ position: 'relative', zIndex: 0 }}>
+    <div className={`fremdriftsplan-content ${isMinimized && !isMobile ? 'content-minimized' : ''}`} style={{ 
+      position: 'relative', 
+      zIndex: 0,
+      width: '100%',
+      height: '100%'
+    }}>
       {/* Header integrated into content */}
       <div className="fremdriftsplan-header d-flex justify-content-between align-items-center" style={{ 
         padding: (isMobile || internalIsMobile) ? '0.05rem 0.5rem' : '8px 16px 4px 16px', 
@@ -415,24 +471,54 @@ export default function ProgressPlan({
           marginLeft: '0',
           padding: '0'
         }}>Fremdriftsplan</h4>
-        {onMobileToggle && (
-          <button 
-            className="btn btn-sm btn-outline-secondary d-lg-none"
-            style={{ 
-              fontSize: '0.55rem', 
-              padding: '0.05rem 0.2rem',
-              borderColor: '#dee2e6',
-              color: '#6c757d',
-              lineHeight: '1',
-              height: '20px',
-              width: '24px'
-            }}
-            onClick={onMobileToggle}
-            title="Skjul/vis paneler"
-          >
-            <i className="fas fa-eye-slash"></i>
-          </button>
-        )}
+        <div className="d-flex gap-1">
+          {onToggleMinimized && !isMobile && (
+            <span
+              style={{ 
+                display: 'inline-block',
+                width: '16px',
+                height: '16px',
+                lineHeight: '14px',
+                textAlign: 'center',
+                fontSize: '10px',
+                color: '#6c757d',
+                backgroundColor: 'white',
+                border: '1px solid #dee2e6',
+                borderRadius: '2px',
+                cursor: 'pointer',
+                userSelect: 'none',
+                WebkitUserSelect: 'none',
+                MozUserSelect: 'none',
+                boxSizing: 'border-box',
+                verticalAlign: 'middle',
+                margin: '0',
+                padding: '0'
+              }}
+              onClick={onToggleMinimized}
+              title={isMinimized ? "Show Fremdriftsplan" : "Hide Fremdriftsplan"}
+            >
+              {isMinimized ? '◀' : '▶'}
+            </span>
+          )}
+          {onMobileToggle && (
+            <button 
+              className="btn btn-sm btn-outline-secondary d-lg-none"
+              style={{ 
+                fontSize: '0.55rem', 
+                padding: '0.05rem 0.2rem',
+                borderColor: '#dee2e6',
+                color: '#6c757d',
+                lineHeight: '1',
+                height: '20px',
+                width: '24px'
+              }}
+              onClick={onMobileToggle}
+              title="Skjul/vis paneler"
+            >
+              <i className="fas fa-eye-slash"></i>
+            </button>
+          )}
+        </div>
       </div>
       <div className="fremdriftsplan-list">
         {sortedLandingsplasser.map((lp) => {
@@ -615,14 +701,28 @@ export default function ProgressPlan({
       </div>
       
       {user?.can_edit_priority ? (
-        <div className="info-footer" style={{ textAlign: 'center', marginTop: '1rem', padding: '0.75rem', background: 'white', borderRadius: '8px', border: '1px solid #e9ecef' }}>
+        <div className="info-footer" style={{ 
+          textAlign: 'center', 
+          marginTop: '1rem', 
+          padding: '0.75rem', 
+          background: 'white', 
+          borderRadius: '8px', 
+          border: '1px solid #e9ecef'
+        }}>
           <div className="text-muted" style={{ fontSize: '0.75rem' }}>
             <i className="fas fa-info-circle me-1" style={{ color: '#667eea' }}></i>
             Dra kort opp/ned for å endre prioritet
           </div>
         </div>
       ) : user ? (
-        <div className="info-footer" style={{ textAlign: 'center', marginTop: '1rem', padding: '0.75rem', background: 'white', borderRadius: '8px', border: '1px solid #e9ecef' }}>
+        <div className="info-footer" style={{ 
+          textAlign: 'center', 
+          marginTop: '1rem', 
+          padding: '0.75rem', 
+          background: 'white', 
+          borderRadius: '8px', 
+          border: '1px solid #e9ecef'
+        }}>
           <div className="text-muted" style={{ fontSize: '0.75rem' }}>
             <i className="fas fa-lock me-1" style={{ color: '#ffc107' }}></i>
             Du har kun lesetilgang til listen

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { User } from '@/types';
-import { supabase } from '@/lib/supabase';
+import { supabase, completeLogout } from '@/lib/supabase';
 
 interface AuthContainerProps {
   user: User | null;
@@ -57,7 +57,7 @@ export default function AuthContainer({ user, onUserUpdate }: AuthContainerProps
   };
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    await completeLogout();
   };
 
   if (user) {

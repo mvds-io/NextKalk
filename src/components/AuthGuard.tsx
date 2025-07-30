@@ -16,7 +16,7 @@
 
 import { useState, useEffect } from 'react';
 import { User } from '@/types';
-import { supabase } from '@/lib/supabase';
+import { supabase, completeLogout } from '@/lib/supabase';
 
 interface AuthGuardProps {
   children: (user: User, onLogout: () => void) => React.ReactNode;
@@ -71,7 +71,7 @@ export default function AuthGuard({ children }: AuthGuardProps) {
 
       if (error || !userData) {
         console.error('User not found in database:', error);
-        await supabase.auth.signOut();
+        setUser(null);
         setLoginError('Brukeren din er ikke registrert i systemet. Kontakt administrator.');
         setIsLoading(false);
         return;
@@ -81,7 +81,7 @@ export default function AuthGuard({ children }: AuthGuardProps) {
       setIsLoading(false);
     } catch (error) {
       console.error('Error loading user data:', error);
-      await supabase.auth.signOut();
+      setUser(null);
       setLoginError('Kunne ikke laste brukerdata. Kontakt administrator.');
       setIsLoading(false);
     }
@@ -112,8 +112,8 @@ export default function AuthGuard({ children }: AuthGuardProps) {
   };
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
     setUser(null);
+    await completeLogout();
   };
 
   // Show loading screen while checking authentication

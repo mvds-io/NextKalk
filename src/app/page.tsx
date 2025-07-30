@@ -35,6 +35,9 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
   const [isMobileUIMinimized, setIsMobileUIMinimized] = useState(false);
   const [isMobileTopBarHidden, setIsMobileTopBarHidden] = useState(false);
   const [isMobile, setIsMobile] = useState(false); // Default to desktop layout
+  
+  // Desktop panel toggle state
+  const [isProgressPlanMinimized, setIsProgressPlanMinimized] = useState(false);
 
   useEffect(() => {
     initializeApp();
@@ -310,6 +313,15 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
     }, 150); // Small delay to ensure CSS transitions complete
   };
 
+  const toggleProgressPlan = () => {
+    setIsProgressPlanMinimized(!isProgressPlanMinimized);
+    
+    // Trigger map resize immediately
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('progressPlanToggle'));
+    }, 10);
+  };
+
   if (isLoading) {
     return <LoadingScreen />;
   }
@@ -354,12 +366,16 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
       )}
       
       
-      <div className={`main-split-container ${isMobile && isMobileUIMinimized ? 'panel-minimized' : ''}`} style={{ 
+      <div className={`main-split-container ${isMobile && isMobileUIMinimized ? 'panel-minimized' : ''} ${!isMobile && isProgressPlanMinimized ? 'progress-plan-minimized' : ''}`} style={{ 
         display: 'flex', 
         flexDirection: isMobile ? 'column' : 'row', 
         height: isMobile ? (isMobileTopBarHidden ? '100vh' : 'calc(100vh - 60px)') : 'calc(100vh - 70px)' 
       }}>
-        <div className="left-panel" style={{ flex: '0 0 70%', height: '100%' }}>
+        <div className="left-panel" style={{ 
+          flex: !isMobile && isProgressPlanMinimized ? '1' : '0 0 70%', 
+          height: '100%',
+          minWidth: 0
+        }}>
           <MapContainer 
             airports={airports}
             landingsplasser={landingsplasser}
@@ -373,7 +389,16 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
             }}
           />
         </div>
-        <div className={`right-panel ${isMobile && isMobileUIMinimized ? 'panel-minimized' : ''}`} style={{ flex: '0 0 30%', height: '100%', borderLeft: '1px solid #dee2e6', background: '#f8f9fa' }}>
+        <div className={`right-panel ${isMobile && isMobileUIMinimized ? 'panel-minimized' : ''} ${!isMobile && isProgressPlanMinimized ? 'panel-minimized' : ''}`} style={{ 
+          flex: !isMobile && isProgressPlanMinimized ? '0 0 40px' : '0 0 30%',
+          height: '100%',
+          borderLeft: '1px solid #dee2e6', 
+          background: '#f8f9fa',
+          overflow: 'hidden',
+          position: 'relative',
+          scrollbarWidth: 'none',
+          msOverflowStyle: 'none'
+        }}>
           <ProgressPlan 
             landingsplasser={landingsplasser}
             filterState={filterState}
@@ -381,12 +406,45 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
             isLoading={loadingStates.landingsplasser}
             isMobile={isMobile}
             onMobileToggle={toggleMobileUI}
+            isMinimized={isProgressPlanMinimized}
+            onToggleMinimized={toggleProgressPlan}
             onDataUpdate={() => {
               loadAirports();
               loadLandingsplasser();
               loadKalkMarkers();
             }}
           />
+          {/* Show button when panel is minimized - positioned at same height as hide button */}
+          {!isMobile && isProgressPlanMinimized && (
+            <div style={{ position: 'absolute', top: '8px', right: '12px', width: '40px', height: '40px', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', paddingTop: '8px' }}>
+              <span
+                style={{ 
+                  display: 'inline-block',
+                  width: '16px',
+                  height: '16px',
+                  lineHeight: '14px',
+                  textAlign: 'center',
+                  fontSize: '10px',
+                  color: '#6c757d',
+                  backgroundColor: 'white',
+                  border: '1px solid #dee2e6',
+                  borderRadius: '2px',
+                  cursor: 'pointer',
+                  userSelect: 'none',
+                  WebkitUserSelect: 'none',
+                  MozUserSelect: 'none',
+                  boxSizing: 'border-box',
+                  verticalAlign: 'middle',
+                  margin: '0',
+                  padding: '0'
+                }}
+                onClick={toggleProgressPlan}
+                title="Show Fremdriftsplan"
+              >
+                ◀
+              </span>
+            </div>
+          )}
         </div>
       </div>
 

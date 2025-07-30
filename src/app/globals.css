@@ -1549,59 +1549,49 @@ body {
   }
 }
 
-/* Tablet and Desktop View - Panel moves right/left */
+/* Tablet and Desktop View - Instant panel hide/show */
 @media (min-width: 901px) {
-  .panel-toggle-btn {
-    top: 50%;
-    left: 6px;
-    transform: translateY(-50%);
+  .right-panel {
+    position: relative !important;
   }
   
+  /* When minimized, instantly resize panel */
   .right-panel.panel-minimized {
     flex: 0 0 40px !important;
     min-width: 40px !important;
     max-width: 40px !important;
-    overflow: hidden;
+    transform: translateX(calc(100% - 40px)) !important;
   }
   
-  .right-panel.panel-minimized h4 {
-    writing-mode: vertical-rl;
-    text-orientation: mixed;
-    padding: 12px 4px;
-    margin: 0;
-    font-size: 0.75rem;
-    text-align: center;
-    background: rgba(248, 249, 250, 0.95);
-    height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 0 6px 6px 0;
-    white-space: nowrap;
-  }
-  
-  .right-panel.panel-minimized .fremdriftsplan-content {
-    opacity: 0;
-    pointer-events: none;
-    overflow: hidden;
-    width: 0;
-    height: 0;
-    transform: translateX(100%);
-    transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), 
-                opacity 0.3s ease;
-  }
-  
-  /* When panel is minimized, left panel (map) expands to take available space */
-  .main-split-container.panel-minimized .left-panel {
+  /* Ensure map expands when panel is minimized */
+  .main-split-container.progress-plan-minimized .left-panel {
     flex: 1 !important;
   }
   
-  .panel-minimized .panel-toggle-btn {
-    left: 10px;
+  /* Hide content when panel is minimized, but keep the fixed button visible */
+  .right-panel.panel-minimized .fremdriftsplan-content {
+    opacity: 0 !important;
+    pointer-events: none !important;
   }
   
-  .panel-minimized .panel-toggle-btn i {
-    transform: none;
+  /* Hide the regular toggle button when minimized - we have a separate one */
+  .right-panel.panel-minimized .fremdriftsplan-header .d-flex span {
+    display: none !important;
+  }
+  
+  /* Fixed toggle button always stays in the right position */
+  .fixed-panel-toggle-btn {
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  }
+  
+  /* Hide scrollbars in right panel */
+  .right-panel::-webkit-scrollbar {
+    display: none !important;
+  }
+  
+  .right-panel {
+    -ms-overflow-style: none !important;
+    scrollbar-width: none !important;
   }
 }
 
@@ -2149,5 +2139,33 @@ body {
 @media (min-width: 901px) {
   .fremdriftsplan-header {
     border-bottom: none !important;
+  }
+  
+  /* Desktop Progress Plan Toggle Styles */
+  .main-split-container.progress-plan-minimized .right-panel {
+    min-width: 40px !important;
+    max-width: 40px !important;
+  }
+  
+  .main-split-container.progress-plan-minimized .right-panel .fremdriftsplan-header h4 {
+    writing-mode: vertical-rl !important;
+    text-orientation: mixed !important;
+    font-size: 0.75rem !important;
+    text-align: center !important;
+    white-space: nowrap !important;
+    padding: 12px 4px !important;
+    margin: 0 !important;
+    height: 100% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+  
+  .main-split-container.progress-plan-minimized .right-panel .panel-toggle-btn {
+    position: absolute !important;
+    left: 10px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    z-index: 1003 !important;
   }
 }
