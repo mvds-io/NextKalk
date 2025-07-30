@@ -99,14 +99,14 @@ export async function GET(request: NextRequest) {
 
     // Format results with source indication
     const results = [
-      ...(vannResults || []).map((item: any) => ({
+      ...(vannResults || []).map((item: Record<string, unknown>) => ({
         ...item,
         source: 'vass_vann',
         type: 'water',
         displayName: item.name,
         color: 'red'
       })),
-      ...(lpResults || []).map((item: any) => ({
+      ...(lpResults || []).map((item: Record<string, unknown>) => ({
         ...item,
         source: 'vass_lasteplass', 
         type: 'landingsplass',

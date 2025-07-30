@@ -83,7 +83,7 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
 
       // Implement proper pagination to get ALL records
       console.log(`🔄 Implementing pagination to fetch all ${count} records...`);
-      let allAirports = [];
+      const allAirports = [];
       const pageSize = 1000; // Supabase's limit
       let currentOffset = 0;
       let hasMore = true;
@@ -125,13 +125,13 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
       }
 
       // Validate data structure and add default values
-      const validAirports = allAirports.filter((airport: any) => 
+      const validAirports = allAirports.filter((airport: Record<string, unknown>) => 
         airport && 
         typeof airport.latitude === 'number' && 
         typeof airport.longitude === 'number' &&
         !isNaN(airport.latitude) &&
         !isNaN(airport.longitude)
-      ).map((airport: any) => ({
+      ).map((airport: Record<string, unknown>) => ({
         ...airport,
         // Use correct field names from original
         done: airport.is_done || false, // Map is_done to done for React compatibility
@@ -165,13 +165,13 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
       }
 
       // Validate data structure
-      const validLandingsplasser = (data || []).filter((lp: any) => 
+      const validLandingsplasser = (data || []).filter((lp: Record<string, unknown>) => 
         lp && 
         typeof lp.latitude === 'number' && 
         typeof lp.longitude === 'number' &&
         !isNaN(lp.latitude) &&
         !isNaN(lp.longitude)
-      ).map((lp: any) => ({
+      ).map((lp: Record<string, unknown>) => ({
         ...lp,
         priority: lp.priority || 999,
         done: lp.is_done || false // Map is_done to done
@@ -201,7 +201,7 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
       }
 
       // Validate data structure
-      const validKalkMarkers = (data || []).filter((kalk: any) => 
+      const validKalkMarkers = (data || []).filter((kalk: Record<string, unknown>) => 
         kalk && 
         typeof kalk.latitude === 'number' && 
         typeof kalk.longitude === 'number' &&
