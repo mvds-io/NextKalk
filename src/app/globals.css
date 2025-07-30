@@ -1,3 +1,46 @@
+/* Mobile-friendly popup styles */
+@media (max-width: 768px) {
+  .leaflet-popup {
+    max-width: 90vw !important;
+  }
+  
+  .mobile-friendly-popup .leaflet-popup-content-wrapper {
+    border-radius: 0.375rem;
+    overflow: hidden;
+  }
+  
+  .mobile-drag-handle {
+    touch-action: pan-y;
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+  }
+  
+  .mobile-drag-handle:active {
+    cursor: grabbing !important;
+  }
+  
+  /* Prevent popup from closing on pan */
+  .mobile-friendly-popup .leaflet-popup-content {
+    margin: 0;
+    padding: 0;
+  }
+  
+  /* Make popup content scrollable */
+  .marker-card {
+    max-height: 70vh;
+    overflow-y: auto;
+  }
+}
+
+/* Desktop styles */
+@media (min-width: 769px) {
+  .mobile-drag-handle {
+    display: none !important;
+  }
+}
+
 /* Reset and mobile viewport handling */
 * {
   box-sizing: border-box;

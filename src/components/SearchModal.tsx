@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { authenticatedFetch } from '@/lib/auth';
 
 interface SearchResult {
   id: number;
@@ -51,7 +52,8 @@ export default function SearchModal({ isOpen, onClose, onResultSelect }: SearchM
     const timeoutId = setTimeout(async () => {
       setIsLoading(true);
       try {
-        const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+        const response = await authenticatedFetch(`/api/search?q=${encodeURIComponent(query)}`);
+        
         if (response.ok) {
           const data = await response.json();
           setResults(data.results || []);

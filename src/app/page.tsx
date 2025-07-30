@@ -6,12 +6,17 @@ import Counter from '@/components/Counter';
 import MapContainer from '@/components/MapContainer';
 import ProgressPlan from '@/components/ProgressPlan';
 import DatabaseInspector from '@/components/DatabaseInspector';
+import AuthGuard from '@/components/AuthGuard';
 import { supabase } from '@/lib/supabase';
 import { Airport, Landingsplass, KalkInfo, User, CounterData, FilterState } from '@/types';
 
-export default function Home() {
+interface AuthenticatedAppProps {
+  user: User;
+  onLogout: () => void;
+}
+
+function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
   const [isLoading, setIsLoading] = useState(true);
-  const [user, setUser] = useState<User | null>(null);
   const [airports, setAirports] = useState<Airport[]>([]);
   const [landingsplasser, setLandingsplasser] = useState<Landingsplass[]>([]);
   const [kalkMarkers, setKalkMarkers] = useState<KalkInfo[]>([]);
@@ -33,57 +38,13 @@ export default function Home() {
 
   useEffect(() => {
     initializeApp();
-    
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' && session?.user) {
-        // Fetch user data from users table
-        try {
-          const { data: userData } = await supabase
-            .from('users')
-            .select('*')
-            .eq('email', session.user.email)
-            .single();
-
-          if (userData) {
-            setUser(userData);
-          }
-        } catch (error) {
-          console.warn('Could not load user data after login');
-        }
-      } else if (event === 'SIGNED_OUT') {
-        setUser(null);
-      }
-    });
-
-    return () => subscription.unsubscribe();
   }, []);
 
   const initializeApp = async () => {
     try {
       setError(null);
       
-      // Check authentication
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (session?.user) {
-        // Fetch user permissions
-        try {
-          const { data: userData } = await supabase
-            .from('users')
-            .select('*')
-            .eq('email', session.user.email)
-            .single();
-
-          if (userData) {
-            setUser(userData);
-          }
-        } catch (userError) {
-          console.warn('Could not load user data - continuing without authentication');
-        }
-      }
-
-      // Load data in parallel
+      // Load data in parallel (user is already authenticated via AuthGuard)
       await Promise.all([
         loadAirports(),
         loadLandingsplasser(),
@@ -386,7 +347,7 @@ export default function Home() {
             filterState={filterState}
             onFilterChange={setFilterState}
             user={user}
-            onUserUpdate={setUser}
+            onUserUpdate={() => onLogout()}
             isLoading={loadingStates.initialLoad}
           />
         </div>
@@ -455,5 +416,15 @@ export default function Home() {
         </button>
       )}
     </>
+  );
+}
+
+export default function Home() {
+  return (
+    <AuthGuard>
+      {(user: User, onLogout: () => void) => (
+        <AuthenticatedApp user={user} onLogout={onLogout} />
+      )}
+    </AuthGuard>
   );
 }

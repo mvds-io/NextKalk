@@ -1314,7 +1314,13 @@ export default function MapContainer({
         });
 
         const popupContent = createAirportPopupContent(airport);
-        marker.bindPopup(popupContent, { maxWidth: 400 });
+        marker.bindPopup(popupContent, { 
+          maxWidth: 400,
+          closeOnEscapeKey: false,
+          autoClose: false,
+          closeOnClick: false,
+          className: 'mobile-friendly-popup'
+        });
         
         // Add hover tooltip showing the name
         const airportName = airport.name || airport.navn || 'Ukjent navn';
@@ -1357,7 +1363,13 @@ export default function MapContainer({
         });
 
         const popupContent = createLandingsplassPopupContent(landingsplass);
-        marker.bindPopup(popupContent, { maxWidth: 400 });
+        marker.bindPopup(popupContent, { 
+          maxWidth: 400,
+          closeOnEscapeKey: false,
+          autoClose: false,
+          closeOnClick: false,
+          className: 'mobile-friendly-popup'
+        });
         
         // Add permanent label below marker showing the kode
         const landingsplassKode = landingsplass.kode || landingsplass.lp || 'N/A';
@@ -1394,7 +1406,13 @@ export default function MapContainer({
         });
 
         const popupContent = createKalkPopupContent(kalk);
-        marker.bindPopup(popupContent, { maxWidth: 400 });
+        marker.bindPopup(popupContent, { 
+          maxWidth: 400,
+          closeOnEscapeKey: false,
+          autoClose: false,
+          closeOnClick: false,
+          className: 'mobile-friendly-popup'
+        });
 
         markersLayerRef.current.addLayer(marker);
       } catch (error) {
@@ -1434,7 +1452,11 @@ export default function MapContainer({
       }) : '';
     
     return `
-      <div class="marker-card ${completedClass}" style="min-width: 300px; max-width: 380px; font-size: 0.85rem; box-sizing: border-box; padding: 0.75rem;">
+      <div class="marker-card ${completedClass}" style="min-width: 300px; max-width: 380px; font-size: 0.85rem; box-sizing: border-box; padding: 0;">
+        <div class="mobile-drag-handle d-md-none" style="width: 100%; height: 30px; background: linear-gradient(90deg, ${isDone ? '#28a745' : '#CB2B3E'} 0%, ${isDone ? '#32cd32' : '#dc3545'} 100%); cursor: grab; display: flex; align-items: center; justify-content: center; border-radius: 0.375rem 0.375rem 0 0; margin-bottom: 0;">
+          <div style="width: 40px; height: 4px; background: rgba(255,255,255,0.8); border-radius: 2px;"></div>
+        </div>
+        <div style="padding: 0.75rem;">
         <div class="popup-header d-flex justify-content-between align-items-start mb-2" style="border-bottom: 2px solid ${isDone ? '#28a745' : '#CB2B3E'}; padding-bottom: 0.5rem;">
           <div class="d-flex align-items-center" style="flex: 1; min-width: 0; overflow: hidden; margin-right: 0.5rem;">
             <div class="me-2" style="font-size: 1.1rem; color: ${isDone ? '#28a745' : '#CB2B3E'}; flex-shrink: 0;"><i class="fas fa-water"></i></div>
@@ -1569,6 +1591,7 @@ export default function MapContainer({
           </div>
           `}
         </div>
+        </div>
       </div>
     `;
   };
@@ -1593,7 +1616,11 @@ export default function MapContainer({
       }) : '';
     
     return `
-      <div class="marker-card ${completedClass}" style="min-width: 300px; max-width: 380px; font-size: 0.85rem; box-sizing: border-box; padding: 0.75rem;">
+      <div class="marker-card ${completedClass}" style="min-width: 300px; max-width: 380px; font-size: 0.85rem; box-sizing: border-box; padding: 0;">
+        <div class="mobile-drag-handle d-md-none" style="width: 100%; height: 30px; background: linear-gradient(90deg, ${isDone ? '#28a745' : '#17a2b8'} 0%, ${isDone ? '#32cd32' : '#20c997'} 100%); cursor: grab; display: flex; align-items: center; justify-content: center; border-radius: 0.375rem 0.375rem 0 0; margin-bottom: 0;">
+          <div style="width: 40px; height: 4px; background: rgba(255,255,255,0.8); border-radius: 2px;"></div>
+        </div>
+        <div style="padding: 0.75rem;">
         <div class="popup-header d-flex justify-content-between align-items-start mb-2" style="border-bottom: 2px solid ${isDone ? '#28a745' : '#17a2b8'}; padding-bottom: 0.5rem;">
           <div class="d-flex align-items-center" style="flex: 1; min-width: 0; overflow: hidden; margin-right: 0.5rem;">
             <div class="me-2" style="font-size: 1.1rem; color: ${isDone ? '#28a745' : '#17a2b8'}; flex-shrink: 0;"><i class="fas fa-helicopter-symbol"></i></div>
@@ -1712,6 +1739,7 @@ export default function MapContainer({
           </div>
           `}
         </div>
+        </div>
       </div>
     `;
   };
@@ -1744,6 +1772,122 @@ export default function MapContainer({
       </div>
     `;
   };
+
+  // Mobile popup drag functionality
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      let isDragging = false;
+      let startY = 0;
+      let currentY = 0;
+      let dragElement: HTMLElement | null = null;
+
+      const handleDragStart = (e: TouchEvent | MouseEvent) => {
+        isDragging = true;
+        startY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+        dragElement = (e.target as HTMLElement).closest('.leaflet-popup');
+        
+        if (dragElement) {
+          dragElement.style.transition = 'none';
+          // Prevent map panning while dragging popup
+          const mapContainer = document.getElementById('map');
+          if (mapContainer) {
+            mapContainer.style.pointerEvents = 'none';
+          }
+        }
+        
+        e.preventDefault();
+        e.stopPropagation();
+      };
+
+      const handleDragMove = (e: TouchEvent | MouseEvent) => {
+        if (!isDragging || !dragElement) return;
+        
+        currentY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+        const deltaY = currentY - startY;
+        
+        // Only allow downward dragging to close
+        if (deltaY > 0) {
+          const opacity = Math.max(0, 1 - deltaY / 200);
+          const scale = Math.max(0.8, 1 - deltaY / 400);
+          
+          dragElement.style.transform = `translateY(${deltaY}px) scale(${scale})`;
+          dragElement.style.opacity = opacity.toString();
+        }
+        
+        e.preventDefault();
+        e.stopPropagation();
+      };
+
+      const handleDragEnd = (e: TouchEvent | MouseEvent) => {
+        if (!isDragging || !dragElement) return;
+        
+        const deltaY = currentY - startY;
+        
+        // Re-enable map interactions
+        const mapContainer = document.getElementById('map');
+        if (mapContainer) {
+          mapContainer.style.pointerEvents = 'auto';
+        }
+        
+        dragElement.style.transition = 'all 0.3s ease';
+        
+        // Close popup if dragged down enough
+        if (deltaY > 100) {
+          dragElement.style.transform = 'translateY(100vh) scale(0.5)';
+          dragElement.style.opacity = '0';
+          
+          setTimeout(() => {
+            const closeButton = dragElement?.querySelector('.leaflet-popup-close-button') as HTMLElement;
+            if (closeButton) {
+              closeButton.click();
+            }
+          }, 300);
+        } else {
+          // Snap back to original position
+          dragElement.style.transform = '';
+          dragElement.style.opacity = '';
+        }
+        
+        isDragging = false;
+        dragElement = null;
+        startY = 0;
+        currentY = 0;
+        
+        e.preventDefault();
+        e.stopPropagation();
+      };
+
+      // Global event listeners for drag handles
+      document.addEventListener('touchstart', (e) => {
+        const target = e.target as HTMLElement;
+        if (target.closest('.mobile-drag-handle')) {
+          handleDragStart(e);
+        }
+      }, { passive: false });
+
+      document.addEventListener('touchmove', handleDragMove, { passive: false });
+      document.addEventListener('touchend', handleDragEnd, { passive: false });
+      
+      document.addEventListener('mousedown', (e) => {
+        const target = e.target as HTMLElement;
+        if (target.closest('.mobile-drag-handle')) {
+          handleDragStart(e);
+        }
+      });
+
+      document.addEventListener('mousemove', handleDragMove);
+      document.addEventListener('mouseup', handleDragEnd);
+
+      return () => {
+        document.removeEventListener('touchstart', handleDragStart);
+        document.removeEventListener('touchmove', handleDragMove);
+        document.removeEventListener('touchend', handleDragEnd);
+        document.removeEventListener('mousedown', handleDragStart);
+        document.removeEventListener('mousemove', handleDragMove);
+        document.removeEventListener('mouseup', handleDragEnd);
+      };
+    }
+  }, []);
 
   // Handle file upload functions
   if (typeof window !== 'undefined') {

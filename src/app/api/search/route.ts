@@ -2,6 +2,25 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 
 export async function GET(request: NextRequest) {
+  // Check authentication
+  const authHeader = request.headers.get('authorization');
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return NextResponse.json(
+      { error: 'Authentication required' },
+      { status: 401 }
+    );
+  }
+
+  const token = authHeader.replace('Bearer ', '');
+  
+  // Verify the token with Supabase
+  const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+  if (authError || !user) {
+    return NextResponse.json(
+      { error: 'Invalid authentication token' },
+      { status: 401 }
+    );
+  }
   const { searchParams } = new URL(request.url);
   const query = searchParams.get('q');
 
@@ -17,8 +36,8 @@ export async function GET(request: NextRequest) {
     
     console.log('Searching for:', query, 'with term:', searchTerm);
     
-    let vannResults: any[] = [];
-    let lpResults: any[] = [];
+    let vannResults: unknown[] = [];
+    let lpResults: unknown[] = [];
     
     // Try to search in vass_vann table (name column)
     try {
@@ -80,14 +99,14 @@ export async function GET(request: NextRequest) {
 
     // Format results with source indication
     const results = [
-      ...(vannResults || []).map(item => ({
+      ...(vannResults || []).map((item: any) => ({
         ...item,
         source: 'vass_vann',
         type: 'water',
         displayName: item.name,
         color: 'red'
       })),
-      ...(lpResults || []).map(item => ({
+      ...(lpResults || []).map((item: any) => ({
         ...item,
         source: 'vass_lasteplass', 
         type: 'landingsplass',
