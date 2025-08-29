@@ -33,6 +33,7 @@ export interface Landingsplass {
   fylke?: string;
   kommune?: string;
   tonn_lp?: number; // Weight in tons for landingsplass
+  calculated_tonn?: number; // Calculated total tonnage from associated waters
   priority?: number;
   done: boolean;
   is_done?: boolean; // Database field name

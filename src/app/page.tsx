@@ -68,7 +68,6 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
   const loadAirports = async () => {
     try {
       setLoadingStates(prev => ({ ...prev, airports: true }));
-      console.log('Fetching airports from table: vass_vann');
       
       // First, get the total count
       const { count, error: countError } = await supabase
@@ -77,20 +76,15 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
 
       if (countError) {
         console.error('Error getting count:', countError);
-      } else {
-        console.log(`📊 Total airports in database: ${count}`);
       }
 
       // Implement proper pagination to get ALL records
-      console.log(`🔄 Implementing pagination to fetch all ${count} records...`);
       const allAirports = [];
       const pageSize = 1000; // Supabase's limit
       let currentOffset = 0;
       let hasMore = true;
       
       while (hasMore) {
-        console.log(`📄 Fetching page ${Math.floor(currentOffset / pageSize) + 1} (records ${currentOffset + 1}-${Math.min(currentOffset + pageSize, count || 0)})...`);
-        
         const { data: pageData, error: pageError } = await supabase
           .from('vass_vann')
           .select('*')
@@ -108,7 +102,6 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
         }
         
         allAirports.push(...pageData);
-        console.log(`✅ Page fetched: ${pageData.length} records (total so far: ${allAirports.length})`);
         
         // Check if we got fewer records than requested (end of data)
         if (pageData.length < pageSize) {
@@ -139,7 +132,6 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
         marker_color: airport.marker_color || 'red'
       }));
 
-      console.log(`✅ Valid airports loaded: ${validAirports.length} records`);
       setAirports(validAirports);
     } catch (error) {
       console.warn('Error loading airports:', error);
@@ -152,20 +144,72 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
   const loadLandingsplasser = async () => {
     try {
       setLoadingStates(prev => ({ ...prev, landingsplasser: true }));
-      console.log('Fetching landingsplass markers from table: vass_lasteplass');
-      const { data, error } = await supabase
+      
+      // First get all landingsplasser
+      const { data: landingsplassData, error: landingsplassError } = await supabase
         .from('vass_lasteplass')
         .select('*')
         .order('lp', { ascending: true }); // Order by lp field like original
 
-      if (error) {
-        console.warn('Could not load landingsplasser:', error.message);
+      if (landingsplassError) {
+        console.warn('Could not load landingsplasser:', landingsplassError.message);
         setLandingsplasser([]);
         return;
       }
 
+      // Get associations and calculate tonnage for each landingsplass
+      const landingsplasserWithCalculatedTonnage = await Promise.all(
+        (landingsplassData || []).map(async (lp: Record<string, unknown>) => {
+          try {
+            // Get sum of tonnage from associated waters
+            const { data: associations, error: associationsError } = await supabase
+              .from('vass_associations')
+              .select('airport_id')
+              .eq('landingsplass_id', lp.id);
+
+            if (associationsError) {
+              console.warn(`Error fetching associations for landingsplass ${lp.id}:`, associationsError);
+              return { ...lp, calculated_tonn: 0 };
+            }
+
+            // If no associations, return 0
+            if (!associations || associations.length === 0) {
+              return { ...lp, calculated_tonn: 0 };
+            }
+
+            // Get tonnage for each associated airport/water
+            const airportIds = associations.map(assoc => assoc.airport_id);
+            const { data: waters, error: tonnageError } = await supabase
+              .from('vass_vann')
+              .select('tonn')
+              .in('id', airportIds);
+
+            if (tonnageError) {
+              console.warn(`Error fetching tonnage for landingsplass ${lp.id}:`, tonnageError);
+              return { ...lp, calculated_tonn: 0 };
+            }
+
+            // Calculate total tonnage from associated waters
+            const totalTonnage = (waters || []).reduce((sum, water: any) => {
+              const tonnageValue = water.tonn || 0;
+              const tonnage = typeof tonnageValue === 'string' ? parseFloat(tonnageValue) : tonnageValue;
+              const validTonnage = typeof tonnage === 'number' && !isNaN(tonnage) ? tonnage : 0;
+              return sum + validTonnage;
+            }, 0);
+
+            return {
+              ...lp,
+              calculated_tonn: totalTonnage
+            };
+          } catch (error) {
+            console.warn(`Error calculating tonnage for landingsplass ${lp.id}:`, error);
+            return { ...lp, calculated_tonn: 0 };
+          }
+        })
+      );
+
       // Validate data structure
-      const validLandingsplasser = (data || []).filter((lp: Record<string, unknown>) => 
+      const validLandingsplasser = landingsplasserWithCalculatedTonnage.filter((lp: Record<string, unknown>) => 
         lp && 
         typeof lp.latitude === 'number' && 
         typeof lp.longitude === 'number' &&
@@ -177,7 +221,6 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
         done: lp.is_done || false // Map is_done to done
       }));
 
-      console.log(`✅ Landingsplasser loaded: ${validLandingsplasser.length} records`);
       setLandingsplasser(validLandingsplasser);
     } catch (error) {
       console.warn('Error loading landingsplasser:', error);
@@ -220,8 +263,6 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
 
   const loadCounties = async () => {
     try {
-      console.log('Fetching unique counties from both tables...');
-      
       // Fetch unique fylke values from both tables like original
       const [airportsResponse, landingsplassResponse] = await Promise.all([
         supabase
@@ -249,7 +290,6 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
         .filter(county => county && county.trim() !== '')
         .sort();
 
-      console.log('✅ Unique counties found:', uniqueCounties);
       setCounties(uniqueCounties);
     } catch (error) {
       console.warn('Error loading counties:', error);

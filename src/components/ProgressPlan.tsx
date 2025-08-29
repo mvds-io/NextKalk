@@ -46,12 +46,6 @@ export default function ProgressPlan({
       if (typeof window !== 'undefined') {
         const isMobileScreen = window.innerWidth <= 900;
         setInternalIsMobile(isMobileScreen);
-        console.log('Mobile check:', { 
-          windowWidth: window.innerWidth, 
-          isMobileScreen, 
-          isMobile, 
-          onToggleMinimized: !!onToggleMinimized 
-        });
       }
     };
     
@@ -91,12 +85,10 @@ export default function ProgressPlan({
         return;
       }
 
-      console.log('🔍 Loading associations for', sortedLandingsplasser.length, 'landingsplasser...');
       const landingsplassIds = sortedLandingsplasser.map(lp => lp.id);
       
       try {
         // First try a simple query without joins to test basic access
-        console.log('📋 Testing basic access to vass_associations table...');
         const { data: testData, error: testError } = await supabase
           .from('vass_associations')
           .select('landingsplass_id, airport_id')
@@ -112,7 +104,6 @@ export default function ProgressPlan({
           return;
         }
 
-        console.log('✅ Basic table access works, trying full query...');
 
         // Try the query without the inner join first
         const { data: simpleData, error: simpleError } = await supabase
@@ -127,12 +118,10 @@ export default function ProgressPlan({
           return;
         }
 
-        console.log('✅ Simple associations query works, got', simpleData?.length || 0, 'associations');
 
         // Now try to get the airport details separately
         if (simpleData && simpleData.length > 0) {
           const airportIds = [...new Set(simpleData.map(item => item.airport_id))];
-          console.log('🔍 Fetching details for', airportIds.length, 'airports...');
 
           const { data: airportData, error: airportError } = await supabase
             .from('vass_vann')
@@ -146,7 +135,6 @@ export default function ProgressPlan({
             return;
           }
 
-          console.log('✅ Airport details fetched:', airportData?.length || 0, 'airports');
 
           // Combine the data manually
           const airportMap = new Map((airportData || []).map(airport => [airport.id, airport]));
@@ -168,7 +156,6 @@ export default function ProgressPlan({
 
           setAssociations(associationsMap);
           setAssociationsAvailable(true);
-          console.log(`✅ Successfully loaded associations for ${Object.keys(associationsMap).length} landingsplasser`);
         } else {
           console.log('ℹ️ No associations found');
           setAssociations({});

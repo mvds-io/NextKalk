@@ -312,7 +312,6 @@ export default function MapContainer({
             chunkedLoading: true,
             chunkProgress: (processed: number, total: number) => {
               // Optional: Add loading progress feedback
-              console.log(`Loading markers: ${processed}/${total}`);
             },
             maxClusterRadius: 35, // Reduced from 50 to make smaller clusters
             disableClusteringAtZoom: 8, // Disable clustering at zoom level 8 and higher (was 12)
@@ -386,7 +385,6 @@ export default function MapContainer({
               return;
             }
 
-            console.log('📍 Requesting user location...');
             
             // Use different options for mobile vs desktop
             const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
@@ -396,12 +394,10 @@ export default function MapContainer({
               maximumAge: isMobile ? 60000 : 300000 // Shorter cache for mobile for more accurate results
             };
 
-            console.log('📍 Using mobile-optimized settings:', isMobile);
 
             navigator.geolocation.getCurrentPosition(
               (position) => {
                 const { latitude, longitude, accuracy } = position.coords;
-                console.log('📍 User location found:', { latitude, longitude, accuracy });
                 
                 // Center map on user location with appropriate zoom based on accuracy
                 const zoomLevel = accuracy > 1000 ? 8 : accuracy > 100 ? 10 : 12;
@@ -1645,7 +1641,7 @@ export default function MapContainer({
           <div class="col-6">
             <div class="info-item-compact">
               <span class="text-muted" style="font-size: 0.7rem;"><i class="fas fa-weight-hanging me-1"></i>Totalt tonn:</span>
-              <div class="fw-semibold" style="word-wrap: break-word; overflow-wrap: break-word;">${landingsplass.tonn_lp || 'N/A'}</div>
+              <div class="fw-semibold" style="word-wrap: break-word; overflow-wrap: break-word;">${landingsplass.calculated_tonn !== undefined ? landingsplass.calculated_tonn : (landingsplass.tonn_lp || 'N/A')}</div>
             </div>
           </div>
           <div class="col-6">
