@@ -14,6 +14,22 @@ interface PDFExportResult {
   itemsExported?: number;
 }
 
+// Utility function to parse European decimal numbers (handles both "1.0" and "1,0" formats)
+function parseEuropeanDecimal(value: string | number): number {
+  if (typeof value === 'number') {
+    return isNaN(value) ? 0 : value;
+  }
+  
+  if (typeof value === 'string') {
+    // Replace comma with dot for European decimal format
+    const normalizedValue = value.replace(',', '.');
+    const parsed = parseFloat(normalizedValue);
+    return isNaN(parsed) ? 0 : parsed;
+  }
+  
+  return 0;
+}
+
 export async function exportCompletedLandingsplassToPDF(): Promise<PDFExportResult> {
   try {
     // Load jsPDF dynamically if not already loaded
@@ -138,12 +154,9 @@ export async function exportCompletedLandingsplassToPDF(): Promise<PDFExportResu
       const lpName = (lp.lp || 'N/A').substring(0, 25);
       const tonn = lp.tonn_lp || 0;
       
-      // Add to total tonnage if it's a valid number
-      if (typeof tonn === 'number' && !isNaN(tonn)) {
-        totalTonnage += tonn;
-      } else if (typeof tonn === 'string' && !isNaN(parseFloat(tonn))) {
-        totalTonnage += parseFloat(tonn);
-      }
+      // Parse tonnage using European decimal format helper
+      const parsedTonnage = parseEuropeanDecimal(tonn);
+      totalTonnage += parsedTonnage;
       
       doc.text(`${index + 1}`, 20, yPosition);
       doc.text(kode, 35, yPosition);

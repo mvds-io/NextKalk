@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { supabase, queryWithRetry } from '@/lib/supabase';
 
 export async function GET(request: NextRequest) {
   // Check authentication
@@ -39,62 +39,64 @@ export async function GET(request: NextRequest) {
     let vannResults: unknown[] = [];
     let lpResults: unknown[] = [];
     
-    // Try to search in vass_vann table (name column)
+    // Try to search in vass_vann table (name column) with retry logic
     try {
-      const { data, error } = await supabase
-        .from('vass_vann')
-        .select('*')
-        .ilike('name', searchTerm)
-        .limit(10);
-
-      if (error) {
-        console.error('Error searching vass_vann by name:', error);
-        // Try alternative search if name column doesn't exist
-        const { data: altData, error: altError } = await supabase
+      const { data } = await queryWithRetry(
+        () => supabase
           .from('vass_vann')
           .select('*')
-          .limit(5); // Get some sample data to see structure
-        
-        if (altError) {
-          console.error('Error accessing vass_vann table:', altError);
-        } else {
-          console.log('vass_vann sample data:', altData?.[0]);
-        }
-      } else {
-        vannResults = data || [];
-        console.log('vass_vann results:', vannResults.length);
-      }
+          .ilike('name', searchTerm)
+          .limit(10),
+        'search vass_vann by name'
+      );
+      
+      vannResults = data || [];
+      console.log('vass_vann results:', vannResults.length);
     } catch (err) {
       console.error('Exception searching vass_vann:', err);
+      // Try fallback search for schema inspection
+      try {
+        const { data: altData } = await queryWithRetry(
+          () => supabase
+            .from('vass_vann')
+            .select('*')
+            .limit(5),
+          'vass_vann fallback search'
+        );
+        console.log('vass_vann sample data:', altData?.[0]);
+      } catch (altErr) {
+        console.error('Error accessing vass_vann table:', altErr);
+      }
     }
 
-    // Try to search in vass_lasteplass table (lp and kode columns)
+    // Try to search in vass_lasteplass table (lp and kode columns) with retry logic
     try {
-      const { data, error } = await supabase
-        .from('vass_lasteplass')
-        .select('*')
-        .or(`lp.ilike.${searchTerm},kode.ilike.${searchTerm}`)
-        .limit(10);
-
-      if (error) {
-        console.error('Error searching vass_lasteplass by lp/kode:', error);
-        // Try alternative search if lp/kode columns don't exist
-        const { data: altData, error: altError } = await supabase
+      const { data } = await queryWithRetry(
+        () => supabase
           .from('vass_lasteplass')
           .select('*')
-          .limit(5); // Get some sample data to see structure
-        
-        if (altError) {
-          console.error('Error accessing vass_lasteplass table:', altError);
-        } else {
-          console.log('vass_lasteplass sample data:', altData?.[0]);
-        }
-      } else {
-        lpResults = data || [];
-        console.log('vass_lasteplass results:', lpResults.length);
-      }
+          .or(`lp.ilike.${searchTerm},kode.ilike.${searchTerm}`)
+          .limit(10),
+        'search vass_lasteplass by lp/kode'
+      );
+      
+      lpResults = data || [];
+      console.log('vass_lasteplass results:', lpResults.length);
     } catch (err) {
       console.error('Exception searching vass_lasteplass:', err);
+      // Try fallback search for schema inspection
+      try {
+        const { data: altData } = await queryWithRetry(
+          () => supabase
+            .from('vass_lasteplass')
+            .select('*')
+            .limit(5),
+          'vass_lasteplass fallback search'
+        );
+        console.log('vass_lasteplass sample data:', altData?.[0]);
+      } catch (altErr) {
+        console.error('Error accessing vass_lasteplass table:', altErr);
+      }
     }
 
     // Format results with source indication

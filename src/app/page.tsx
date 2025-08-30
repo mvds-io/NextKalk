@@ -7,8 +7,24 @@ import MapContainer from '@/components/MapContainer';
 import ProgressPlan from '@/components/ProgressPlan';
 import DatabaseInspector from '@/components/DatabaseInspector';
 import AuthGuard from '@/components/AuthGuard';
-import { supabase } from '@/lib/supabase';
+import { supabase, queryWithRetry } from '@/lib/supabase';
 import { Airport, Landingsplass, KalkInfo, User, CounterData, FilterState } from '@/types';
+
+// Utility function to parse European decimal numbers (handles both "1.0" and "1,0" formats)
+function parseEuropeanDecimal(value: string | number): number {
+  if (typeof value === 'number') {
+    return isNaN(value) ? 0 : value;
+  }
+  
+  if (typeof value === 'string') {
+    // Replace comma with dot for European decimal format
+    const normalizedValue = value.replace(',', '.');
+    const parsed = parseFloat(normalizedValue);
+    return isNaN(parsed) ? 0 : parsed;
+  }
+  
+  return 0;
+}
 
 interface AuthenticatedAppProps {
   user: User;
@@ -69,32 +85,30 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
     try {
       setLoadingStates(prev => ({ ...prev, airports: true }));
       
-      // First, get the total count
-      const { count, error: countError } = await supabase
-        .from('vass_vann')
-        .select('*', { count: 'exact', head: true });
+      // Get the total count with retry logic
+      const countResult = await queryWithRetry(
+        () => supabase
+          .from('vass_vann')
+          .select('*', { count: 'exact', head: true }),
+        'get airports count'
+      );
+      const count = countResult.count;
 
-      if (countError) {
-        console.error('Error getting count:', countError);
-      }
-
-      // Implement proper pagination to get ALL records
+      // Implement proper pagination to get ALL records with retry logic
       const allAirports = [];
       const pageSize = 1000; // Supabase's limit
       let currentOffset = 0;
       let hasMore = true;
       
       while (hasMore) {
-        const { data: pageData, error: pageError } = await supabase
-          .from('vass_vann')
-          .select('*')
-          .order('id', { ascending: true })
-          .range(currentOffset, currentOffset + pageSize - 1);
-          
-        if (pageError) {
-          console.error(`Error fetching page at offset ${currentOffset}:`, pageError);
-          break;
-        }
+        const { data: pageData } = await queryWithRetry(
+          () => supabase
+            .from('vass_vann')
+            .select('*')
+            .order('id', { ascending: true })
+            .range(currentOffset, currentOffset + pageSize - 1),
+          `load airports page ${Math.floor(currentOffset / pageSize) + 1}`
+        );
         
         if (!pageData || pageData.length === 0) {
           hasMore = false;
@@ -132,9 +146,10 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
         marker_color: airport.marker_color || 'red'
       }));
 
+      console.log(`✅ Loaded ${validAirports.length} airports using ${Math.ceil(allAirports.length / pageSize)} paginated queries`);
       setAirports(validAirports);
     } catch (error) {
-      console.warn('Error loading airports:', error);
+      console.error('Error loading airports:', error);
       setAirports([]);
     } finally {
       setLoadingStates(prev => ({ ...prev, airports: false }));
@@ -145,68 +160,73 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
     try {
       setLoadingStates(prev => ({ ...prev, landingsplasser: true }));
       
-      // First get all landingsplasser
-      const { data: landingsplassData, error: landingsplassError } = await supabase
-        .from('vass_lasteplass')
-        .select('*')
-        .order('lp', { ascending: true }); // Order by lp field like original
+      // First get all landingsplasser with retry logic
+      const { data: landingsplassData } = await queryWithRetry(
+        () => supabase
+          .from('vass_lasteplass')
+          .select('*')
+          .order('lp', { ascending: true }),
+        'load landingsplasser'
+      );
 
-      if (landingsplassError) {
-        console.warn('Could not load landingsplasser:', landingsplassError.message);
+      if (!landingsplassData || landingsplassData.length === 0) {
+        console.warn('No landingsplasser found');
         setLandingsplasser([]);
         return;
       }
 
-      // Get associations and calculate tonnage for each landingsplass
-      const landingsplasserWithCalculatedTonnage = await Promise.all(
-        (landingsplassData || []).map(async (lp: Record<string, unknown>) => {
-          try {
-            // Get sum of tonnage from associated waters
-            const { data: associations, error: associationsError } = await supabase
-              .from('vass_associations')
-              .select('airport_id')
-              .eq('landingsplass_id', lp.id);
+      // Get landingsplass IDs for batch queries
+      const landingsplassIds = landingsplassData.map(lp => lp.id);
 
-            if (associationsError) {
-              console.warn(`Error fetching associations for landingsplass ${lp.id}:`, associationsError);
-              return { ...lp, calculated_tonn: 0 };
-            }
-
-            // If no associations, return 0
-            if (!associations || associations.length === 0) {
-              return { ...lp, calculated_tonn: 0 };
-            }
-
-            // Get tonnage for each associated airport/water
-            const airportIds = associations.map(assoc => assoc.airport_id);
-            const { data: waters, error: tonnageError } = await supabase
-              .from('vass_vann')
-              .select('tonn')
-              .in('id', airportIds);
-
-            if (tonnageError) {
-              console.warn(`Error fetching tonnage for landingsplass ${lp.id}:`, tonnageError);
-              return { ...lp, calculated_tonn: 0 };
-            }
-
-            // Calculate total tonnage from associated waters
-            const totalTonnage = (waters || []).reduce((sum, water: any) => {
-              const tonnageValue = water.tonn || 0;
-              const tonnage = typeof tonnageValue === 'string' ? parseFloat(tonnageValue) : tonnageValue;
-              const validTonnage = typeof tonnage === 'number' && !isNaN(tonnage) ? tonnage : 0;
-              return sum + validTonnage;
-            }, 0);
-
-            return {
-              ...lp,
-              calculated_tonn: totalTonnage
-            };
-          } catch (error) {
-            console.warn(`Error calculating tonnage for landingsplass ${lp.id}:`, error);
-            return { ...lp, calculated_tonn: 0 };
-          }
-        })
+      // Batch load all associations in one query (eliminates N+1 problem)
+      const { data: allAssociations } = await queryWithRetry(
+        () => supabase
+          .from('vass_associations')
+          .select('landingsplass_id, airport_id')
+          .in('landingsplass_id', landingsplassIds),
+        'load associations'
       );
+
+      // Get unique airport IDs from associations
+      const airportIds = [...new Set((allAssociations || []).map(assoc => assoc.airport_id))];
+
+      // Batch load all tonnage data in one query (eliminates second N query)
+      const { data: watersData } = await queryWithRetry(
+        () => supabase
+          .from('vass_vann')
+          .select('id, tonn')
+          .in('id', airportIds),
+        'load waters tonnage'
+      );
+
+      // Create lookup maps for efficient processing
+      const associationsMap = new Map<number, number[]>();
+      (allAssociations || []).forEach(assoc => {
+        if (!associationsMap.has(assoc.landingsplass_id)) {
+          associationsMap.set(assoc.landingsplass_id, []);
+        }
+        associationsMap.get(assoc.landingsplass_id)!.push(assoc.airport_id);
+      });
+
+      const tonnageMap = new Map<number, number>();
+      (watersData || []).forEach(water => {
+        const tonnageValue = water.tonn || 0;
+        const validTonnage = parseEuropeanDecimal(tonnageValue);
+        tonnageMap.set(water.id, validTonnage);
+      });
+
+      // Calculate tonnage for each landingsplass efficiently
+      const landingsplasserWithCalculatedTonnage = landingsplassData.map((lp: Record<string, unknown>) => {
+        const associatedAirportIds = associationsMap.get(lp.id as number) || [];
+        const totalTonnage = associatedAirportIds.reduce((sum, airportId) => {
+          return sum + (tonnageMap.get(airportId) || 0);
+        }, 0);
+
+        return {
+          ...lp,
+          calculated_tonn: totalTonnage
+        };
+      });
 
       // Validate data structure
       const validLandingsplasser = landingsplasserWithCalculatedTonnage.filter((lp: Record<string, unknown>) => 
@@ -221,9 +241,10 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
         done: lp.is_done || false // Map is_done to done
       }));
 
+      console.log(`✅ Loaded ${validLandingsplasser.length} landingsplasser with ${(allAssociations || []).length} associations using 3 queries instead of ${1 + 2 * landingsplassData.length}`);
       setLandingsplasser(validLandingsplasser);
     } catch (error) {
-      console.warn('Error loading landingsplasser:', error);
+      console.error('Error loading landingsplasser:', error);
       setLandingsplasser([]);
     } finally {
       setLoadingStates(prev => ({ ...prev, landingsplasser: false }));
@@ -233,15 +254,12 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
   const loadKalkMarkers = async () => {
     try {
       setLoadingStates(prev => ({ ...prev, kalkMarkers: true }));
-      const { data, error } = await supabase
-        .from('vass_info')
-        .select('*');
-
-      if (error) {
-        console.warn('Could not load kalk markers:', error.message);
-        setKalkMarkers([]);
-        return;
-      }
+      const { data } = await queryWithRetry(
+        () => supabase
+          .from('vass_info')
+          .select('*'),
+        'load kalk markers'
+      );
 
       // Validate data structure
       const validKalkMarkers = (data || []).filter((kalk: Record<string, unknown>) => 
@@ -252,9 +270,10 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
         !isNaN(kalk.longitude)
       );
 
+      console.log(`✅ Loaded ${validKalkMarkers.length} kalk markers`);
       setKalkMarkers(validKalkMarkers);
     } catch (error) {
-      console.warn('Error loading kalk markers:', error);
+      console.error('Error loading kalk markers:', error);
       setKalkMarkers([]);
     } finally {
       setLoadingStates(prev => ({ ...prev, kalkMarkers: false }));
@@ -263,22 +282,25 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
 
   const loadCounties = async () => {
     try {
-      // Fetch unique fylke values from both tables like original
+      // Fetch unique fylke values from both tables with retry logic
       const [airportsResponse, landingsplassResponse] = await Promise.all([
-        supabase
-          .from('vass_vann')
-          .select('fylke')
-          .not('fylke', 'is', null)
-          .not('fylke', 'eq', ''),
-        supabase
-          .from('vass_lasteplass')
-          .select('fylke')
-          .not('fylke', 'is', null)
-          .not('fylke', 'eq', '')
+        queryWithRetry(
+          () => supabase
+            .from('vass_vann')
+            .select('fylke')
+            .not('fylke', 'is', null)
+            .not('fylke', 'eq', ''),
+          'load airport counties'
+        ),
+        queryWithRetry(
+          () => supabase
+            .from('vass_lasteplass')
+            .select('fylke')
+            .not('fylke', 'is', null)
+            .not('fylke', 'eq', ''),
+          'load landingsplass counties'
+        )
       ]);
-
-      if (airportsResponse.error) throw airportsResponse.error;
-      if (landingsplassResponse.error) throw landingsplassResponse.error;
 
       // Combine and get unique values
       const allCounties = [
@@ -290,9 +312,10 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
         .filter(county => county && county.trim() !== '')
         .sort();
 
+      console.log(`✅ Loaded ${uniqueCounties.length} unique counties`);
       setCounties(uniqueCounties);
     } catch (error) {
-      console.warn('Error loading counties:', error);
+      console.error('Error loading counties:', error);
       setCounties([]);
     }
   };

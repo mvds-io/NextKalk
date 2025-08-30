@@ -16,7 +16,7 @@
 
 import { useState, useEffect } from 'react';
 import { User } from '@/types';
-import { supabase, completeLogout } from '@/lib/supabase';
+import { supabase, completeLogout, queryWithRetry } from '@/lib/supabase';
 
 interface AuthGuardProps {
   children: (user: User, onLogout: () => void) => React.ReactNode;
@@ -25,17 +25,39 @@ interface AuthGuardProps {
 export default function AuthGuard({ children }: AuthGuardProps) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [showLoginModal, setShowLoginModal] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [loginError, setLoginError] = useState('');
+  const [authTimeout, setAuthTimeout] = useState(false);
 
   useEffect(() => {
-    checkAuthentication();
+    let mounted = true;
+    
+    // Show timeout warning after 10 seconds
+    const warningTimeout = setTimeout(() => {
+      if (mounted) {
+        setAuthTimeout(true);
+      }
+    }, 10000); // Show warning after 10 seconds
+    
+    // Safety timeout to prevent infinite loading
+    const safetyTimeout = setTimeout(() => {
+      if (mounted) {
+        console.warn('Authentication check taking too long, showing login screen');
+        setIsLoading(false);
+      }
+    }, 20000); // 20 second safety timeout
+
+    checkAuthentication().finally(() => {
+      clearTimeout(warningTimeout);
+      clearTimeout(safetyTimeout);
+    });
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!mounted) return;
+      
       if (event === 'SIGNED_IN' && session?.user) {
         await loadUserData(session.user.email!);
       } else if (event === 'SIGNED_OUT') {
@@ -43,19 +65,43 @@ export default function AuthGuard({ children }: AuthGuardProps) {
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      clearTimeout(warningTimeout);
+      clearTimeout(safetyTimeout);
+      subscription.unsubscribe();
+    };
   }, []);
 
   const checkAuthentication = async () => {
+    let timeoutId: NodeJS.Timeout | null = null;
+    
     try {
+      // Set up a timeout that will handle hanging, but won't reject the promise
+      timeoutId = setTimeout(() => {
+        console.warn('Authentication check is taking longer than expected');
+        // Don't reject, just log the warning
+      }, 15000);
+
       const { data: { session } } = await supabase.auth.getSession();
+      
+      // Clear timeout since we got a response
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
       
       if (session?.user?.email) {
         await loadUserData(session.user.email);
       } else {
+        console.log('No active session found');
         setIsLoading(false);
       }
     } catch (error) {
+      // Clear timeout on error
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
       console.error('Error checking authentication:', error);
       setIsLoading(false);
     }
@@ -63,14 +109,17 @@ export default function AuthGuard({ children }: AuthGuardProps) {
 
   const loadUserData = async (email: string) => {
     try {
-      const { data: userData, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('email', email)
-        .single();
+      const { data: userData } = await queryWithRetry(
+        () => supabase
+          .from('users')
+          .select('*')
+          .eq('email', email)
+          .single(),
+        'load user data'
+      );
 
-      if (error || !userData) {
-        console.error('User not found in database:', error);
+      if (!userData) {
+        console.error('User not found in database');
         setUser(null);
         setLoginError('Brukeren din er ikke registrert i systemet. Kontakt administrator.');
         setIsLoading(false);
@@ -82,7 +131,7 @@ export default function AuthGuard({ children }: AuthGuardProps) {
     } catch (error) {
       console.error('Error loading user data:', error);
       setUser(null);
-      setLoginError('Kunne ikke laste brukerdata. Kontakt administrator.');
+      setLoginError('Kunne ikke laste brukerdata. Prøv å laste siden på nytt.');
       setIsLoading(false);
     }
   };
@@ -100,7 +149,6 @@ export default function AuthGuard({ children }: AuthGuardProps) {
 
       if (error) throw error;
       
-      setShowLoginModal(false);
       setEmail('');
       setPassword('');
     } catch (error: any) {
@@ -125,6 +173,23 @@ export default function AuthGuard({ children }: AuthGuardProps) {
             <span className="visually-hidden">Laster...</span>
           </div>
           <h5 className="text-muted">Sjekker innlogging...</h5>
+          {authTimeout && (
+            <div className="mt-3">
+              <div className="alert alert-warning d-inline-block" style={{ fontSize: '0.9rem' }}>
+                <i className="fas fa-clock me-2"></i>
+                Tilkobling tar lengre tid enn forventet. Venter...
+              </div>
+              <div className="mt-2">
+                <button 
+                  className="btn btn-outline-primary btn-sm"
+                  onClick={() => window.location.reload()}
+                >
+                  <i className="fas fa-redo me-2"></i>
+                  Last siden på nytt
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );

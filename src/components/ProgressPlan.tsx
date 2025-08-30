@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Landingsplass, User } from '@/types';
-import { supabase } from '@/lib/supabase';
+import { supabase, queryWithRetry } from '@/lib/supabase';
 import { SkeletonProgressItem } from './SkeletonLoader';
 
 interface ProgressPlanProps {
@@ -599,7 +599,9 @@ export default function ProgressPlan({
                     <div className="text-muted mb-1">
                       <i className="fas fa-weight-hanging me-1"></i>Tonn:
                     </div>
-                    <div className="fw-semibold text-dark">{lp.tonn_lp || 'N/A'}</div>
+                    <div className="fw-semibold text-dark">
+                      {lp.calculated_tonn ? `${lp.calculated_tonn.toFixed(1)}t` : 'N/A'}
+                    </div>
                   </div>
                   <div className="info-item" style={{ background: '#f8f9fa', padding: '0.5rem', borderRadius: '6px' }}>
                     <div className="text-muted mb-1">
