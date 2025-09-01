@@ -1921,7 +1921,7 @@ export default function MapContainer({
     `;
   };
 
-  // Mobile popup drag functionality
+  // Mobile popup drag functionality - disabled auto-close, only X button closes popups
   useEffect(() => {
     if (typeof window !== 'undefined') {
       let isDragging = false;
@@ -1953,12 +1953,13 @@ export default function MapContainer({
         currentY = 'touches' in e ? e.touches[0].clientY : e.clientY;
         const deltaY = currentY - startY;
         
-        // Only allow downward dragging to close
+        // Allow limited downward dragging for visual feedback but prevent closing
         if (deltaY > 0) {
-          const opacity = Math.max(0, 1 - deltaY / 200);
-          const scale = Math.max(0.8, 1 - deltaY / 400);
+          // Limit drag distance to prevent accidental closing
+          const limitedDelta = Math.min(deltaY, 50);
+          const opacity = Math.max(0.8, 1 - limitedDelta / 200);
           
-          dragElement.style.transform = `translateY(${deltaY}px) scale(${scale})`;
+          dragElement.style.transform = `translateY(${limitedDelta}px)`;
           dragElement.style.opacity = opacity.toString();
         }
         
@@ -1969,8 +1970,6 @@ export default function MapContainer({
       const handleDragEnd = (e: TouchEvent | MouseEvent) => {
         if (!isDragging || !dragElement) return;
         
-        const deltaY = currentY - startY;
-        
         // Re-enable map interactions
         const mapContainer = document.getElementById('map');
         if (mapContainer) {
@@ -1979,22 +1978,9 @@ export default function MapContainer({
         
         dragElement.style.transition = 'all 0.3s ease';
         
-        // Close popup if dragged down enough
-        if (deltaY > 100) {
-          dragElement.style.transform = 'translateY(100vh) scale(0.5)';
-          dragElement.style.opacity = '0';
-          
-          setTimeout(() => {
-            const closeButton = dragElement?.querySelector('.leaflet-popup-close-button') as HTMLElement;
-            if (closeButton) {
-              closeButton.click();
-            }
-          }, 300);
-        } else {
-          // Snap back to original position
-          dragElement.style.transform = '';
-          dragElement.style.opacity = '';
-        }
+        // Always snap back to original position - no auto-close
+        dragElement.style.transform = '';
+        dragElement.style.opacity = '';
         
         isDragging = false;
         dragElement = null;
