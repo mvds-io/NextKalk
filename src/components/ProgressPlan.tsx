@@ -781,12 +781,26 @@ export default function ProgressPlan({
                       Ingen kontaktpersoner
                     </div>
                   ) : (
-                    <div className="contact-persons-list" style={{ maxHeight: '100px', overflowY: 'auto' }}>
+                    <div className="contact-persons-list" style={{ 
+                      maxHeight: '100px', 
+                      overflowY: 'auto',
+                      position: 'relative',
+                      zIndex: 1,
+                      backgroundColor: '#f0f8ff',
+                      borderRadius: '4px'
+                    }}>
                       {contactPersons[lp.id].map((contact, index) => (
                         <div 
                           key={`${contact.kontaktperson}-${contact.phone}-${index}`}
                           className="contact-item py-1" 
-                          style={{ fontSize: '0.7rem', borderBottom: '1px solid #e9ecef' }}
+                          style={{ 
+                            fontSize: '0.7rem', 
+                            borderBottom: '1px solid #e9ecef',
+                            position: 'relative',
+                            zIndex: 1,
+                            backgroundColor: '#f0f8ff',
+                            marginBottom: '1px'
+                          }}
                         >
                           <div className="d-flex justify-content-between align-items-start">
                             <div style={{ flex: 1 }}>
