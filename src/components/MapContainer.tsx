@@ -453,23 +453,16 @@ export default function MapContainer({
                 });
               },
               (error) => {
-                console.log('📍 Could not get user location:', error.message);
-                console.log('📍 Error code:', error.code);
-                console.log('📍 Error details:', error);
                 
                 // Provide specific error messages
                 switch(error.code) {
                   case error.PERMISSION_DENIED:
-                    console.log('📍 User denied the request for Geolocation');
                     break;
                   case error.POSITION_UNAVAILABLE:
-                    console.log('📍 Location information is unavailable');
                     break;
                   case error.TIMEOUT:
-                    console.log('📍 The request to get user location timed out');
                     break;
                   default:
-                    console.log('📍 An unknown error occurred');
                     break;
                 }
               },
@@ -1229,6 +1222,111 @@ export default function MapContainer({
     }
   };
 
+  // Load contact persons for landingsplasser
+  const loadContactPersons = async (landingsplassId: number) => {
+    try {
+      const loadingId = `landingsplass-${landingsplassId}`;
+      
+      // Check if this is still the current loading operation
+      if (currentLoadingIdRef.current !== loadingId) {
+        return; // Another popup has taken priority, abandon this operation
+      }
+
+      const { data: associations, error } = await supabase
+        .from('vass_associations')
+        .select(`
+          airport_id,
+          vass_vann:airport_id (
+            forening, kontaktperson, phone, tonn
+          )
+        `)
+        .eq('landingsplass_id', landingsplassId);
+
+      if (error) throw error;
+
+      // Check again after async operation
+      if (currentLoadingIdRef.current !== loadingId) {
+        return; // Another popup has taken priority during the async operation
+      }
+
+      const contactPersonsElement = document.getElementById(`contact-persons-landingsplass-${landingsplassId}`);
+      if (!contactPersonsElement) return;
+
+      if (!associations || associations.length === 0) {
+        contactPersonsElement.innerHTML = '<em class="text-muted">Ingen kontaktpersoner</em>';
+        return;
+      }
+
+      // Extract and deduplicate contact persons, summing tonnage
+      const contactPersonsMap = new Map();
+      associations.forEach((assoc: any) => {
+        const water = assoc.vass_vann;
+        if (!water) return;
+        
+        const { forening, kontaktperson, phone, tonn } = water;
+        if (kontaktperson || forening || phone) {
+          const key = `${kontaktperson || ''}-${phone || ''}`;
+          if (!contactPersonsMap.has(key)) {
+            contactPersonsMap.set(key, { 
+              forening, 
+              kontaktperson, 
+              phone, 
+              totalTonn: 0,
+              tonnCount: 0 
+            });
+          }
+          
+          // Add tonnage to the contact person
+          const contact = contactPersonsMap.get(key);
+          if (tonn && tonn !== 'N/A' && !isNaN(parseFloat(tonn))) {
+            contact.totalTonn += parseFloat(tonn);
+            contact.tonnCount++;
+          }
+        }
+      });
+
+      if (contactPersonsMap.size === 0) {
+        contactPersonsElement.innerHTML = '<em class="text-muted">Ingen kontaktpersoner</em>';
+        return;
+      }
+
+      const contactPersonsHTML = Array.from(contactPersonsMap.values()).map((contact: any) => {
+        const displayName = contact.kontaktperson || 'Ukjent';
+        const displayPhone = contact.phone ? contact.phone.toString() : '';
+        const displayForening = contact.forening || '';
+        const displayTonn = contact.totalTonn > 0 ? contact.totalTonn.toFixed(1) + 't' : '';
+        
+        return `
+          <div class="contact-item py-1" style="font-size: 0.7rem; border-bottom: 1px solid #e9ecef;">
+            <div class="d-flex justify-content-between align-items-start">
+              <div style="color: #495057; flex: 1;">
+                <i class="fas fa-user me-1" style="color: #6c757d;"></i>
+                <span class="fw-semibold">${displayName}</span>
+              </div>
+              ${displayTonn ? `<span class="badge" style="background: #28a745; color: white; font-size: 0.65rem; border-radius: 8px; flex-shrink: 0;">
+                ${displayTonn}
+              </span>` : ''}
+            </div>
+            ${displayForening ? `<div style="color: #6c757d; font-size: 0.65rem; margin-left: 1rem;">
+              <i class="fas fa-users me-1"></i>${displayForening}
+            </div>` : ''}
+            ${displayPhone ? `<div style="color: #6c757d; font-size: 0.65rem; margin-left: 1rem;">
+              <i class="fas fa-phone me-1"></i>${displayPhone}
+            </div>` : ''}
+          </div>
+        `;
+      }).join('');
+
+      contactPersonsElement.innerHTML = `<div style="max-height: 120px; overflow-y: auto;">${contactPersonsHTML}</div>`;
+    } catch (error) {
+      console.error('Error loading contact persons:', error);
+      const contactPersonsElement = document.getElementById(`contact-persons-landingsplass-${landingsplassId}`);
+      if (contactPersonsElement) {
+        contactPersonsElement.innerHTML = '<em class="text-muted text-danger">Feil ved lasting av kontaktpersoner</em>';
+      }
+    }
+  };
+
   // Memoize filtered data to prevent unnecessary recalculations
   const filteredAirports = useMemo(() => {
     if (filterState.county) {
@@ -1269,6 +1367,7 @@ export default function MapContainer({
         loadAndDisplayImages(id, 'landingsplass');
         showIndividualConnections(id);
         loadRelatedWaters(id);
+        loadContactPersons(id);
       }
     }, 100);
   }, []);
@@ -1685,6 +1784,15 @@ export default function MapContainer({
             </div>
           </div>
           ` : ''}
+        </div>
+        
+        <div class="contact-persons-section mb-2" style="background: #f0f8ff; padding: 0.5rem; border-radius: 0.375rem;">
+          <div style="font-size: 0.75rem; font-weight: 600; color: #495057; margin-bottom: 0.5rem;">
+            <i class="fas fa-address-book me-1" style="color: #4a90e2;"></i>Kontaktpersoner:
+          </div>
+          <div id="contact-persons-landingsplass-${landingsplass.id}" class="contact-persons-display" style="font-size: 0.7rem;">
+            <em class="text-muted">Laster...</em>
+          </div>
         </div>
         
         <div class="related-waters-section mb-2" style="background: #f1f3f4; padding: 0.5rem; border-radius: 0.375rem;">

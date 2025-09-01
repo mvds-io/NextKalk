@@ -94,7 +94,6 @@ export default function AuthGuard({ children }: AuthGuardProps) {
       if (session?.user?.email) {
         await loadUserData(session.user.email);
       } else {
-        console.log('No active session found');
         setIsLoading(false);
       }
     } catch (error) {
@@ -109,19 +108,15 @@ export default function AuthGuard({ children }: AuthGuardProps) {
 
   const loadUserData = async (email: string) => {
     try {
-      console.log('Loading user data for email:', email);
       
       // Check current auth state
       const { data: { session } } = await supabase.auth.getSession();
-      console.log('Current session:', session);
-      console.log('Session user email:', session?.user?.email);
       
       // First, let's see all users in the database to debug
       const allUsersResult = await supabase
         .from('users')
         .select('*');
       
-      console.log('All users in database:', allUsersResult);
       
       // Try direct query first to bypass retry logic
       const result = await supabase
@@ -129,9 +124,6 @@ export default function AuthGuard({ children }: AuthGuardProps) {
         .select('*')
         .eq('email', email);
 
-      console.log('Query result:', result);
-      console.log('Query result data:', result.data);
-      console.log('Query result error:', result.error);
 
       if (result.error) {
         console.error('Database error:', result.error);
@@ -144,7 +136,6 @@ export default function AuthGuard({ children }: AuthGuardProps) {
       const usersData = result.data;
 
       if (!usersData || usersData.length === 0) {
-        console.log('User not found, attempting to create user in database');
         
         // Try to create the user
         const createResult = await supabase
@@ -161,7 +152,6 @@ export default function AuthGuard({ children }: AuthGuardProps) {
           .select()
           .single();
         
-        console.log('Create user result:', createResult);
         
         if (createResult.error) {
           console.error('Failed to create user:', createResult.error);
@@ -171,7 +161,6 @@ export default function AuthGuard({ children }: AuthGuardProps) {
           return;
         }
         
-        console.log('User created successfully:', createResult.data);
         setUser(createResult.data);
         setIsLoading(false);
         return;
@@ -181,7 +170,6 @@ export default function AuthGuard({ children }: AuthGuardProps) {
         console.warn(`Multiple users found for email ${email}, using the first one`);
       }
 
-      console.log('Setting user:', usersData[0]);
       setUser(usersData[0]);
       setIsLoading(false);
     } catch (error) {

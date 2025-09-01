@@ -146,7 +146,6 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
         marker_color: airport.marker_color || 'red'
       }));
 
-      console.log(`✅ Loaded ${validAirports.length} airports using ${Math.ceil(allAirports.length / pageSize)} paginated queries`);
       setAirports(validAirports);
     } catch (error) {
       console.error('Error loading airports:', error);
@@ -241,7 +240,6 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
         done: lp.is_done || false // Map is_done to done
       }));
 
-      console.log(`✅ Loaded ${validLandingsplasser.length} landingsplasser with ${(allAssociations || []).length} associations using 3 queries instead of ${1 + 2 * landingsplassData.length}`);
       setLandingsplasser(validLandingsplasser);
     } catch (error) {
       console.error('Error loading landingsplasser:', error);
@@ -270,7 +268,6 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
         !isNaN(kalk.longitude)
       );
 
-      console.log(`✅ Loaded ${validKalkMarkers.length} kalk markers`);
       setKalkMarkers(validKalkMarkers);
     } catch (error) {
       console.error('Error loading kalk markers:', error);
@@ -312,7 +309,6 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
         .filter(county => county && county.trim() !== '')
         .sort();
 
-      console.log(`✅ Loaded ${uniqueCounties.length} unique counties`);
       setCounties(uniqueCounties);
     } catch (error) {
       console.error('Error loading counties:', error);

@@ -23,6 +23,13 @@ interface Association {
   tonn: number;
 }
 
+interface ContactPerson {
+  kontaktperson: string;
+  forening: string;
+  phone: string;
+  totalTonn: number;
+}
+
 export default function ProgressPlan({ 
   landingsplasser, 
   filterState,
@@ -39,6 +46,8 @@ export default function ProgressPlan({
   const [expandedComments, setExpandedComments] = useState<Set<number>>(new Set());
   const [associationsAvailable, setAssociationsAvailable] = useState<boolean | null>(null);
   const [internalIsMobile, setInternalIsMobile] = useState(false);
+  const [contactPersons, setContactPersons] = useState<Record<number, ContactPerson[]>>({});
+  const [isContactPersonsLoading, setIsContactPersonsLoading] = useState<Record<number, boolean>>({});
 
   // Internal mobile detection as fallback
   useEffect(() => {
@@ -105,62 +114,44 @@ export default function ProgressPlan({
         }
 
 
-        // Try the query without the inner join first
-        const { data: simpleData, error: simpleError } = await supabase
+        // Use the same foreign key join approach as the map popup
+        const { data: associations, error: associationsError } = await supabase
           .from('vass_associations')
-          .select('landingsplass_id, airport_id')
+          .select(`
+            landingsplass_id,
+            airport_id,
+            vass_vann:airport_id (
+              id, name, tonn
+            )
+          `)
           .in('landingsplass_id', landingsplassIds);
 
-        if (simpleError) {
-          console.warn('❌ Simple associations query failed:', simpleError.message);
+        if (associationsError) {
+          console.warn('❌ Associations query failed:', associationsError.message);
           setAssociations({});
           setAssociationsAvailable(false);
           return;
         }
 
-
-        // Now try to get the airport details separately
-        if (simpleData && simpleData.length > 0) {
-          const airportIds = [...new Set(simpleData.map(item => item.airport_id))];
-
-          const { data: airportData, error: airportError } = await supabase
-            .from('vass_vann')
-            .select('id, name, tonn')
-            .in('id', airportIds);
-
-          if (airportError) {
-            console.warn('❌ Airport details query failed:', airportError.message);
-            setAssociations({});
-            setAssociationsAvailable(false);
-            return;
-          }
-
-
-          // Combine the data manually
-          const airportMap = new Map((airportData || []).map(airport => [airport.id, airport]));
-          const associationsMap: Record<number, Association[]> = {};
-
-          simpleData.forEach(item => {
-            const airport = airportMap.get(item.airport_id);
-            if (airport) {
-              if (!associationsMap[item.landingsplass_id]) {
-                associationsMap[item.landingsplass_id] = [];
-              }
-              associationsMap[item.landingsplass_id].push({
-                id: airport.id,
-                name: airport.name,
-                tonn: airport.tonn
-              });
+        // Process the data with foreign key relationship
+        const associationsMap: Record<number, Association[]> = {};
+        
+        (associations || []).forEach((assoc: any) => {
+          const water = assoc.vass_vann;
+          if (water) {
+            if (!associationsMap[assoc.landingsplass_id]) {
+              associationsMap[assoc.landingsplass_id] = [];
             }
-          });
+            associationsMap[assoc.landingsplass_id].push({
+              id: water.id,
+              name: water.name,
+              tonn: water.tonn
+            });
+          }
+        });
 
-          setAssociations(associationsMap);
-          setAssociationsAvailable(true);
-        } else {
-          console.log('ℹ️ No associations found');
-          setAssociations({});
-          setAssociationsAvailable(true);
-        }
+        setAssociations(associationsMap);
+        setAssociationsAvailable(true);
 
       } catch (error: any) {
         console.error('❌ Unexpected error loading associations:', error);
@@ -180,6 +171,130 @@ export default function ProgressPlan({
       loadAssociations();
     }
   }, [sortedLandingsplasser.length]); // Only depend on the length, not the entire array
+
+  // Load contact persons for a specific landingsplass
+  const loadContactPersonsForLandingsplass = async (landingsplassId: number) => {
+    setIsContactPersonsLoading(prev => ({ ...prev, [landingsplassId]: true }));
+    
+    try {
+      const { data: associations, error } = await supabase
+        .from('vass_associations')
+        .select(`
+          airport_id,
+          vass_vann:airport_id (
+            forening, kontaktperson, phone, tonn
+          )
+        `)
+        .eq('landingsplass_id', landingsplassId);
+
+      if (error) throw error;
+
+      // Extract and deduplicate contact persons, summing tonnage
+      const contactPersonsMap = new Map();
+      (associations || []).forEach((assoc: any) => {
+        const water = assoc.vass_vann;
+        if (!water) return;
+        
+        const { forening, kontaktperson, phone, tonn } = water;
+        if (kontaktperson || forening || phone) {
+          const key = `${kontaktperson || ''}-${phone || ''}`;
+          if (!contactPersonsMap.has(key)) {
+            contactPersonsMap.set(key, { 
+              forening, 
+              kontaktperson, 
+              phone, 
+              totalTonn: 0
+            });
+          }
+          
+          // Add tonnage to the contact person
+          const contact = contactPersonsMap.get(key);
+          if (tonn && tonn !== 'N/A' && !isNaN(parseFloat(tonn))) {
+            contact.totalTonn += parseFloat(tonn);
+          }
+        }
+      });
+
+      const contactPersonsList = Array.from(contactPersonsMap.values()).sort((a, b) => {
+        // Sort by totalTonn descending, then by name
+        if (b.totalTonn !== a.totalTonn) return b.totalTonn - a.totalTonn;
+        return (a.kontaktperson || '').localeCompare(b.kontaktperson || '');
+      });
+
+      setContactPersons(prev => ({ ...prev, [landingsplassId]: contactPersonsList }));
+    } catch (error) {
+      console.error('Error loading contact persons for landingsplass:', landingsplassId, error);
+      setContactPersons(prev => ({ ...prev, [landingsplassId]: [] }));
+    } finally {
+      setIsContactPersonsLoading(prev => ({ ...prev, [landingsplassId]: false }));
+    }
+  };
+
+  // Load contact persons for all visible landingsplasser
+  useEffect(() => {
+    sortedLandingsplasser.forEach(lp => {
+      if (!contactPersons[lp.id] && !isContactPersonsLoading[lp.id]) {
+        loadContactPersonsForLandingsplass(lp.id);
+      }
+    });
+  }, [sortedLandingsplasser.length]);
+
+  // Auto-scroll to first incomplete landingsplass after all data is loaded
+  useEffect(() => {
+    if (sortedLandingsplasser.length === 0 || isMinimized) return;
+
+    // Check if all data loading is complete
+    const allAssociationsLoaded = associationsAvailable !== null;
+    const contactPersonsLoadingCount = Object.values(isContactPersonsLoading).filter(Boolean).length;
+    const allContactPersonsLoaded = contactPersonsLoadingCount === 0;
+    
+    // Only proceed if all data is loaded
+    if (!allAssociationsLoaded || !allContactPersonsLoaded) {
+      return;
+    }
+
+    // Wait a bit for the DOM to settle after data loading
+    const scrollTimeout = setTimeout(() => {
+      // Find the first incomplete landingsplass
+      const firstIncomplete = sortedLandingsplasser.find(lp => !lp.done);
+      
+      if (firstIncomplete) {
+        // Find the card element by looking for a unique identifier
+        const cardElement = document.querySelector(`[data-landingsplass-id="${firstIncomplete.id}"]`);
+        
+        if (cardElement) {
+          // Find the ProgressPlan content container (which is now scrollable)
+          const scrollContainer = cardElement.closest('.fremdriftsplan-content') as HTMLElement;
+          
+          if (scrollContainer) {
+            // Calculate scroll position to show the card at the very top
+            const cardOffsetTop = (cardElement as HTMLElement).offsetTop;
+            
+            // Get the actual header height
+            const headerElement = scrollContainer.querySelector('.fremdriftsplan-header') as HTMLElement;
+            const headerHeight = headerElement ? headerElement.offsetHeight : 50;
+            
+            // Add a small padding (8px) to ensure the card is fully visible
+            const padding = 8;
+            const targetScrollTop = cardOffsetTop - headerHeight - padding;
+            
+            scrollContainer.scrollTo({
+              top: Math.max(0, targetScrollTop),
+              behavior: 'smooth'
+            });
+          }
+        }
+      }
+    }, 500); // Reduced wait time since data is already loaded
+
+    return () => clearTimeout(scrollTimeout);
+  }, [
+    sortedLandingsplasser.length, 
+    filterState.county, 
+    isMinimized, 
+    associationsAvailable, 
+    isContactPersonsLoading // This will trigger when contact persons finish loading
+  ]);
 
   const handleToggleDone = (landingsplassId: number) => {
     // Placeholder for toggle functionality
@@ -433,7 +548,9 @@ export default function ProgressPlan({
       position: 'relative', 
       zIndex: 0,
       width: '100%',
-      height: '100%'
+      height: '100%',
+      overflowY: 'auto',
+      overflowX: 'hidden'
     }}>
       {/* Header integrated into content */}
       <div className="fremdriftsplan-header d-flex justify-content-between align-items-center" style={{ 
@@ -524,6 +641,7 @@ export default function ProgressPlan({
           return (
             <div 
               key={lp.id}
+              data-landingsplass-id={lp.id}
               className={`card mb-3 shadow-sm border-0 draggable-card ${isDone ? 'opacity-75' : ''}`}
               style={{
                 borderRadius: '12px',
@@ -645,6 +763,61 @@ export default function ProgressPlan({
                     </div>
                   </div>
                 )}
+                
+                {/* Contact Persons Section */}
+                <div className="contact-persons-section mb-2" style={{ background: '#f0f8ff', borderRadius: '6px', padding: '0.5rem' }}>
+                  <div className="text-muted mb-1" style={{ fontSize: '0.7rem', fontWeight: 600 }}>
+                    <i className="fas fa-address-book me-1" style={{ color: '#4a90e2' }}></i>
+                    Kontaktpersoner ({(contactPersons[lp.id] || []).length}):
+                  </div>
+                  {isContactPersonsLoading[lp.id] ? (
+                    <div className="text-center py-1">
+                      <div className="spinner-border spinner-border-sm" role="status" style={{ width: '0.8rem', height: '0.8rem' }}>
+                        <span className="visually-hidden">Loading...</span>
+                      </div>
+                    </div>
+                  ) : !contactPersons[lp.id] || contactPersons[lp.id].length === 0 ? (
+                    <div className="text-muted" style={{ fontSize: '0.7rem', fontStyle: 'italic' }}>
+                      Ingen kontaktpersoner
+                    </div>
+                  ) : (
+                    <div className="contact-persons-list" style={{ maxHeight: '100px', overflowY: 'auto' }}>
+                      {contactPersons[lp.id].map((contact, index) => (
+                        <div 
+                          key={`${contact.kontaktperson}-${contact.phone}-${index}`}
+                          className="contact-item py-1" 
+                          style={{ fontSize: '0.7rem', borderBottom: '1px solid #e9ecef' }}
+                        >
+                          <div className="d-flex justify-content-between align-items-start">
+                            <div style={{ flex: 1 }}>
+                              <div style={{ color: '#495057', fontWeight: 600 }}>
+                                <i className="fas fa-user me-1" style={{ color: '#6c757d' }}></i>
+                                {contact.kontaktperson || 'Ukjent'}
+                              </div>
+                              {contact.forening && (
+                                <div style={{ color: '#6c757d', fontSize: '0.65rem', marginLeft: '1rem', marginTop: '0.25rem' }}>
+                                  <i className="fas fa-users me-1"></i>
+                                  {contact.forening}
+                                </div>
+                              )}
+                              {contact.phone && (
+                                <div style={{ color: '#6c757d', fontSize: '0.65rem', marginLeft: '1rem', marginTop: '0.25rem' }}>
+                                  <i className="fas fa-phone me-1"></i>
+                                  {contact.phone}
+                                </div>
+                              )}
+                            </div>
+                            {contact.totalTonn > 0 && (
+                              <span className="badge bg-success" style={{ fontSize: '0.65rem', flexShrink: 0, borderRadius: '8px' }}>
+                                {contact.totalTonn.toFixed(1)}t
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 
                 <div className="airports-section" style={{ background: '#f1f3f4', borderRadius: '6px', padding: '0.5rem' }}>
                   <div className="text-muted mb-1" style={{ fontSize: '0.7rem', fontWeight: 600 }}>
