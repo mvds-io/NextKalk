@@ -17,6 +17,7 @@ interface CounterProps {
   user?: User | null;
   onUserUpdate?: (user: User | null) => void;
   isLoading?: boolean;
+  onHideAll?: () => void;
 }
 
 export default function Counter({ 
@@ -26,7 +27,8 @@ export default function Counter({
   onFilterChange, 
   user, 
   onUserUpdate,
-  isLoading = false
+  isLoading = false,
+  onHideAll
 }: CounterProps) {
   
   const [isLoadingConnections, setIsLoadingConnections] = useState(false);
@@ -336,6 +338,22 @@ export default function Counter({
                 </>
               )}
             </button>
+            {onHideAll && (
+              <button 
+                className="btn btn-outline-danger btn-sm"
+                style={{ 
+                  fontSize: '0.65rem', 
+                  padding: '0.2rem 0.4rem', 
+                  whiteSpace: 'nowrap',
+                  borderColor: '#dc3545',
+                  color: '#dc3545'
+                }}
+                onClick={onHideAll}
+                title="Skjul alt for fullskjerm kart"
+              >
+                <i className="fas fa-expand-arrows-alt" style={{ fontSize: '0.6rem' }}></i>
+              </button>
+            )}
             </div>
 
             {/* User authentication UI - mobile */}
@@ -511,6 +529,23 @@ export default function Counter({
                   </>
                 )}
               </button>
+              {onHideAll && (
+                <button 
+                  className="btn btn-outline-danger btn-sm"
+                  style={{ 
+                    fontSize: '0.7rem', 
+                    padding: '0.25rem 0.5rem', 
+                    whiteSpace: 'nowrap',
+                    borderColor: '#dc3545',
+                    color: '#dc3545'
+                  }}
+                  onClick={onHideAll}
+                  title="Skjul alt for fullskjerm kart"
+                >
+                  <i className="fas fa-expand-arrows-alt me-1" style={{ fontSize: '0.65rem' }}></i>
+                  Fullskjerm
+                </button>
+              )}
             </div>
             <div className="legend-item" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem', color: '#6c757d' }}>
               <i className="fas fa-info-circle" style={{ fontSize: '0.65rem' }}></i>

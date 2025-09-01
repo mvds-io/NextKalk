@@ -5,7 +5,6 @@ import LoadingScreen from '@/components/LoadingScreen';
 import Counter from '@/components/Counter';
 import MapContainer from '@/components/MapContainer';
 import ProgressPlan from '@/components/ProgressPlan';
-import DatabaseInspector from '@/components/DatabaseInspector';
 import AuthGuard from '@/components/AuthGuard';
 import { supabase, queryWithRetry } from '@/lib/supabase';
 import { Airport, Landingsplass, KalkInfo, User, CounterData, FilterState } from '@/types';
@@ -54,6 +53,7 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
   
   // Desktop panel toggle state
   const [isProgressPlanMinimized, setIsProgressPlanMinimized] = useState(false);
+  const [isFullScreen, setIsFullScreen] = useState(false);
 
   useEffect(() => {
     initializeApp();
@@ -381,6 +381,15 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
     }, 10);
   };
 
+  const toggleFullScreen = () => {
+    setIsFullScreen(!isFullScreen);
+    
+    // Trigger map resize after layout changes
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('fullscreenToggle'));
+    }, 150);
+  };
+
   if (isLoading) {
     return <LoadingScreen />;
   }
@@ -409,8 +418,8 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
 
   return (
     <>
-      {/* Show counter unless hidden on mobile */}
-      {(!isMobile || !isMobileTopBarHidden) && (
+      {/* Show counter unless hidden on mobile or in fullscreen */}
+      {(!isMobile || !isMobileTopBarHidden) && !isFullScreen && (
         <div className={`${isMobile && isMobileTopBarHidden ? 'mobile-hidden' : ''}`}>
           <Counter 
             counterData={counterData}
@@ -420,18 +429,19 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
             user={user}
             onUserUpdate={() => onLogout()}
             isLoading={loadingStates.initialLoad}
+            onHideAll={toggleFullScreen}
           />
         </div>
       )}
       
       
-      <div className={`main-split-container ${isMobile && isMobileUIMinimized ? 'panel-minimized' : ''} ${!isMobile && isProgressPlanMinimized ? 'progress-plan-minimized' : ''}`} style={{ 
+      <div className={`main-split-container ${isMobile && isMobileUIMinimized ? 'panel-minimized' : ''} ${!isMobile && isProgressPlanMinimized ? 'progress-plan-minimized' : ''} ${isFullScreen ? 'fullscreen' : ''}`} style={{ 
         display: 'flex', 
         flexDirection: isMobile ? 'column' : 'row', 
-        height: isMobile ? (isMobileTopBarHidden ? '100vh' : 'calc(100vh - 60px)') : 'calc(100vh - 70px)' 
+        height: isFullScreen ? '100vh' : (isMobile ? (isMobileTopBarHidden ? '100vh' : 'calc(100vh - 60px)') : 'calc(100vh - 70px)') 
       }}>
         <div className="left-panel" style={{ 
-          flex: !isMobile && isProgressPlanMinimized ? '1' : '0 0 70%', 
+          flex: isFullScreen ? '1' : (!isMobile && isProgressPlanMinimized ? '1' : '0 0 70%'), 
           height: '100%',
           minWidth: 0
         }}>
@@ -448,16 +458,17 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
             }}
           />
         </div>
-        <div className={`right-panel ${isMobile && isMobileUIMinimized ? 'panel-minimized' : ''} ${!isMobile && isProgressPlanMinimized ? 'panel-minimized' : ''}`} style={{ 
-          flex: !isMobile && isProgressPlanMinimized ? '0 0 40px' : '0 0 30%',
-          height: '100%',
-          borderLeft: '1px solid #dee2e6', 
-          background: '#f8f9fa',
-          overflow: 'hidden',
-          position: 'relative',
-          scrollbarWidth: 'none',
-          msOverflowStyle: 'none'
-        }}>
+        {!isFullScreen && (
+          <div className={`right-panel ${isMobile && isMobileUIMinimized ? 'panel-minimized' : ''} ${!isMobile && isProgressPlanMinimized ? 'panel-minimized' : ''}`} style={{ 
+            flex: !isMobile && isProgressPlanMinimized ? '0 0 40px' : '0 0 30%',
+            height: '100%',
+            borderLeft: '1px solid #dee2e6', 
+            background: '#f8f9fa',
+            overflow: 'hidden',
+            position: 'relative',
+            scrollbarWidth: 'none',
+            msOverflowStyle: 'none'
+          }}>
           <ProgressPlan 
             landingsplasser={landingsplasser}
             filterState={filterState}
@@ -504,10 +515,9 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
               </span>
             </div>
           )}
-        </div>
+          </div>
+        )}
       </div>
-
-      <DatabaseInspector />
 
       {/* Floating show button when everything is hidden on mobile */}
       {isMobile && isMobileUIMinimized && isMobileTopBarHidden && (
@@ -530,6 +540,31 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
           title="Vis paneler"
         >
           <i className="fas fa-eye" style={{ fontSize: '18px' }}></i>
+        </button>
+      )}
+
+      {/* Floating restore button when in fullscreen mode */}
+      {isFullScreen && (
+        <button
+          className="btn btn-danger"
+          style={{
+            position: 'fixed',
+            top: '20px',
+            right: '20px',
+            zIndex: 1000,
+            borderRadius: '8px',
+            padding: '8px 12px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
+            fontSize: '0.9rem'
+          }}
+          onClick={toggleFullScreen}
+          title="Vis topbar og Fremdriftsplan"
+        >
+          <i className="fas fa-compress-arrows-alt me-2" style={{ fontSize: '16px' }}></i>
+          Vis paneler
         </button>
       )}
     </>

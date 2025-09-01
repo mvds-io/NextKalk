@@ -410,24 +410,6 @@ export default function ProgressPlan({
             padding: '0'
           }}>Fremdriftsplan</h4>
           <div className="d-flex gap-1">
-            {onToggleMinimized && !isMobile && (
-              <button 
-                className="btn btn-sm btn-outline-secondary panel-toggle-btn"
-                style={{ 
-                  fontSize: '0.65rem', 
-                  padding: '0.2rem 0.4rem',
-                  borderColor: '#dee2e6',
-                  color: '#6c757d',
-                  lineHeight: '1',
-                  height: '24px',
-                  width: '28px'
-                }}
-                onClick={onToggleMinimized}
-                title={isMinimized ? "Vis Fremdriftsplan" : "Skjul Fremdriftsplan"}
-              >
-                <i className={`fas fa-chevron-${isMinimized ? 'left' : 'right'}`}></i>
-              </button>
-            )}
             {onMobileToggle && (
               <button 
                 className="btn btn-sm btn-outline-secondary d-lg-none"
@@ -489,24 +471,6 @@ export default function ProgressPlan({
             padding: '0'
           }}>Fremdriftsplan</h4>
           <div className="d-flex gap-1">
-            {onToggleMinimized && !isMobile && (
-              <button 
-                className="btn btn-sm btn-outline-secondary panel-toggle-btn"
-                style={{ 
-                  fontSize: '0.65rem', 
-                  padding: '0.2rem 0.4rem',
-                  borderColor: '#dee2e6',
-                  color: '#6c757d',
-                  lineHeight: '1',
-                  height: '24px',
-                  width: '28px'
-                }}
-                onClick={onToggleMinimized}
-                title={isMinimized ? "Vis Fremdriftsplan" : "Skjul Fremdriftsplan"}
-              >
-                <i className={`fas fa-chevron-${isMinimized ? 'left' : 'right'}`}></i>
-              </button>
-            )}
             {onMobileToggle && (
               <button 
                 className="btn btn-sm btn-outline-secondary d-lg-none"
@@ -571,34 +535,6 @@ export default function ProgressPlan({
           padding: '0'
         }}>Fremdriftsplan</h4>
         <div className="d-flex gap-1">
-          {onToggleMinimized && !isMobile && (
-            <span
-              style={{ 
-                display: 'inline-block',
-                width: '16px',
-                height: '16px',
-                lineHeight: '14px',
-                textAlign: 'center',
-                fontSize: '10px',
-                color: '#6c757d',
-                backgroundColor: 'white',
-                border: '1px solid #dee2e6',
-                borderRadius: '2px',
-                cursor: 'pointer',
-                userSelect: 'none',
-                WebkitUserSelect: 'none',
-                MozUserSelect: 'none',
-                boxSizing: 'border-box',
-                verticalAlign: 'middle',
-                margin: '0',
-                padding: '0'
-              }}
-              onClick={onToggleMinimized}
-              title={isMinimized ? "Show Fremdriftsplan" : "Hide Fremdriftsplan"}
-            >
-              {isMinimized ? '◀' : '▶'}
-            </span>
-          )}
           {onMobileToggle && (
             <button 
               className="btn btn-sm btn-outline-secondary d-lg-none"

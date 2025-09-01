@@ -731,6 +731,7 @@ export default function MapContainer({
     // Listen for mobile UI toggle events
     window.addEventListener('mobileUIToggle', handleResize);
     window.addEventListener('progressPlanToggle', handleResize);
+    window.addEventListener('fullscreenToggle', handleResize);
     
     // Also check for changes in container size using ResizeObserver if available
     let resizeObserver: ResizeObserver | null = null;
@@ -749,6 +750,7 @@ export default function MapContainer({
       window.removeEventListener('orientationchange', handleResize);
       window.removeEventListener('mobileUIToggle', handleResize);
       window.removeEventListener('progressPlanToggle', handleResize);
+      window.removeEventListener('fullscreenToggle', handleResize);
       if (resizeObserver) {
         resizeObserver.disconnect();
       }

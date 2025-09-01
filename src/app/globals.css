@@ -2460,3 +2460,13 @@ body {
     z-index: 1003 !important;
   }
 }
+
+/* Fullscreen mode styles */
+.main-split-container.fullscreen .left-panel {
+  flex: 1 !important;
+  width: 100% !important;
+}
+
+.main-split-container.fullscreen {
+  height: 100vh !important;
+}
