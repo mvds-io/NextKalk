@@ -378,6 +378,39 @@ export default function MapContainer({
           // Make global functions available for popup buttons
           setupGlobalFunctions(L, map);
 
+          // Override popup behavior to prevent auto-closing on mobile
+          const originalCheckDynamicEvents = map._checkDynamicEvents;
+          map._checkDynamicEvents = function() {
+            // Prevent popup from closing when map is panned or zoomed on mobile
+            const popups = document.querySelectorAll('.mobile-friendly-popup');
+            const shouldPreventClose = popups.length > 0 && window.innerWidth <= 768;
+            
+            if (!shouldPreventClose) {
+              return originalCheckDynamicEvents.call(this);
+            }
+          };
+
+          // Add event listeners to prevent popup closing during map interactions on mobile
+          map.on('movestart', function(e: any) {
+            if (window.innerWidth <= 768) {
+              const openPopup = map._popup;
+              if (openPopup && openPopup.options.className === 'mobile-friendly-popup') {
+                e.preventDefault && e.preventDefault();
+                return false;
+              }
+            }
+          });
+
+          map.on('zoomstart', function(e: any) {
+            if (window.innerWidth <= 768) {
+              const openPopup = map._popup;
+              if (openPopup && openPopup.options.className === 'mobile-friendly-popup') {
+                e.preventDefault && e.preventDefault();
+                return false;
+              }
+            }
+          });
+
           // Try to get user's location and center map after everything is initialized
           const getUserLocation = () => {
             if (!navigator.geolocation) {
@@ -1419,6 +1452,8 @@ export default function MapContainer({
           closeOnEscapeKey: false,
           autoClose: false,
           closeOnClick: false,
+          autoPan: false,
+          keepInView: true,
           className: 'mobile-friendly-popup'
         });
         
@@ -1468,6 +1503,8 @@ export default function MapContainer({
           closeOnEscapeKey: false,
           autoClose: false,
           closeOnClick: false,
+          autoPan: false,
+          keepInView: true,
           className: 'mobile-friendly-popup'
         });
         
@@ -1511,6 +1548,8 @@ export default function MapContainer({
           closeOnEscapeKey: false,
           autoClose: false,
           closeOnClick: false,
+          autoPan: false,
+          keepInView: true,
           className: 'mobile-friendly-popup'
         });
 

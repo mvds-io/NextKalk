@@ -2,14 +2,13 @@
 
 import { useState, useEffect } from 'react';
 import { Landingsplass, User } from '@/types';
-import { supabase, queryWithRetry } from '@/lib/supabase';
-import { SkeletonProgressItem } from './SkeletonLoader';
+import { supabase } from '@/lib/supabase';
 
 interface ProgressPlanProps {
   landingsplasser: Landingsplass[];
   filterState: { county: string; showConnections: boolean };
   user: User | null;
-  onDataUpdate: () => void;
+  onDataUpdate?: () => void;
   isLoading?: boolean;
   isMobile?: boolean;
   onMobileToggle?: () => void;
@@ -98,7 +97,7 @@ export default function ProgressPlan({
       
       try {
         // First try a simple query without joins to test basic access
-        const { data: testData, error: testError } = await supabase
+        const { error: testError } = await supabase
           .from('vass_associations')
           .select('landingsplass_id, airport_id')
           .limit(1);
@@ -297,10 +296,6 @@ export default function ProgressPlan({
     isContactPersonsLoading // This will trigger when contact persons finish loading
   ]);
 
-  const handleToggleDone = (landingsplassId: number) => {
-    // Placeholder for toggle functionality
-    console.log('Toggle done for landingsplass:', landingsplassId);
-  };
 
   const handleZoomToLandingsplass = (landingsplassId: number) => {
     // Find the landingsplass in the data
@@ -326,25 +321,24 @@ export default function ProgressPlan({
     }
 
     // Try to find the map instance - it should be available globally
-    const mapContainer = mapElement as any;
     let map = null;
     
     // Check if the map is available in the MapContainer component
-    if ((window as any).leafletMapInstance) {
-      map = (window as any).leafletMapInstance;
+    if ((window as Record<string, unknown>).leafletMapInstance) {
+      map = (window as Record<string, unknown>).leafletMapInstance as Record<string, unknown>;
     }
     
     if (map) {
       console.log('✅ Zooming to landingsplass:', landingsplass.kode, 'at', [landingsplass.latitude, landingsplass.longitude]);
-      map.setView([landingsplass.latitude, landingsplass.longitude], 12);
+      (map as Record<string, unknown>).setView([landingsplass.latitude, landingsplass.longitude], 12);
       
       // Try to find and open the popup for this marker
-      map.eachLayer((layer: any) => {
+      (map as Record<string, unknown>).eachLayer((layer: Record<string, unknown>) => {
         if (layer.getLatLng && layer.bindPopup) {
-          const latlng = layer.getLatLng();
+          const latlng = (layer.getLatLng as () => Record<string, number>)();
           if (Math.abs(latlng.lat - landingsplass.latitude) < 0.0001 && 
               Math.abs(latlng.lng - landingsplass.longitude) < 0.0001) {
-            layer.openPopup();
+            (layer.openPopup as () => void)();
           }
         }
       });

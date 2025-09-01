@@ -150,7 +150,7 @@ export const retryWithBackoff = async <T>(
 };
 
 // Enhanced query wrapper with health monitoring
-export const queryWithRetry = async (queryFn: () => any, operationName: string = 'query') => {
+export const queryWithRetry = async <T>(queryFn: () => Promise<T>, operationName: string = 'query'): Promise<T> => {
   return retryWithBackoff(async () => {
     try {
       const result = await queryFn();

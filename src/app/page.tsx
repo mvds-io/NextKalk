@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import LoadingScreen from '@/components/LoadingScreen';
 import Counter from '@/components/Counter';
 import MapContainer from '@/components/MapContainer';
@@ -59,7 +59,7 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
     initializeApp();
   }, []);
 
-  const initializeApp = async () => {
+  const initializeApp = useCallback(async () => {
     try {
       setError(null);
       
@@ -79,7 +79,7 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
       setLoadingStates(prev => ({ ...prev, initialLoad: false }));
       setIsLoading(false);
     }
-  };
+  }, []);
 
   const loadAirports = async () => {
     try {
@@ -316,7 +316,7 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
     }
   };
 
-  const updateCounterData = () => {
+  const updateCounterData = useCallback(() => {
     // Counter should reflect filtered data, not all data
     let visibleAirports = airports;
     
@@ -329,7 +329,7 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
     const done = visibleAirports.filter(a => a.done).length;
     
     setCounterData({ remaining, done });
-  };
+  }, [airports, filterState.county]);
 
   useEffect(() => {
     updateCounterData();

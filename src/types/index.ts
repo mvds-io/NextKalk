@@ -78,7 +78,7 @@ export interface UserActionLog {
   target_type: string;
   target_id: number;
   target_name?: string;
-  action_details?: any;
+  action_details?: Record<string, unknown>;
   timestamp: string;
 }
 

@@ -1,12 +1,10 @@
 declare module 'leaflet-routing-machine' {
-  import * as L from 'leaflet';
-  const leafletRouting: any;
+  const leafletRouting: Record<string, unknown>;
   export = leafletRouting;
 }
 
 declare module 'leaflet.awesome-markers' {
-  import * as L from 'leaflet';
-  const awesomeMarkers: any;
+  const awesomeMarkers: Record<string, unknown>;
   export = awesomeMarkers;
 }
 

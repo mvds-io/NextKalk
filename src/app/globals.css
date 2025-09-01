@@ -8,6 +8,15 @@
     left: 50% !important;
     transform: translateX(-50%) !important;
     z-index: 1000 !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+  
+  /* Force popup to stay visible regardless of pan/zoom */
+  .mobile-friendly-popup {
+    visibility: visible !important;
+    opacity: 1 !important;
+    display: block !important;
   }
   
   .mobile-friendly-popup .leaflet-popup-content-wrapper {

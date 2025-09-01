@@ -14,9 +14,9 @@
  */
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { User } from '@/types';
-import { supabase, completeLogout, queryWithRetry } from '@/lib/supabase';
+import { supabase, completeLogout } from '@/lib/supabase';
 
 interface AuthGuardProps {
   children: (user: User, onLogout: () => void) => React.ReactNode;
@@ -110,10 +110,10 @@ export default function AuthGuard({ children }: AuthGuardProps) {
     try {
       
       // Check current auth state
-      const { data: { session } } = await supabase.auth.getSession();
+      await supabase.auth.getSession();
       
       // First, let's see all users in the database to debug
-      const allUsersResult = await supabase
+      await supabase
         .from('users')
         .select('*');
       
@@ -195,9 +195,9 @@ export default function AuthGuard({ children }: AuthGuardProps) {
       
       setEmail('');
       setPassword('');
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Login error:', error);
-      setLoginError(error.message || 'Innlogging feilet. Sjekk e-post og passord.');
+      setLoginError(error instanceof Error ? error.message : 'Innlogging feilet. Sjekk e-post og passord.');
     } finally {
       setIsLoggingIn(false);
     }

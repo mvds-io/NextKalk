@@ -49,8 +49,8 @@ export default function AuthContainer({ user, onUserUpdate }: AuthContainerProps
       });
 
       if (error) throw error;
-    } catch (error: any) {
-      setError(error.message);
+    } catch (error: unknown) {
+      setError(error instanceof Error ? error.message : 'An unknown error occurred');
     } finally {
       setIsLoading(false);
     }

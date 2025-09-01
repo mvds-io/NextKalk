@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { CounterData, FilterState, User } from '@/types';
+import { CounterData, FilterState, User, Airport, Landingsplass } from '@/types';
 import { supabase, completeLogout } from '@/lib/supabase';
 import { exportCompletedLandingsplassToPDF } from '@/lib/pdfExport';
 import UserLogsModal from './UserLogsModal';
@@ -36,11 +36,11 @@ export default function Counter({
   const [password, setPassword] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [loginError, setLoginError] = useState('');
-  const [userPermissions, setUserPermissions] = useState<any>({});
+  const [userPermissions, setUserPermissions] = useState<Record<string, boolean>>({});
   const [isExportingPDF, setIsExportingPDF] = useState(false);
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [showResultModal, setShowResultModal] = useState(false);
-  const [selectedSearchResult, setSelectedSearchResult] = useState<any>(null);
+  const [selectedSearchResult, setSelectedSearchResult] = useState<Airport | Landingsplass | null>(null);
 
   // Load user permissions when user changes
   useEffect(() => {
@@ -92,8 +92,8 @@ export default function Counter({
     
     try {
       // Toggle connections via global function
-      if (typeof window !== 'undefined' && (window as any).toggleAllConnections) {
-        await (window as any).toggleAllConnections();
+      if (typeof window !== 'undefined' && (window as Record<string, unknown>).toggleAllConnections) {
+        await ((window as Record<string, unknown>).toggleAllConnections as () => Promise<void>)();
         onFilterChange({
           ...filterState,
           showConnections: !filterState.showConnections
@@ -124,8 +124,8 @@ export default function Counter({
       setShowLoginModal(false);
       setEmail('');
       setPassword('');
-    } catch (error: any) {
-      setLoginError(error.message);
+    } catch (error: unknown) {
+      setLoginError(error instanceof Error ? error.message : 'An unknown error occurred');
     } finally {
       setIsLoggingIn(false);
     }
@@ -172,7 +172,7 @@ export default function Counter({
     setShowUserLogsModal(true);
   };
 
-  const handleSearchResultSelect = (result: any) => {
+  const handleSearchResultSelect = (result: Airport | Landingsplass) => {
     setSelectedSearchResult(result);
     setShowSearchModal(false);
     setShowResultModal(true);

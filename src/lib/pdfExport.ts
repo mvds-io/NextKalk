@@ -1,9 +1,11 @@
 import { supabase } from './supabase';
-import { Landingsplass } from '@/types';
+import type { Landingsplass } from '@/types';
 
 declare global {
   interface Window {
-    jspdf: any;
+    jspdf: {
+      jsPDF: new (options?: Record<string, unknown>) => Record<string, unknown>;
+    };
   }
 }
 
@@ -70,7 +72,7 @@ export async function exportCompletedLandingsplassToPDF(): Promise<PDFExportResu
     // Try to load and add logo
     try {
       await addLogoToPDF(doc);
-    } catch (error) {
+    } catch {
       console.warn('Could not load logo, continuing without it');
     }
 
@@ -262,7 +264,7 @@ async function loadJsPDF(): Promise<void> {
   });
 }
 
-async function addLogoToPDF(doc: any): Promise<void> {
+async function addLogoToPDF(doc: Record<string, unknown>): Promise<void> {
   return new Promise((resolve, reject) => {
     const logoImg = new Image();
     logoImg.crossOrigin = 'anonymous';
@@ -290,5 +292,5 @@ async function addLogoToPDF(doc: any): Promise<void> {
 
 // Make it available globally for backward compatibility
 if (typeof window !== 'undefined') {
-  (window as any).exportCompletedLandingsplassToPDF = exportCompletedLandingsplassToPDF;
+  (window as Record<string, unknown>).exportCompletedLandingsplassToPDF = exportCompletedLandingsplassToPDF;
 } 
