@@ -383,7 +383,7 @@ export default function MapContainer({
           map._checkDynamicEvents = function() {
             // Prevent popup from closing when map is panned or zoomed on mobile
             const popups = document.querySelectorAll('.mobile-friendly-popup');
-            const shouldPreventClose = popups.length > 0 && window.innerWidth <= 768;
+            const shouldPreventClose = popups.length > 0 && window.innerWidth <= 1024;
             
             if (!shouldPreventClose) {
               return originalCheckDynamicEvents.call(this);
@@ -392,7 +392,7 @@ export default function MapContainer({
 
           // Add event listeners to prevent popup closing during map interactions on mobile
           map.on('movestart', function(e: any) {
-            if (window.innerWidth <= 768) {
+            if (window.innerWidth <= 1024) {
               const openPopup = map._popup;
               if (openPopup && openPopup.options.className === 'mobile-friendly-popup') {
                 e.preventDefault && e.preventDefault();
@@ -402,12 +402,77 @@ export default function MapContainer({
           });
 
           map.on('zoomstart', function(e: any) {
-            if (window.innerWidth <= 768) {
+            if (window.innerWidth <= 1024) {
               const openPopup = map._popup;
               if (openPopup && openPopup.options.className === 'mobile-friendly-popup') {
                 e.preventDefault && e.preventDefault();
                 return false;
               }
+            }
+          });
+
+          // Add more comprehensive event listeners to prevent popup closing
+          map.on('moveend', function(e: any) {
+            if (window.innerWidth <= 1024) {
+              const popups = document.querySelectorAll('.mobile-friendly-popup');
+              if (popups.length > 0) {
+                // Ensure popup stays visible after move
+                popups.forEach((popup) => {
+                  const leafletPopup = popup.closest('.leaflet-popup') as HTMLElement;
+                  if (leafletPopup) {
+                    leafletPopup.style.visibility = 'visible !important';
+                    leafletPopup.style.opacity = '1 !important';
+                    leafletPopup.style.display = 'block !important';
+                  }
+                });
+              }
+            }
+          });
+
+          map.on('zoomend', function(e: any) {
+            if (window.innerWidth <= 1024) {
+              const popups = document.querySelectorAll('.mobile-friendly-popup');
+              if (popups.length > 0) {
+                // Ensure popup stays visible after zoom
+                popups.forEach((popup) => {
+                  const leafletPopup = popup.closest('.leaflet-popup') as HTMLElement;
+                  if (leafletPopup) {
+                    leafletPopup.style.visibility = 'visible !important';
+                    leafletPopup.style.opacity = '1 !important';
+                    leafletPopup.style.display = 'block !important';
+                  }
+                });
+              }
+            }
+          });
+
+          // Override Leaflet's popup positioning completely on mobile/tablet
+          map.on('move zoom', function(e: any) {
+            if (window.innerWidth <= 1024) {
+              const popups = document.querySelectorAll('.mobile-friendly-popup .leaflet-popup');
+              popups.forEach((popup) => {
+                const leafletPopup = popup as HTMLElement;
+                if (leafletPopup && leafletPopup.style) {
+                  // Force the popup to stay in our custom position
+                  if (window.innerWidth <= 767) {
+                    // iPhone positioning
+                    leafletPopup.style.position = 'fixed !important';
+                    leafletPopup.style.bottom = 'max(30px, env(safe-area-inset-bottom)) !important';
+                    leafletPopup.style.left = '50% !important';
+                    leafletPopup.style.transform = 'translateX(-50%) !important';
+                  } else {
+                    // iPad positioning
+                    leafletPopup.style.position = 'fixed !important';
+                    leafletPopup.style.bottom = '50px !important';
+                    leafletPopup.style.left = '50% !important';
+                    leafletPopup.style.transform = 'translateX(-50%) !important';
+                  }
+                  leafletPopup.style.visibility = 'visible !important';
+                  leafletPopup.style.opacity = '1 !important';
+                  leafletPopup.style.display = 'block !important';
+                  leafletPopup.style.zIndex = '10000 !important';
+                }
+              });
             }
           });
 
@@ -1453,7 +1518,7 @@ export default function MapContainer({
           autoClose: false,
           closeOnClick: false,
           autoPan: false,
-          keepInView: true,
+          keepInView: false,
           className: 'mobile-friendly-popup'
         });
         
@@ -1504,7 +1569,7 @@ export default function MapContainer({
           autoClose: false,
           closeOnClick: false,
           autoPan: false,
-          keepInView: true,
+          keepInView: false,
           className: 'mobile-friendly-popup'
         });
         
@@ -1549,7 +1614,7 @@ export default function MapContainer({
           autoClose: false,
           closeOnClick: false,
           autoPan: false,
-          keepInView: true,
+          keepInView: false,
           className: 'mobile-friendly-popup'
         });
 
