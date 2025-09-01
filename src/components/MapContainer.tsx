@@ -41,6 +41,22 @@ export default function MapContainer({
   const currentLoadingIdRef = useRef<string | null>(null);
   const loadingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Enhanced mobile/tablet detection - available throughout component
+  const isMobileOrTablet = useCallback(() => {
+    // Check for touch support
+    const hasTouchScreen = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    // Check user agent for mobile/tablet devices
+    const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    // Check for iPad specifically (including newer iPads that might not show up in user agent)
+    const isIPad = /iPad/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    // Width check for smaller screens
+    const isSmallScreen = window.innerWidth <= 1024;
+    
+    console.log('Mobile detection:', { hasTouchScreen, isMobileUA, isIPad, isSmallScreen, userAgent: navigator.userAgent });
+    
+    return hasTouchScreen || isMobileUA || isIPad || isSmallScreen;
+  }, []);
+
   // Get user permissions
   useEffect(() => {
     const getUserPermissions = async () => {
@@ -378,19 +394,6 @@ export default function MapContainer({
           // Make global functions available for popup buttons
           setupGlobalFunctions(L, map);
 
-          // Enhanced mobile/tablet detection
-          const isMobileOrTablet = () => {
-            // Check for touch support
-            const hasTouchScreen = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-            // Check user agent for mobile/tablet devices
-            const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-            // Check for iPad specifically (including newer iPads that might not show up in user agent)
-            const isIPad = /iPad/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-            // Width check for smaller screens
-            const isSmallScreen = window.innerWidth <= 1024;
-            
-            return hasTouchScreen || isMobileUA || isIPad || isSmallScreen;
-          };
 
           // Force mobile behavior on tablets/iPads
           if (isMobileOrTablet()) {
@@ -420,6 +423,8 @@ export default function MapContainer({
             if (!shouldPreventClose) {
               return originalCheckDynamicEvents.call(this);
             }
+            // For mobile, we still want to allow the event processing, just not close the popup
+            return true;
           };
 
           // Override Leaflet's closePopup function for mobile-friendly popups
@@ -429,9 +434,10 @@ export default function MapContainer({
               // Check if this is a mobile-friendly popup
               const openPopup = popup || map._popup;
               if (openPopup && openPopup.options && openPopup.options.className === 'mobile-friendly-popup') {
-                // Don't close mobile-friendly popups unless explicitly requested
+                // Don't close mobile-friendly popups unless explicitly requested via close button
                 const popupElement = document.querySelector('.mobile-friendly-popup');
                 if (popupElement && !popupElement.hasAttribute('data-force-close')) {
+                  console.log('Preventing automatic popup close on mobile - only close button should close it');
                   return map; // Return map instance without closing
                 }
               }
@@ -531,35 +537,56 @@ export default function MapContainer({
             }
           });
 
-          // Override Leaflet's popup positioning completely on mobile/tablet
-          map.on('move zoom', function(_e: any) {
-            if (isMobileOrTablet()) {
-              const popups = document.querySelectorAll('.mobile-friendly-popup .leaflet-popup');
-              popups.forEach((popup) => {
-                const leafletPopup = popup as HTMLElement;
-                if (leafletPopup && leafletPopup.style) {
-                  // Force the popup to stay in our custom position
-                  if (window.innerWidth <= 767) {
-                    // iPhone positioning
-                    leafletPopup.style.position = 'fixed !important';
-                    leafletPopup.style.bottom = 'max(30px, env(safe-area-inset-bottom)) !important';
-                    leafletPopup.style.left = '50% !important';
-                    leafletPopup.style.transform = 'translateX(-50%) !important';
-                  } else {
-                    // iPad positioning
-                    leafletPopup.style.position = 'fixed !important';
-                    leafletPopup.style.bottom = '50px !important';
-                    leafletPopup.style.left = '50% !important';
-                    leafletPopup.style.transform = 'translateX(-50%) !important';
+          // Mobile popup styling - apply mobile-specific styles without interfering with positioning
+          const applyMobilePopupStyling = () => {
+            try {
+              if (isMobileOrTablet()) {
+                const popups = document.querySelectorAll('.leaflet-popup');
+                
+                popups.forEach((popup) => {
+                  const leafletPopup = popup as HTMLElement;
+                  
+                  if (leafletPopup) {
+                    // Apply only styling adjustments, let Leaflet handle positioning
+                    setTimeout(() => {
+                      leafletPopup.style.setProperty('z-index', '10000', 'important');
+                      leafletPopup.style.setProperty('visibility', 'visible', 'important');
+                      leafletPopup.style.setProperty('opacity', '1', 'important');
+                      leafletPopup.style.setProperty('display', 'block', 'important');
+                      leafletPopup.style.setProperty('pointer-events', 'auto', 'important');
+                      
+                      // Set size constraints
+                      if (window.innerWidth <= 767) {
+                        leafletPopup.style.setProperty('max-width', '95vw', 'important');
+                        leafletPopup.style.setProperty('max-height', '70vh', 'important');
+                      } else {
+                        leafletPopup.style.setProperty('max-width', '400px', 'important');
+                        leafletPopup.style.setProperty('max-height', '75vh', 'important');
+                      }
+                      
+                      // Ensure popup content is scrollable
+                      const content = leafletPopup.querySelector('.leaflet-popup-content') as HTMLElement;
+                      if (content) {
+                        content.style.maxHeight = window.innerWidth <= 767 ? '60vh' : '65vh';
+                        content.style.overflowY = 'auto';
+                        content.style.WebkitOverflowScrolling = 'touch';
+                      }
+                    }, 100);
                   }
-                  leafletPopup.style.visibility = 'visible !important';
-                  leafletPopup.style.opacity = '1 !important';
-                  leafletPopup.style.display = 'block !important';
-                  leafletPopup.style.zIndex = '10000 !important';
-                }
-              });
+                });
+              }
+            } catch (error) {
+              console.error('Error applying mobile popup styling:', error);
+            }
+          };
+          
+          // Apply mobile styling when popup opens
+          map.on('popupopen', function() {
+            if (isMobileOrTablet()) {
+              applyMobilePopupStyling();
             }
           });
+          
 
           // Add event delegation for close button clicks
           document.addEventListener('click', function(e: any) {
@@ -1622,13 +1649,14 @@ export default function MapContainer({
 
         const popupContent = createAirportPopupContent(airport);
         marker.bindPopup(popupContent, { 
-          maxWidth: 400,
+          maxWidth: isMobileOrTablet() ? 350 : 400,
           closeOnEscapeKey: false,
           autoClose: false,
           closeOnClick: false,
           autoPan: false,
           keepInView: false,
           closeButton: true,
+          offset: [0, -10],
           // @ts-ignore - Override Leaflet's internal close behavior
           _close: function() { /* Do nothing - prevent internal closing */ },
           className: 'mobile-friendly-popup'
@@ -1676,13 +1704,14 @@ export default function MapContainer({
 
         const popupContent = createLandingsplassPopupContent(landingsplass);
         marker.bindPopup(popupContent, { 
-          maxWidth: 400,
+          maxWidth: isMobileOrTablet() ? 350 : 400,
           closeOnEscapeKey: false,
           autoClose: false,
           closeOnClick: false,
           autoPan: false,
           keepInView: false,
           closeButton: true,
+          offset: [0, -10],
           // @ts-ignore - Override Leaflet's internal close behavior
           _close: function() { /* Do nothing - prevent internal closing */ },
           className: 'mobile-friendly-popup'
@@ -1724,13 +1753,14 @@ export default function MapContainer({
 
         const popupContent = createKalkPopupContent(kalk);
         marker.bindPopup(popupContent, { 
-          maxWidth: 400,
+          maxWidth: isMobileOrTablet() ? 350 : 400,
           closeOnEscapeKey: false,
           autoClose: false,
           closeOnClick: false,
           autoPan: false,
           keepInView: false,
           closeButton: true,
+          offset: [0, -10],
           // @ts-ignore - Override Leaflet's internal close behavior
           _close: function() { /* Do nothing - prevent internal closing */ },
           className: 'mobile-friendly-popup'
@@ -1741,7 +1771,7 @@ export default function MapContainer({
         console.error('Error creating kalk marker:', error);
       }
     });
-  }, [isMapReady, filteredAirports, filteredLandingsplasser, kalkMarkers, userPermissions, handleMarkerPopupOpen, handleLandingsplassPopupClose]);
+  }, [isMapReady, filteredAirports, filteredLandingsplasser, kalkMarkers, userPermissions, handleMarkerPopupOpen, handleLandingsplassPopupClose, isMobileOrTablet]);
 
   // Toggle satellite view function
   const toggleSatelliteView = () => {

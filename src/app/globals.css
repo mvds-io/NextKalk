@@ -4,10 +4,6 @@
   .leaflet-popup {
     max-width: 95vw !important;
     max-height: 70vh !important;
-    position: fixed !important;
-    bottom: max(30px, env(safe-area-inset-bottom)) !important;
-    left: 50% !important;
-    transform: translateX(-50%) translateY(0) !important;
     z-index: 10000 !important;
     visibility: visible !important;
     opacity: 1 !important;
@@ -21,7 +17,6 @@
     opacity: 1 !important;
     display: block !important;
     pointer-events: auto !important;
-    position: fixed !important;
     z-index: 10000 !important;
   }
   
@@ -99,13 +94,6 @@
   .leaflet-popup-pane {
     z-index: 10000 !important;
   }
-  
-  .leaflet-popup-pane .leaflet-popup {
-    position: fixed !important;
-    bottom: max(30px, env(safe-area-inset-bottom)) !important;
-    left: 50% !important;
-    transform: translateX(-50%) !important;
-  }
 }
 
 /* iPad and tablet devices - enhanced detection */
@@ -115,10 +103,6 @@
   .leaflet-popup {
     max-width: 400px !important;
     max-height: 75vh !important;
-    position: fixed !important;
-    bottom: 50px !important;
-    left: 50% !important;
-    transform: translateX(-50%) !important;
     z-index: 10000 !important;
     visibility: visible !important;
     opacity: 1 !important;
@@ -131,7 +115,6 @@
     opacity: 1 !important;
     display: block !important;
     pointer-events: auto !important;
-    position: fixed !important;
     z-index: 10000 !important;
   }
   
@@ -208,14 +191,6 @@
     z-index: 10000 !important;
   }
   
-  /* Keep popup visible even when map pans - use fixed positioning */
-  .leaflet-popup-pane .leaflet-popup {
-    position: fixed !important;
-    bottom: 50px !important;
-    left: 50% !important;
-    transform: translateX(-50%) !important;
-    max-height: 75vh !important;
-  }
 }
 
 /* JavaScript-based mobile/tablet detection fallback */
@@ -223,10 +198,6 @@ body.mobile-device .leaflet-popup,
 body.ipad-device .leaflet-popup {
   max-width: 400px !important;
   max-height: 75vh !important;
-  position: fixed !important;
-  bottom: 50px !important;
-  left: 50% !important;
-  transform: translateX(-50%) !important;
   z-index: 10000 !important;
   visibility: visible !important;
   opacity: 1 !important;
@@ -240,7 +211,6 @@ body.ipad-device .mobile-friendly-popup {
   opacity: 1 !important;
   display: block !important;
   pointer-events: auto !important;
-  position: fixed !important;
   z-index: 10000 !important;
 }
 
