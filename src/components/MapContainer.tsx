@@ -378,12 +378,44 @@ export default function MapContainer({
           // Make global functions available for popup buttons
           setupGlobalFunctions(L, map);
 
+          // Enhanced mobile/tablet detection
+          const isMobileOrTablet = () => {
+            // Check for touch support
+            const hasTouchScreen = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+            // Check user agent for mobile/tablet devices
+            const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            // Check for iPad specifically (including newer iPads that might not show up in user agent)
+            const isIPad = /iPad/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+            // Width check for smaller screens
+            const isSmallScreen = window.innerWidth <= 1024;
+            
+            return hasTouchScreen || isMobileUA || isIPad || isSmallScreen;
+          };
+
+          // Force mobile behavior on tablets/iPads
+          if (isMobileOrTablet()) {
+            // Add mobile-specific classes to body for CSS targeting
+            document.body.classList.add('mobile-device');
+            if (/iPad/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) {
+              document.body.classList.add('ipad-device');
+            }
+            
+            // Ensure proper viewport meta tag for tablets
+            let viewport = document.querySelector('meta[name=viewport]') as HTMLMetaElement;
+            if (!viewport) {
+              viewport = document.createElement('meta');
+              viewport.name = 'viewport';
+              document.head.appendChild(viewport);
+            }
+            viewport.content = 'width=device-width, initial-scale=1.0, user-scalable=no';
+          }
+
           // Override popup behavior to prevent auto-closing on mobile/tablet
           const originalCheckDynamicEvents = map._checkDynamicEvents;
           map._checkDynamicEvents = function() {
             // Prevent popup from closing when map is panned or zoomed on mobile/tablet
             const popups = document.querySelectorAll('.mobile-friendly-popup');
-            const shouldPreventClose = popups.length > 0 && window.innerWidth <= 1024;
+            const shouldPreventClose = popups.length > 0 && isMobileOrTablet();
             
             if (!shouldPreventClose) {
               return originalCheckDynamicEvents.call(this);
@@ -393,7 +425,7 @@ export default function MapContainer({
           // Override Leaflet's closePopup function for mobile-friendly popups
           const originalClosePopup = map.closePopup;
           map.closePopup = function(popup?: any) {
-            if (window.innerWidth <= 1024) {
+            if (isMobileOrTablet()) {
               // Check if this is a mobile-friendly popup
               const openPopup = popup || map._popup;
               if (openPopup && openPopup.options && openPopup.options.className === 'mobile-friendly-popup') {
@@ -445,7 +477,7 @@ export default function MapContainer({
 
           // Add event listeners to prevent popup closing during map interactions on mobile
           map.on('movestart', function(e: any) {
-            if (window.innerWidth <= 1024) {
+            if (isMobileOrTablet()) {
               const openPopup = map._popup;
               if (openPopup && openPopup.options.className === 'mobile-friendly-popup') {
                 e.preventDefault && e.preventDefault();
@@ -455,7 +487,7 @@ export default function MapContainer({
           });
 
           map.on('zoomstart', function(e: any) {
-            if (window.innerWidth <= 1024) {
+            if (isMobileOrTablet()) {
               const openPopup = map._popup;
               if (openPopup && openPopup.options.className === 'mobile-friendly-popup') {
                 e.preventDefault && e.preventDefault();
@@ -466,7 +498,7 @@ export default function MapContainer({
 
           // Add more comprehensive event listeners to prevent popup closing
           map.on('moveend', function(e: any) {
-            if (window.innerWidth <= 1024) {
+            if (isMobileOrTablet()) {
               const popups = document.querySelectorAll('.mobile-friendly-popup');
               if (popups.length > 0) {
                 // Ensure popup stays visible after move
@@ -483,7 +515,7 @@ export default function MapContainer({
           });
 
           map.on('zoomend', function(e: any) {
-            if (window.innerWidth <= 1024) {
+            if (isMobileOrTablet()) {
               const popups = document.querySelectorAll('.mobile-friendly-popup');
               if (popups.length > 0) {
                 // Ensure popup stays visible after zoom
@@ -501,7 +533,7 @@ export default function MapContainer({
 
           // Override Leaflet's popup positioning completely on mobile/tablet
           map.on('move zoom', function(e: any) {
-            if (window.innerWidth <= 1024) {
+            if (isMobileOrTablet()) {
               const popups = document.querySelectorAll('.mobile-friendly-popup .leaflet-popup');
               popups.forEach((popup) => {
                 const leafletPopup = popup as HTMLElement;
@@ -532,7 +564,7 @@ export default function MapContainer({
           // Add event delegation for close button clicks
           document.addEventListener('click', function(e: any) {
             if (e.target && e.target.closest && e.target.closest('.leaflet-popup-close-button')) {
-              if (window.innerWidth <= 1024) {
+              if (isMobileOrTablet()) {
                 // Mark mobile-friendly popup for force closing
                 const popupElement = document.querySelector('.mobile-friendly-popup');
                 if (popupElement) {

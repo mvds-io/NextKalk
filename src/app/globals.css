@@ -108,8 +108,10 @@
   }
 }
 
-/* iPad and tablet devices */
-@media (min-width: 768px) and (max-width: 1024px) {
+/* iPad and tablet devices - enhanced detection */
+@media (min-width: 768px) and (max-width: 1366px) and (pointer: coarse), 
+       (min-width: 768px) and (max-width: 1024px),
+       (hover: none) and (min-width: 768px) {
   .leaflet-popup {
     max-width: 400px !important;
     max-height: 75vh !important;
@@ -214,6 +216,65 @@
     transform: translateX(-50%) !important;
     max-height: 75vh !important;
   }
+}
+
+/* JavaScript-based mobile/tablet detection fallback */
+body.mobile-device .leaflet-popup,
+body.ipad-device .leaflet-popup {
+  max-width: 400px !important;
+  max-height: 75vh !important;
+  position: fixed !important;
+  bottom: 50px !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  z-index: 10000 !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  display: block !important;
+}
+
+body.mobile-device .mobile-friendly-popup,
+body.ipad-device .mobile-friendly-popup {
+  visibility: visible !important;
+  opacity: 1 !important;
+  display: block !important;
+  pointer-events: auto !important;
+  position: fixed !important;
+  z-index: 10000 !important;
+}
+
+body.mobile-device .mobile-friendly-popup .leaflet-popup-content-wrapper,
+body.ipad-device .mobile-friendly-popup .leaflet-popup-content-wrapper {
+  border-radius: 0.375rem !important;
+  overflow: hidden !important;
+  max-height: 75vh !important;
+  display: flex !important;
+  flex-direction: column !important;
+  pointer-events: auto !important;
+  background: white !important;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.25) !important;
+}
+
+body.mobile-device .mobile-friendly-popup .leaflet-popup-close-button,
+body.ipad-device .mobile-friendly-popup .leaflet-popup-close-button {
+  position: absolute !important;
+  top: 10px !important;
+  right: 15px !important;
+  z-index: 10001 !important;
+  background: rgba(255, 255, 255, 0.95) !important;
+  border-radius: 50% !important;
+  width: 32px !important;
+  height: 32px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 18px !important;
+  color: #666 !important;
+  text-decoration: none !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15) !important;
+  border: 1px solid rgba(0,0,0,0.1) !important;
+  pointer-events: auto !important;
 }
 
 /* Desktop styles */
