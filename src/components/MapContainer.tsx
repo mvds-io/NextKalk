@@ -1209,7 +1209,7 @@ export default function MapContainer({
       }).filter(html => html).join('');
 
       if (watersHTML) {
-        relatedWatersElement.innerHTML = `<div style="max-height: 80px; overflow-y: auto;">${watersHTML}</div>`;
+        relatedWatersElement.innerHTML = `<div style="max-height: 80px; overflow-y: auto;" class="airports-list">${watersHTML}</div>`;
       } else {
         relatedWatersElement.innerHTML = '<em class="text-muted">Ingen relaterte vann</em>';
       }
@@ -1265,12 +1265,13 @@ export default function MapContainer({
         
         const { forening, kontaktperson, phone, tonn } = water;
         if (kontaktperson || forening || phone) {
-          const key = `${kontaktperson || ''}-${phone || ''}`;
+          const phoneStr = phone ? String(phone) : '';
+          const key = `${kontaktperson || ''}-${phoneStr}`;
           if (!contactPersonsMap.has(key)) {
             contactPersonsMap.set(key, { 
               forening, 
               kontaktperson, 
-              phone, 
+              phone: phoneStr, 
               totalTonn: 0,
               tonnCount: 0 
             });
@@ -1290,14 +1291,16 @@ export default function MapContainer({
         return;
       }
 
-      const contactPersonsHTML = Array.from(contactPersonsMap.values()).map((contact: any) => {
+      const contactPersonsList = Array.from(contactPersonsMap.values());
+      const contactPersonsHTML = contactPersonsList.map((contact: any, index: number) => {
         const displayName = contact.kontaktperson || 'Ukjent';
-        const displayPhone = contact.phone ? contact.phone.toString() : '';
+        const displayPhone = contact.phone && contact.phone.trim() ? contact.phone.toString() : '';
         const displayForening = contact.forening || '';
         const displayTonn = contact.totalTonn > 0 ? contact.totalTonn.toFixed(1) + 't' : '';
+        const isLastItem = index === contactPersonsList.length - 1;
         
         return `
-          <div class="contact-item py-1" style="font-size: 0.7rem; border-bottom: 1px solid #e9ecef;">
+          <div class="contact-item" style="font-size: 0.7rem; padding: 6px 0; margin: 0; ${index === 0 ? '' : 'border-top: 1px solid rgba(0,0,0,0.1);'}">
             <div class="d-flex justify-content-between align-items-start">
               <div style="color: #495057; flex: 1;">
                 <i class="fas fa-user me-1" style="color: #6c757d;"></i>
@@ -1317,7 +1320,7 @@ export default function MapContainer({
         `;
       }).join('');
 
-      contactPersonsElement.innerHTML = `<div style="max-height: 120px; overflow-y: auto;">${contactPersonsHTML}</div>`;
+      contactPersonsElement.innerHTML = `<div style="max-height: 120px; overflow-y: auto;" class="contact-persons-scroll">${contactPersonsHTML}</div>`;
     } catch (error) {
       console.error('Error loading contact persons:', error);
       const contactPersonsElement = document.getElementById(`contact-persons-landingsplass-${landingsplassId}`);
@@ -1787,7 +1790,7 @@ export default function MapContainer({
         </div>
         
         <div class="contact-persons-section mb-2" style="background: #f0f8ff; padding: 0.5rem; border-radius: 0.375rem;">
-          <div style="font-size: 0.75rem; font-weight: 600; color: #495057; margin-bottom: 0.5rem;">
+          <div style="font-size: 0.75rem; font-weight: 600; color: #495057; margin-bottom: 8px;">
             <i class="fas fa-address-book me-1" style="color: #4a90e2;"></i>Kontaktpersoner:
           </div>
           <div id="contact-persons-landingsplass-${landingsplass.id}" class="contact-persons-display" style="font-size: 0.7rem;">

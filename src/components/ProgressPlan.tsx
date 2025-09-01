@@ -197,12 +197,13 @@ export default function ProgressPlan({
         
         const { forening, kontaktperson, phone, tonn } = water;
         if (kontaktperson || forening || phone) {
-          const key = `${kontaktperson || ''}-${phone || ''}`;
+          const phoneStr = phone ? String(phone) : '';
+          const key = `${kontaktperson || ''}-${phoneStr}`;
           if (!contactPersonsMap.has(key)) {
             contactPersonsMap.set(key, { 
               forening, 
               kontaktperson, 
-              phone, 
+              phone: phoneStr,
               totalTonn: 0
             });
           }
@@ -766,7 +767,7 @@ export default function ProgressPlan({
                 
                 {/* Contact Persons Section */}
                 <div className="contact-persons-section mb-2" style={{ background: '#f0f8ff', borderRadius: '6px', padding: '0.5rem' }}>
-                  <div className="text-muted mb-1" style={{ fontSize: '0.7rem', fontWeight: 600 }}>
+                  <div className="text-muted" style={{ fontSize: '0.7rem', fontWeight: 600, marginBottom: '8px' }}>
                     <i className="fas fa-address-book me-1" style={{ color: '#4a90e2' }}></i>
                     Kontaktpersoner ({(contactPersons[lp.id] || []).length}):
                   </div>
@@ -781,25 +782,20 @@ export default function ProgressPlan({
                       Ingen kontaktpersoner
                     </div>
                   ) : (
-                    <div className="contact-persons-list" style={{ 
+                    <div className="contact-persons-list contact-persons-scroll" style={{ 
                       maxHeight: '100px', 
                       overflowY: 'auto',
                       position: 'relative',
-                      zIndex: 1,
-                      backgroundColor: '#f0f8ff',
-                      borderRadius: '4px'
+                      zIndex: 1
                     }}>
                       {contactPersons[lp.id].map((contact, index) => (
                         <div 
                           key={`${contact.kontaktperson}-${contact.phone}-${index}`}
-                          className="contact-item py-1" 
+                          className="contact-item" 
                           style={{ 
-                            fontSize: '0.7rem', 
-                            borderBottom: '1px solid #e9ecef',
-                            position: 'relative',
-                            zIndex: 1,
-                            backgroundColor: '#f0f8ff',
-                            marginBottom: '1px'
+                            fontSize: '0.7rem',
+                            padding: '6px 0',
+                            margin: '0'
                           }}
                         >
                           <div className="d-flex justify-content-between align-items-start">
@@ -814,7 +810,7 @@ export default function ProgressPlan({
                                   {contact.forening}
                                 </div>
                               )}
-                              {contact.phone && (
+                              {contact.phone && contact.phone.trim() && (
                                 <div style={{ color: '#6c757d', fontSize: '0.65rem', marginLeft: '1rem', marginTop: '0.25rem' }}>
                                   <i className="fas fa-phone me-1"></i>
                                   {contact.phone}

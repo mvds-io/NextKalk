@@ -45,7 +45,7 @@ export default function DatabaseInspector() {
   if (!isOpen) {
     return (
       <button 
-        className="btn btn-sm btn-outline-info position-fixed" 
+        className="btn btn-sm btn-outline-info position-fixed d-none d-lg-block" 
         style={{ bottom: '60px', left: '10px', zIndex: 1000 }}
         onClick={() => setIsOpen(true)}
       >
@@ -56,7 +56,7 @@ export default function DatabaseInspector() {
   }
 
   return (
-    <div className="position-fixed" style={{ bottom: '10px', left: '10px', zIndex: 1000 }}>
+    <div className="position-fixed d-none d-lg-block" style={{ bottom: '10px', left: '10px', zIndex: 1000 }}>
       <div className="card" style={{ width: '400px', maxHeight: '400px' }}>
         <div className="card-header d-flex justify-content-between align-items-center">
           <h6 className="mb-0">Database Inspector</h6>

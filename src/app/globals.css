@@ -1316,24 +1316,48 @@ body {
     position: relative !important;
     z-index: 10 !important;
     background-color: #f0f8ff !important;
-    border: 1px solid #e0f0ff !important;
     border-radius: 6px !important;
     overflow-y: auto !important;
     max-height: 120px !important;
   }
-  
-  .contact-item {
-    position: relative !important;
-    z-index: 11 !important;
-    background-color: #f0f8ff !important;
-    margin-bottom: 2px !important;
-    padding: 8px !important;
-    border-bottom: 1px solid #d0e0ff !important;
-  }
-  
-  .contact-item:last-child {
-    border-bottom: none !important;
-  }
+}
+
+/* Hide scrollbars when not scrolling */
+.contact-persons-scroll, 
+.airports-list {
+  scrollbar-width: none; /* Firefox - completely hide */
+  -ms-overflow-style: none; /* IE and Edge - completely hide */
+}
+
+.contact-persons-scroll::-webkit-scrollbar,
+.airports-list::-webkit-scrollbar {
+  width: 0px; /* WebKit browsers - completely hide */
+  height: 0px;
+  background: transparent;
+}
+
+/* Optional: Show thin scrollbar on hover for better UX */
+.contact-persons-scroll:hover,
+.airports-list:hover {
+  scrollbar-width: thin; /* Firefox */
+  scrollbar-color: rgba(0,0,0,0.2) transparent;
+}
+
+.contact-persons-scroll:hover::-webkit-scrollbar,
+.airports-list:hover::-webkit-scrollbar {
+  width: 4px; /* WebKit browsers */
+  height: 4px;
+}
+
+.contact-persons-scroll:hover::-webkit-scrollbar-track,
+.airports-list:hover::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.contact-persons-scroll:hover::-webkit-scrollbar-thumb,
+.airports-list:hover::-webkit-scrollbar-thumb {
+  background-color: rgba(0,0,0,0.2);
+  border-radius: 2px;
 }
 
 .draggable-card {
