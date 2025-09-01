@@ -55,10 +55,6 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
   const [isProgressPlanMinimized, setIsProgressPlanMinimized] = useState(false);
   const [isFullScreen, setIsFullScreen] = useState(false);
 
-  useEffect(() => {
-    initializeApp();
-  }, []);
-
   const initializeApp = useCallback(async () => {
     try {
       setError(null);
@@ -80,6 +76,10 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
       setIsLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    initializeApp();
+  }, [initializeApp]);
 
   const loadAirports = async () => {
     try {
@@ -333,7 +333,7 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
 
   useEffect(() => {
     updateCounterData();
-  }, [airports, filterState.county]);
+  }, [updateCounterData]);
 
   // Detect mobile device and handle resize
   useEffect(() => {

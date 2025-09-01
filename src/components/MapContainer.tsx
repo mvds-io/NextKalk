@@ -25,7 +25,7 @@ export default function MapContainer({
   const leafletMapRef = useRef<any>(null);
   const markersLayerRef = useRef<any>(null);
   const clusterGroupRef = useRef<any>(null);
-  const connectionsLayerRef = useRef<any>(null);
+  const _connectionsLayerRef = useRef<any>(null);
   const [isMapReady, setIsMapReady] = useState(false);
   const [userPermissions, setUserPermissions] = useState<any>({});
   const [isSatelliteView, setIsSatelliteView] = useState(false);
@@ -310,7 +310,7 @@ export default function MapContainer({
           // Create clustering groups for better performance
           const clusterGroup = (L as any).markerClusterGroup({
             chunkedLoading: true,
-            chunkProgress: (processed: number, total: number) => {
+            chunkProgress: (_processed: number, _total: number) => {
               // Optional: Add loading progress feedback
             },
             maxClusterRadius: 35, // Reduced from 50 to make smaller clusters
@@ -497,7 +497,7 @@ export default function MapContainer({
           });
 
           // Add more comprehensive event listeners to prevent popup closing
-          map.on('moveend', function(e: any) {
+          map.on('moveend', function(_e: any) {
             if (isMobileOrTablet()) {
               const popups = document.querySelectorAll('.mobile-friendly-popup');
               if (popups.length > 0) {
@@ -514,7 +514,7 @@ export default function MapContainer({
             }
           });
 
-          map.on('zoomend', function(e: any) {
+          map.on('zoomend', function(_e: any) {
             if (isMobileOrTablet()) {
               const popups = document.querySelectorAll('.mobile-friendly-popup');
               if (popups.length > 0) {
@@ -532,7 +532,7 @@ export default function MapContainer({
           });
 
           // Override Leaflet's popup positioning completely on mobile/tablet
-          map.on('move zoom', function(e: any) {
+          map.on('move zoom', function(_e: any) {
             if (isMobileOrTablet()) {
               const popups = document.querySelectorAll('.mobile-friendly-popup .leaflet-popup');
               popups.forEach((popup) => {

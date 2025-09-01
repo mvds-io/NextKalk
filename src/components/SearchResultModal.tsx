@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 
 interface SearchResult {
@@ -36,13 +36,7 @@ export default function SearchResultModal({ isOpen, onClose, result }: SearchRes
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (isOpen && result) {
-      fetchDetailedData();
-    }
-  }, [isOpen, result]);
-
-  const fetchDetailedData = async () => {
+  const fetchDetailedData = useCallback(async () => {
     if (!result) return;
 
     setIsLoading(true);
@@ -66,7 +60,13 @@ export default function SearchResultModal({ isOpen, onClose, result }: SearchRes
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [result]);
+
+  useEffect(() => {
+    if (isOpen && result) {
+      fetchDetailedData();
+    }
+  }, [isOpen, result, fetchDetailedData]);
 
   const formatDate = (dateString: string | null | undefined) => {
     if (!dateString) return 'Ikke satt';

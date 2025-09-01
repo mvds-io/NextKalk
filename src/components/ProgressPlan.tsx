@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Landingsplass, User } from '@/types';
 import { supabase } from '@/lib/supabase';
 
@@ -33,7 +33,7 @@ export default function ProgressPlan({
   landingsplasser, 
   filterState,
   user, 
-  onDataUpdate,
+  onDataUpdate: _onDataUpdate,
   isLoading = false,
   isMobile = false,
   onMobileToggle,
@@ -172,7 +172,7 @@ export default function ProgressPlan({
   }, [sortedLandingsplasser.length]); // Only depend on the length, not the entire array
 
   // Load contact persons for a specific landingsplass
-  const loadContactPersonsForLandingsplass = async (landingsplassId: number) => {
+  const loadContactPersonsForLandingsplass = useCallback(async (landingsplassId: number) => {
     setIsContactPersonsLoading(prev => ({ ...prev, [landingsplassId]: true }));
     
     try {
@@ -228,7 +228,7 @@ export default function ProgressPlan({
     } finally {
       setIsContactPersonsLoading(prev => ({ ...prev, [landingsplassId]: false }));
     }
-  };
+  }, []);
 
   // Load contact persons for all visible landingsplasser
   useEffect(() => {
@@ -237,7 +237,7 @@ export default function ProgressPlan({
         loadContactPersonsForLandingsplass(lp.id);
       }
     });
-  }, [sortedLandingsplasser.length]);
+  }, [sortedLandingsplasser.length, loadContactPersonsForLandingsplass]);
 
   // Auto-scroll to first incomplete landingsplass after all data is loaded
   useEffect(() => {
@@ -289,7 +289,7 @@ export default function ProgressPlan({
 
     return () => clearTimeout(scrollTimeout);
   }, [
-    sortedLandingsplasser.length, 
+    sortedLandingsplasser, 
     filterState.county, 
     isMinimized, 
     associationsAvailable, 

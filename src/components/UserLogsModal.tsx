@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 
 interface UserLog {
@@ -31,13 +31,7 @@ export default function UserLogsModal({ isOpen, onClose }: UserLogsModalProps) {
   });
   const [hasMore, setHasMore] = useState(true);
 
-  useEffect(() => {
-    if (isOpen) {
-      loadUserLogs(true);
-    }
-  }, [isOpen]);
-
-  const fetchUserLogs = async (limit = 50, offset = 0, filterParams = filters) => {
+  const fetchUserLogs = useCallback(async (limit = 50, offset = 0, filterParams = filters) => {
     let query = supabase
       .from('user_action_logs')
       .select('*')
@@ -66,9 +60,9 @@ export default function UserLogsModal({ isOpen, onClose }: UserLogsModalProps) {
     }
 
     return data || [];
-  };
+  }, [filters]);
 
-  const loadUserLogs = async (reset = true) => {
+  const loadUserLogs = useCallback(async (reset = true) => {
     setIsLoading(true);
     
     try {
@@ -89,7 +83,13 @@ export default function UserLogsModal({ isOpen, onClose }: UserLogsModalProps) {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [currentOffset, filters, fetchUserLogs]);
+
+  useEffect(() => {
+    if (isOpen) {
+      loadUserLogs(true);
+    }
+  }, [isOpen, loadUserLogs]);
 
   const handleFilterChange = (field: string, value: string) => {
     setFilters(prev => ({

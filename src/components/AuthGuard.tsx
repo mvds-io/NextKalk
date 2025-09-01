@@ -31,82 +31,7 @@ export default function AuthGuard({ children }: AuthGuardProps) {
   const [loginError, setLoginError] = useState('');
   const [authTimeout, setAuthTimeout] = useState(false);
 
-  useEffect(() => {
-    let mounted = true;
-    
-    // Show timeout warning after 10 seconds
-    const warningTimeout = setTimeout(() => {
-      if (mounted) {
-        setAuthTimeout(true);
-      }
-    }, 10000); // Show warning after 10 seconds
-    
-    // Safety timeout to prevent infinite loading
-    const safetyTimeout = setTimeout(() => {
-      if (mounted) {
-        console.warn('Authentication check taking too long, showing login screen');
-        setIsLoading(false);
-      }
-    }, 20000); // 20 second safety timeout
-
-    checkAuthentication().finally(() => {
-      clearTimeout(warningTimeout);
-      clearTimeout(safetyTimeout);
-    });
-
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (!mounted) return;
-      
-      if (event === 'SIGNED_IN' && session?.user) {
-        await loadUserData(session.user.email!);
-      } else if (event === 'SIGNED_OUT') {
-        setUser(null);
-      }
-    });
-
-    return () => {
-      mounted = false;
-      clearTimeout(warningTimeout);
-      clearTimeout(safetyTimeout);
-      subscription.unsubscribe();
-    };
-  }, []);
-
-  const checkAuthentication = async () => {
-    let timeoutId: NodeJS.Timeout | null = null;
-    
-    try {
-      // Set up a timeout that will handle hanging, but won't reject the promise
-      timeoutId = setTimeout(() => {
-        console.warn('Authentication check is taking longer than expected');
-        // Don't reject, just log the warning
-      }, 15000);
-
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      // Clear timeout since we got a response
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-        timeoutId = null;
-      }
-      
-      if (session?.user?.email) {
-        await loadUserData(session.user.email);
-      } else {
-        setIsLoading(false);
-      }
-    } catch (error) {
-      // Clear timeout on error
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-      }
-      console.error('Error checking authentication:', error);
-      setIsLoading(false);
-    }
-  };
-
-  const loadUserData = async (email: string) => {
+  const loadUserData = useCallback(async (email: string) => {
     try {
       
       // Check current auth state
@@ -151,34 +76,124 @@ export default function AuthGuard({ children }: AuthGuardProps) {
           ])
           .select()
           .single();
-        
-        
+
         if (createResult.error) {
-          console.error('Failed to create user:', createResult.error);
+          console.error('Error creating user:', createResult.error);
           setUser(null);
           setLoginError('Kunne ikke opprette bruker. Kontakt administrator.');
           setIsLoading(false);
           return;
         }
-        
-        setUser(createResult.data);
+
+        // Use created user data
+        const userData = createResult.data;
+        const user: User = {
+          id: userData.id,
+          email: userData.email,
+          role: userData.role || 'viewer',
+          can_edit_priority: userData.can_edit_priority || false,
+          can_edit_markers: userData.can_edit_markers || false,
+          display_name: userData.display_name || email.split('@')[0]
+        };
+        setUser(user);
         setIsLoading(false);
-        return;
+      } else {
+        // Use existing user data
+        const userData = usersData[0];
+        const user: User = {
+          id: userData.id,
+          email: userData.email,
+          role: userData.role || 'viewer',
+          can_edit_priority: userData.can_edit_priority || false,
+          can_edit_markers: userData.can_edit_markers || false,
+          display_name: userData.display_name || email.split('@')[0]
+        };
+        setUser(user);
+        setIsLoading(false);
       }
-
-      if (usersData.length > 1) {
-        console.warn(`Multiple users found for email ${email}, using the first one`);
-      }
-
-      setUser(usersData[0]);
-      setIsLoading(false);
     } catch (error) {
       console.error('Error loading user data:', error);
       setUser(null);
       setLoginError('Kunne ikke laste brukerdata. Prøv å laste siden på nytt.');
       setIsLoading(false);
     }
-  };
+  }, []);
+
+  const checkAuthentication = useCallback(async () => {
+    let timeoutId: NodeJS.Timeout | null = null;
+    
+    try {
+      // Set up a timeout that will handle hanging, but won't reject the promise
+      timeoutId = setTimeout(() => {
+        console.warn('Authentication check is taking longer than expected');
+        // Don't reject, just log the warning
+      }, 15000);
+
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      // Clear timeout since we got a response
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+      
+      if (session?.user?.email) {
+        await loadUserData(session.user.email);
+      } else {
+        setIsLoading(false);
+      }
+    } catch (error) {
+      // Clear timeout on error
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      console.error('Error checking authentication:', error);
+      setIsLoading(false);
+    }
+  }, [loadUserData]);
+
+  useEffect(() => {
+    let mounted = true;
+    
+    // Show timeout warning after 10 seconds
+    const warningTimeout = setTimeout(() => {
+      if (mounted) {
+        setAuthTimeout(true);
+      }
+    }, 10000); // Show warning after 10 seconds
+    
+    // Safety timeout to prevent infinite loading
+    const safetyTimeout = setTimeout(() => {
+      if (mounted) {
+        console.warn('Authentication check taking too long, showing login screen');
+        setIsLoading(false);
+      }
+    }, 20000); // 20 second safety timeout
+
+    checkAuthentication().finally(() => {
+      clearTimeout(warningTimeout);
+      clearTimeout(safetyTimeout);
+    });
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!mounted) return;
+      
+      if (event === 'SIGNED_IN' && session?.user) {
+        await loadUserData(session.user.email!);
+      } else if (event === 'SIGNED_OUT') {
+        setUser(null);
+      }
+    });
+
+    return () => {
+      mounted = false;
+      clearTimeout(warningTimeout);
+      clearTimeout(safetyTimeout);
+      subscription.unsubscribe();
+    };
+  }, [checkAuthentication, loadUserData]);
+
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();

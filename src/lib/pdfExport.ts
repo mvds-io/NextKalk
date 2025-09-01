@@ -1,5 +1,4 @@
 import { supabase } from './supabase';
-import type { Landingsplass } from '@/types';
 
 declare global {
   interface Window {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { CounterData, FilterState, User, Airport, Landingsplass } from '@/types';
 import { supabase, completeLogout } from '@/lib/supabase';
 import { exportCompletedLandingsplassToPDF } from '@/lib/pdfExport';
@@ -44,14 +44,7 @@ export default function Counter({
   const [showResultModal, setShowResultModal] = useState(false);
   const [selectedSearchResult, setSelectedSearchResult] = useState<Airport | Landingsplass | null>(null);
 
-  // Load user permissions when user changes
-  useEffect(() => {
-    if (user) {
-      getUserPermissions();
-    }
-  }, [user]);
-
-  const getUserPermissions = async () => {
+  const getUserPermissions = useCallback(async () => {
     if (!user) return {};
     
     try {
@@ -77,7 +70,14 @@ export default function Counter({
     }
     
     return {};
-  };
+  }, [user]);
+
+  // Load user permissions when user changes
+  useEffect(() => {
+    if (user) {
+      getUserPermissions();
+    }
+  }, [user, getUserPermissions]);
 
   const handleCountyChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const county = e.target.value;
