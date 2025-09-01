@@ -318,7 +318,7 @@ export default function MapContainer({
             showCoverageOnHover: false,
             zoomToBoundsOnClick: true,
             spiderfyOnMaxZoom: true,
-            removeOutsideVisibleBounds: true,
+            removeOutsideVisibleBounds: false, // Keep markers in DOM to preserve popups
             animate: true,
             animateAddingMarkers: false, // Better performance
             iconCreateFunction: function(cluster: any) {
