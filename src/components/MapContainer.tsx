@@ -378,16 +378,69 @@ export default function MapContainer({
           // Make global functions available for popup buttons
           setupGlobalFunctions(L, map);
 
-          // Override popup behavior to prevent auto-closing on mobile
+          // Override popup behavior to prevent auto-closing on mobile/tablet
           const originalCheckDynamicEvents = map._checkDynamicEvents;
           map._checkDynamicEvents = function() {
-            // Prevent popup from closing when map is panned or zoomed on mobile
+            // Prevent popup from closing when map is panned or zoomed on mobile/tablet
             const popups = document.querySelectorAll('.mobile-friendly-popup');
             const shouldPreventClose = popups.length > 0 && window.innerWidth <= 1024;
             
             if (!shouldPreventClose) {
               return originalCheckDynamicEvents.call(this);
             }
+          };
+
+          // Override Leaflet's closePopup function for mobile-friendly popups
+          const originalClosePopup = map.closePopup;
+          map.closePopup = function(popup?: any) {
+            if (window.innerWidth <= 1024) {
+              // Check if this is a mobile-friendly popup
+              const openPopup = popup || map._popup;
+              if (openPopup && openPopup.options && openPopup.options.className === 'mobile-friendly-popup') {
+                // Don't close mobile-friendly popups unless explicitly requested
+                const popupElement = document.querySelector('.mobile-friendly-popup');
+                if (popupElement && !popupElement.hasAttribute('data-force-close')) {
+                  return map; // Return map instance without closing
+                }
+              }
+            }
+            return originalClosePopup.call(this, popup);
+          };
+
+          // Override the popup's close method as well
+          const originalPopupClose = L.Popup.prototype.close;
+          L.Popup.prototype.close = function() {
+            if (window.innerWidth <= 1024 && this.options.className === 'mobile-friendly-popup') {
+              const popupElement = document.querySelector('.mobile-friendly-popup');
+              if (popupElement && !popupElement.hasAttribute('data-force-close')) {
+                return this; // Don't close
+              }
+            }
+            return originalPopupClose.call(this);
+          };
+
+          // Override Leaflet's internal popup removal methods
+          const originalRemove = L.Popup.prototype.remove;
+          L.Popup.prototype.remove = function() {
+            if (window.innerWidth <= 1024 && this.options.className === 'mobile-friendly-popup') {
+              const popupElement = document.querySelector('.mobile-friendly-popup');
+              if (popupElement && !popupElement.hasAttribute('data-force-close')) {
+                return this; // Don't remove
+              }
+            }
+            return originalRemove.call(this);
+          };
+
+          // Override map's removeLayer method for popups
+          const originalRemoveLayer = map.removeLayer;
+          map.removeLayer = function(layer: any) {
+            if (window.innerWidth <= 1024 && layer instanceof L.Popup && layer.options.className === 'mobile-friendly-popup') {
+              const popupElement = document.querySelector('.mobile-friendly-popup');
+              if (popupElement && !popupElement.hasAttribute('data-force-close')) {
+                return map; // Don't remove mobile-friendly popups
+              }
+            }
+            return originalRemoveLayer.call(this, layer);
           };
 
           // Add event listeners to prevent popup closing during map interactions on mobile
@@ -473,6 +526,28 @@ export default function MapContainer({
                   leafletPopup.style.zIndex = '10000 !important';
                 }
               });
+            }
+          });
+
+          // Add event delegation for close button clicks
+          document.addEventListener('click', function(e: any) {
+            if (e.target && e.target.closest && e.target.closest('.leaflet-popup-close-button')) {
+              if (window.innerWidth <= 1024) {
+                // Mark mobile-friendly popup for force closing
+                const popupElement = document.querySelector('.mobile-friendly-popup');
+                if (popupElement) {
+                  popupElement.setAttribute('data-force-close', 'true');
+                  // Close the popup
+                  const popup = map._popup;
+                  if (popup) {
+                    map.closePopup(popup);
+                  }
+                  // Clean up the attribute after closing
+                  setTimeout(() => {
+                    popupElement.removeAttribute('data-force-close');
+                  }, 100);
+                }
+              }
             }
           });
 
@@ -1519,6 +1594,9 @@ export default function MapContainer({
           closeOnClick: false,
           autoPan: false,
           keepInView: false,
+          closeButton: true,
+          // @ts-ignore - Override Leaflet's internal close behavior
+          _close: function() { /* Do nothing - prevent internal closing */ },
           className: 'mobile-friendly-popup'
         });
         
@@ -1570,6 +1648,9 @@ export default function MapContainer({
           closeOnClick: false,
           autoPan: false,
           keepInView: false,
+          closeButton: true,
+          // @ts-ignore - Override Leaflet's internal close behavior
+          _close: function() { /* Do nothing - prevent internal closing */ },
           className: 'mobile-friendly-popup'
         });
         
@@ -1615,6 +1696,9 @@ export default function MapContainer({
           closeOnClick: false,
           autoPan: false,
           keepInView: false,
+          closeButton: true,
+          // @ts-ignore - Override Leaflet's internal close behavior
+          _close: function() { /* Do nothing - prevent internal closing */ },
           className: 'mobile-friendly-popup'
         });
 
