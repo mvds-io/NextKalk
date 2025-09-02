@@ -981,18 +981,22 @@ export default function MapContainer({
               console.warn('Error fetching associations, exporting only landingsplass:', error);
               // Use landingsplass code (kode field) for the name
               const lpCode = (item as any).kode || (item as any).lp || name;
-              exportToGPX(item.latitude, item.longitude, lpCode);
+              const lpTonnage = (item as any).tonn_lp;
+              const formattedLpName = lpTonnage ? `(${lpTonnage}t) ${lpCode}` : lpCode;
+              exportToGPX(item.latitude, item.longitude, formattedLpName);
               return;
             }
 
             // Use landingsplass code (kode field) for the name
             const lpCode = (item as any).kode || (item as any).lp || name;
+            const lpTonnage = (item as any).tonn_lp;
+            const formattedLpName = lpTonnage ? `(${lpTonnage}t) ${lpCode}` : lpCode;
             
             const waypoints: Waypoint[] = [
               {
                 lat: item.latitude,
                 lng: item.longitude,
-                name: lpCode,
+                name: formattedLpName,
                 desc: 'Landingsplass - Exported from Kalk Planner 2025'
               }
             ];
@@ -1019,7 +1023,7 @@ export default function MapContainer({
             if (waypoints.length > 1) {
               exportMultipleToGPX(waypoints, `${lpCode}_with_waters`);
             } else {
-              exportToGPX(item.latitude, item.longitude, lpCode);
+              exportToGPX(item.latitude, item.longitude, formattedLpName);
             }
 
             // Log the GPX export action
@@ -1031,7 +1035,7 @@ export default function MapContainer({
                   action_type: 'export_gpx',
                   target_type: 'landingsplass',
                   target_id: id,
-                  target_name: lpCode,
+                  target_name: formattedLpName,
                   action_details: { 
                     waypoints_count: waypoints.length,
                     includes_waters: waypoints.length > 1
@@ -1042,7 +1046,9 @@ export default function MapContainer({
           } catch (fetchError) {
             console.warn('Error fetching waters, exporting only landingsplass:', fetchError);
             const lpCode = (item as any).kode || (item as any).lp || name;
-            exportToGPX(item.latitude, item.longitude, lpCode);
+            const lpTonnage = (item as any).tonn_lp;
+            const formattedLpName = lpTonnage ? `(${lpTonnage}t) ${lpCode}` : lpCode;
+            exportToGPX(item.latitude, item.longitude, formattedLpName);
           }
         } else {
           // For airports, export single waypoint as before
