@@ -972,22 +972,27 @@ export default function MapContainer({
               .from('vass_associations')
               .select(`
                 vass_vann:airport_id (
-                  id, name, latitude, longitude
+                  id, name, latitude, longitude, tonn
                 )
               `)
               .eq('landingsplass_id', id);
 
             if (error) {
               console.warn('Error fetching associations, exporting only landingsplass:', error);
-              exportToGPX(item.latitude, item.longitude, name);
+              // Use landingsplass code (lp field) for the name
+              const lpCode = (item as any).lp || (item as any).kode || name;
+              exportToGPX(item.latitude, item.longitude, lpCode);
               return;
             }
 
+            // Use landingsplass code (lp field) for the name
+            const lpCode = (item as any).lp || (item as any).kode || name;
+            
             const waypoints: Waypoint[] = [
               {
                 lat: item.latitude,
                 lng: item.longitude,
-                name: name,
+                name: lpCode,
                 desc: 'Landingsplass - Exported from Kalk Planner 2025'
               }
             ];
@@ -996,10 +1001,14 @@ export default function MapContainer({
             if (associations && associations.length > 0) {
               associations.forEach((assoc: any) => {
                 if (assoc.vass_vann && assoc.vass_vann.latitude && assoc.vass_vann.longitude) {
+                  const waterName = assoc.vass_vann.name || 'Unknown Water';
+                  const tonnage = assoc.vass_vann.tonn;
+                  const formattedName = tonnage ? `(${tonnage}) ${waterName}` : waterName;
+                  
                   waypoints.push({
                     lat: assoc.vass_vann.latitude,
                     lng: assoc.vass_vann.longitude,
-                    name: assoc.vass_vann.name || 'Unknown Water',
+                    name: formattedName,
                     desc: 'Associated Water - Exported from Kalk Planner 2025'
                   });
                 }
@@ -1008,9 +1017,9 @@ export default function MapContainer({
 
             // Export multiple waypoints or single if no associations
             if (waypoints.length > 1) {
-              exportMultipleToGPX(waypoints, `${name}_with_waters`);
+              exportMultipleToGPX(waypoints, `${lpCode}_with_waters`);
             } else {
-              exportToGPX(item.latitude, item.longitude, name);
+              exportToGPX(item.latitude, item.longitude, lpCode);
             }
 
             // Log the GPX export action
@@ -1022,7 +1031,7 @@ export default function MapContainer({
                   action_type: 'export_gpx',
                   target_type: 'landingsplass',
                   target_id: id,
-                  target_name: name,
+                  target_name: lpCode,
                   action_details: { 
                     waypoints_count: waypoints.length,
                     includes_waters: waypoints.length > 1
@@ -1032,7 +1041,8 @@ export default function MapContainer({
 
           } catch (fetchError) {
             console.warn('Error fetching waters, exporting only landingsplass:', fetchError);
-            exportToGPX(item.latitude, item.longitude, name);
+            const lpCode = (item as any).lp || (item as any).kode || name;
+            exportToGPX(item.latitude, item.longitude, lpCode);
           }
         } else {
           // For airports, export single waypoint as before
