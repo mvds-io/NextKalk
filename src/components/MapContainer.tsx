@@ -52,8 +52,6 @@ export default function MapContainer({
     // Width check for smaller screens
     const isSmallScreen = window.innerWidth <= 1024;
     
-    console.log('Mobile detection:', { hasTouchScreen, isMobileUA, isIPad, isSmallScreen, userAgent: navigator.userAgent });
-    
     return hasTouchScreen || isMobileUA || isIPad || isSmallScreen;
   }, []);
 
