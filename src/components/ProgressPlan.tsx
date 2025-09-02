@@ -329,7 +329,6 @@ export default function ProgressPlan({
     }
     
     if (map) {
-      console.log('✅ Zooming to landingsplass:', landingsplass.kode, 'at', [landingsplass.latitude, landingsplass.longitude]);
       (map as Record<string, unknown>).setView([landingsplass.latitude, landingsplass.longitude], 12);
       
       // Try to find and open the popup for this marker

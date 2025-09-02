@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { Airport, Landingsplass, KalkInfo, User, FilterState } from '@/types';
-import { supabase } from '@/lib/supabase';
+import { supabase, getConnectionStatus } from '@/lib/supabase';
 
 interface MapContainerProps {
   airports: Airport[];
@@ -40,6 +40,20 @@ export default function MapContainer({
   // Add loading state management
   const currentLoadingIdRef = useRef<string | null>(null);
   const loadingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // AbortController for canceling pending requests
+  const currentAbortControllerRef = useRef<AbortController | null>(null);
+  const pendingRequestsRef = useRef<Map<string, AbortController>>(new Map());
+  
+  // Debouncing for marker clicks
+  const lastClickTimeRef = useRef<number>(0);
+  const debounceDelayMs = 300;
+  
+  // Memory monitoring
+  const memoryCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Connection health monitoring
+  const [connectionHealth, setConnectionHealth] = useState({ isHealthy: true, consecutiveFailures: 0 });
 
   // Enhanced mobile/tablet detection - available throughout component
   const isMobileOrTablet = useCallback(() => {
@@ -83,8 +97,6 @@ export default function MapContainer({
   // Connection functions
   const showAllConnections = async () => {
     if (!leafletMapRef.current || !markersLayerRef.current) return;
-    
-    console.log('🔗 Showing all connections...');
     
     // Update button state
     const connectionsButton = document.getElementById('toggle-all-connections');
@@ -168,8 +180,6 @@ export default function MapContainer({
         (connectionsButton as HTMLButtonElement).disabled = false;
       }
 
-      console.log(`✅ Showing ${allConnectionLinesRef.current.length} connections from ${processedCount} landingsplasser`);
-
     } catch (error) {
       console.error('Error showing all connections:', error);
       
@@ -209,11 +219,8 @@ export default function MapContainer({
   const showIndividualConnections = async (landingsplassId: number) => {
     if (!leafletMapRef.current) return;
     
-    console.log('🔗 Showing individual connections for landingsplass:', landingsplassId);
-    
     // Don't show individual connections if all connections are already visible
     if (allConnectionsVisible) {
-      console.log('All connections already visible, skipping individual connection');
       return;
     }
 
@@ -239,7 +246,6 @@ export default function MapContainer({
       if (error) throw error;
 
       if (!associations || associations.length === 0) {
-        console.log('No associations found for landingsplass', landingsplassId);
         return;
       }
 
@@ -261,8 +267,6 @@ export default function MapContainer({
 
         individualConnectionLinesRef.current.push(line);
       });
-
-      console.log(`✅ Showing ${individualConnectionLinesRef.current.length} individual connections for landingsplass ${landingsplassId}`);
 
     } catch (error) {
       console.error('Error showing individual connections:', error);
@@ -710,7 +714,30 @@ export default function MapContainer({
 
     loadLeaflet();
 
+    // Start memory monitoring
+    if (process.env.NODE_ENV === 'development') {
+      memoryCheckIntervalRef.current = setInterval(monitorMemoryUsage, 30000);
+      // Initial check
+      monitorMemoryUsage();
+    }
+
     return () => {
+      // Cancel all pending requests and clean up AbortControllers
+      cancelPendingRequests();
+      
+      // Clear loading timeouts
+      if (loadingTimeoutRef.current) {
+        clearTimeout(loadingTimeoutRef.current);
+        loadingTimeoutRef.current = null;
+      }
+      currentLoadingIdRef.current = null;
+      
+      // Clear memory monitoring
+      if (memoryCheckIntervalRef.current) {
+        clearInterval(memoryCheckIntervalRef.current);
+        memoryCheckIntervalRef.current = null;
+      }
+      
       if (leafletMapRef.current) {
         // Clean up user location marker
         if (userLocationMarkerRef.current) {
@@ -727,13 +754,6 @@ export default function MapContainer({
         
         // Clean up global map instance
         (window as any).leafletMapInstance = null;
-      }
-      
-      // Clean up loading state
-      currentLoadingIdRef.current = null;
-      if (loadingTimeoutRef.current) {
-        clearTimeout(loadingTimeoutRef.current);
-        loadingTimeoutRef.current = null;
       }
     };
   }, []);
@@ -804,7 +824,6 @@ export default function MapContainer({
         const currentDoneStatus = currentData.is_done || false;
         const newDoneStatus = !currentDoneStatus;
         
-        console.log(`🔄 Toggling ${type} ${id}: ${currentDoneStatus} → ${newDoneStatus}`);
         
         const updates: any = { 
           is_done: newDoneStatus 
@@ -829,7 +848,6 @@ export default function MapContainer({
         // If this is a landingsplass, cascade the status change to all associated airports
         if (type === 'landingsplass') {
           const action = newDoneStatus ? 'done' : 'undone';
-          console.log(`🔗 Marking associated airports as ${action} for landingsplass ${id}...`);
           
           try {
             // Get all associated airports for this landingsplass
@@ -842,7 +860,6 @@ export default function MapContainer({
               console.warn('Could not fetch associations:', assocError);
             } else if (associations && associations.length > 0) {
               const airportIds = associations.map(assoc => assoc.airport_id);
-              console.log(`📍 Found ${airportIds.length} associated airports:`, airportIds);
               
               // Update all associated airports to match the landingsplass status
               const { error: updateError } = await supabase
@@ -853,7 +870,6 @@ export default function MapContainer({
               if (updateError) {
                 console.warn('Could not update associated airports:', updateError);
               } else {
-                console.log(`✅ Successfully marked ${airportIds.length} associated airports as ${action}`);
               }
             }
           } catch (cascadeError) {
@@ -1348,18 +1364,98 @@ ${waypointElements}
     URL.revokeObjectURL(url);
   };
 
+  // Helper functions for managing AbortControllers
+  const cancelPendingRequests = (loadingId?: string) => {
+    if (loadingId) {
+      // Cancel specific request
+      const controller = pendingRequestsRef.current.get(loadingId);
+      if (controller) {
+        controller.abort();
+        pendingRequestsRef.current.delete(loadingId);
+      }
+    } else {
+      // Cancel all pending requests
+      pendingRequestsRef.current.forEach((controller) => {
+        controller.abort();
+      });
+      pendingRequestsRef.current.clear();
+    }
+    
+    // Also cancel the current abort controller
+    if (currentAbortControllerRef.current) {
+      currentAbortControllerRef.current.abort();
+      currentAbortControllerRef.current = null;
+    }
+  };
+
+  const createAbortController = (loadingId: string): AbortController => {
+    // Cancel any existing request for this specific loading ID
+    const existingController = pendingRequestsRef.current.get(loadingId);
+    if (existingController) {
+      existingController.abort();
+      pendingRequestsRef.current.delete(loadingId);
+    }
+    
+    // Create new AbortController
+    const controller = new AbortController();
+    pendingRequestsRef.current.set(loadingId, controller);
+    currentAbortControllerRef.current = controller;
+    
+    return controller;
+  };
+
+  // Memory monitoring helper
+  const monitorMemoryUsage = useCallback(() => {
+    if (typeof performance !== 'undefined' && performance.memory) {
+      const memory = performance.memory;
+      const usedMB = Math.round(memory.usedJSHeapSize / 1024 / 1024);
+      const totalMB = Math.round(memory.totalJSHeapSize / 1024 / 1024);
+      const limitMB = Math.round(memory.jsHeapSizeLimit / 1024 / 1024);
+      
+      // Log memory usage every 30 seconds in development
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`🧠 Memory usage: ${usedMB}MB / ${totalMB}MB (limit: ${limitMB}MB)`);
+        console.log(`📊 Pending requests: ${pendingRequestsRef.current.size}`);
+      }
+      
+      // Warn if memory usage is high
+      if (usedMB > limitMB * 0.8) {
+        console.warn('⚠️ High memory usage detected. Consider reducing concurrent operations.');
+        
+        // Force cleanup of completed requests
+        const staleRequests: string[] = [];
+        pendingRequestsRef.current.forEach((controller, key) => {
+          if (controller.signal.aborted) {
+            staleRequests.push(key);
+          }
+        });
+        staleRequests.forEach(key => pendingRequestsRef.current.delete(key));
+      }
+    }
+    
+    // Update connection health
+    const healthStatus = getConnectionStatus();
+    setConnectionHealth({
+      isHealthy: healthStatus.isHealthy,
+      consecutiveFailures: healthStatus.consecutiveFailures
+    });
+  }, []);
+
   // Load and display images
   const loadAndDisplayImages = async (id: number, type: string) => {
+    const loadingId = `images-${type}-${id}`;
+    
     try {
-      const loadingId = `${type}-${id}`;
-      
       // Check if this is still the current loading operation
-      if (currentLoadingIdRef.current !== loadingId) {
+      if (currentLoadingIdRef.current !== `${type}-${id}`) {
         return; // Another popup has taken priority, abandon this operation
       }
 
       const displayElement = document.getElementById(`images-display-${id}`);
       if (!displayElement) return;
+
+      // Create AbortController for this request
+      const abortController = createAbortController(loadingId);
 
       // Use the correct table based on marker type
       const imageTable = type === 'airport' ? 'vass_vann_images' : 'vass_lasteplass_images';
@@ -1368,13 +1464,14 @@ ${waypointElements}
         .from(imageTable)
         .select('*')
         .eq('marker_id', id)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .abortSignal(abortController.signal);
 
       if (error) throw error;
 
       // Check again after async operation
-      if (currentLoadingIdRef.current !== loadingId) {
-        return; // Another popup has taken priority during the async operation
+      if (currentLoadingIdRef.current !== `${type}-${id}` || abortController.signal.aborted) {
+        return; // Another popup has taken priority during the async operation or request was aborted
       }
 
       if (!images || images.length === 0) {
@@ -1393,7 +1490,18 @@ ${waypointElements}
       `).join('');
 
       displayElement.innerHTML = imageListHTML;
+      
+      // Clean up this request
+      pendingRequestsRef.current.delete(loadingId);
     } catch (error) {
+      // Clean up this request
+      pendingRequestsRef.current.delete(loadingId);
+      
+      // Don't show error if request was aborted
+      if (error?.name === 'AbortError' || error?.message?.includes('aborted')) {
+        return;
+      }
+      
       console.error('Error loading images:', error);
       const displayElement = document.getElementById(`images-display-${id}`);
       if (displayElement) {
@@ -1404,11 +1512,11 @@ ${waypointElements}
 
   // Load and display documents
   const loadAndDisplayDocuments = async (id: number, type: string) => {
+    const loadingId = `documents-${type}-${id}`;
+    
     try {
-      const loadingId = `${type}-${id}`;
-      
       // Check if this is still the current loading operation
-      if (currentLoadingIdRef.current !== loadingId) {
+      if (currentLoadingIdRef.current !== `${type}-${id}`) {
         return; // Another popup has taken priority, abandon this operation
       }
 
@@ -1416,18 +1524,22 @@ ${waypointElements}
       const displayElement = document.getElementById(containerId);
       if (!displayElement) return;
 
+      // Create AbortController for this request
+      const abortController = createAbortController(loadingId);
+
       const documentTable = type === 'airport' ? 'vass_vann_documents' : 'vass_lasteplass_documents';
       const { data: documents, error } = await supabase
         .from(documentTable)
         .select('*')
         .eq('marker_id', id)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .abortSignal(abortController.signal);
 
       if (error) throw error;
 
       // Check again after async operation
-      if (currentLoadingIdRef.current !== loadingId) {
-        return; // Another popup has taken priority during the async operation
+      if (currentLoadingIdRef.current !== `${type}-${id}` || abortController.signal.aborted) {
+        return; // Another popup has taken priority during the async operation or request was aborted
       }
 
       if (!documents || documents.length === 0) {
@@ -1463,7 +1575,18 @@ ${waypointElements}
       }).join('');
 
       displayElement.innerHTML = documentListHTML;
+      
+      // Clean up this request
+      pendingRequestsRef.current.delete(loadingId);
     } catch (error) {
+      // Clean up this request
+      pendingRequestsRef.current.delete(loadingId);
+      
+      // Don't show error if request was aborted
+      if (error?.name === 'AbortError' || error?.message?.includes('aborted')) {
+        return;
+      }
+      
       console.error('Error loading documents:', error);
       const containerId = type === 'landingsplass' ? `documents-display-landingsplass-${id}` : `documents-display-${id}`;
       const displayElement = document.getElementById(containerId);
@@ -1475,13 +1598,16 @@ ${waypointElements}
 
   // Load associations
   const loadCurrentAssociations = async (airportId: number) => {
+    const loadingId = `associations-airport-${airportId}`;
+    
     try {
-      const loadingId = `airport-${airportId}`;
-      
       // Check if this is still the current loading operation
-      if (currentLoadingIdRef.current !== loadingId) {
+      if (currentLoadingIdRef.current !== `airport-${airportId}`) {
         return; // Another popup has taken priority, abandon this operation
       }
+
+      // Create AbortController for this request
+      const abortController = createAbortController(loadingId);
 
       const { data: associations, error } = await supabase
         .from('vass_associations')
@@ -1489,13 +1615,14 @@ ${waypointElements}
           id,
           landingsplass:vass_lasteplass(id, lp, latitude, longitude)
         `)
-        .eq('airport_id', airportId);
+        .eq('airport_id', airportId)
+        .abortSignal(abortController.signal);
 
       if (error) throw error;
 
       // Check again after async operation
-      if (currentLoadingIdRef.current !== loadingId) {
-        return; // Another popup has taken priority during the async operation
+      if (currentLoadingIdRef.current !== `airport-${airportId}` || abortController.signal.aborted) {
+        return; // Another popup has taken priority during the async operation or request was aborted
       }
 
       const associationsElement = document.getElementById(`current-associations-${airportId}`);
@@ -1517,20 +1644,34 @@ ${waypointElements}
       `).join('');
 
       associationsElement.innerHTML = associationsHTML;
+      
+      // Clean up this request
+      pendingRequestsRef.current.delete(loadingId);
     } catch (error) {
+      // Clean up this request
+      pendingRequestsRef.current.delete(loadingId);
+      
+      // Don't show error if request was aborted
+      if (error?.name === 'AbortError' || error?.message?.includes('aborted')) {
+        return;
+      }
+      
       console.error('Error loading associations:', error);
     }
   };
 
   // Load related waters for landingsplasser
   const loadRelatedWaters = async (landingsplassId: number) => {
+    const loadingId = `waters-landingsplass-${landingsplassId}`;
+    
     try {
-      const loadingId = `landingsplass-${landingsplassId}`;
-      
       // Check if this is still the current loading operation
-      if (currentLoadingIdRef.current !== loadingId) {
+      if (currentLoadingIdRef.current !== `landingsplass-${landingsplassId}`) {
         return; // Another popup has taken priority, abandon this operation
       }
+
+      // Create AbortController for this request
+      const abortController = createAbortController(loadingId);
 
       const { data: associations, error } = await supabase
         .from('vass_associations')
@@ -1540,13 +1681,14 @@ ${waypointElements}
             id, name, tonn
           )
         `)
-        .eq('landingsplass_id', landingsplassId);
+        .eq('landingsplass_id', landingsplassId)
+        .abortSignal(abortController.signal);
 
       if (error) throw error;
 
       // Check again after async operation
-      if (currentLoadingIdRef.current !== loadingId) {
-        return; // Another popup has taken priority during the async operation
+      if (currentLoadingIdRef.current !== `landingsplass-${landingsplassId}` || abortController.signal.aborted) {
+        return; // Another popup has taken priority during the async operation or request was aborted
       }
 
       const relatedWatersElement = document.getElementById(`related-waters-landingsplass-${landingsplassId}`);
@@ -1581,7 +1723,18 @@ ${waypointElements}
       } else {
         relatedWatersElement.innerHTML = '<em class="text-muted">Ingen relaterte vann</em>';
       }
+      
+      // Clean up this request
+      pendingRequestsRef.current.delete(loadingId);
     } catch (error) {
+      // Clean up this request
+      pendingRequestsRef.current.delete(loadingId);
+      
+      // Don't show error if request was aborted
+      if (error?.name === 'AbortError' || error?.message?.includes('aborted')) {
+        return;
+      }
+      
       console.error('Error loading related waters:', error);
       const relatedWatersElement = document.getElementById(`related-waters-landingsplass-${landingsplassId}`);
       if (relatedWatersElement) {
@@ -1592,13 +1745,16 @@ ${waypointElements}
 
   // Load contact persons for landingsplasser
   const loadContactPersons = async (landingsplassId: number) => {
+    const loadingId = `contacts-landingsplass-${landingsplassId}`;
+    
     try {
-      const loadingId = `landingsplass-${landingsplassId}`;
-      
       // Check if this is still the current loading operation
-      if (currentLoadingIdRef.current !== loadingId) {
+      if (currentLoadingIdRef.current !== `landingsplass-${landingsplassId}`) {
         return; // Another popup has taken priority, abandon this operation
       }
+
+      // Create AbortController for this request
+      const abortController = createAbortController(loadingId);
 
       const { data: associations, error } = await supabase
         .from('vass_associations')
@@ -1608,13 +1764,14 @@ ${waypointElements}
             forening, kontaktperson, phone, tonn
           )
         `)
-        .eq('landingsplass_id', landingsplassId);
+        .eq('landingsplass_id', landingsplassId)
+        .abortSignal(abortController.signal);
 
       if (error) throw error;
 
       // Check again after async operation
-      if (currentLoadingIdRef.current !== loadingId) {
-        return; // Another popup has taken priority during the async operation
+      if (currentLoadingIdRef.current !== `landingsplass-${landingsplassId}` || abortController.signal.aborted) {
+        return; // Another popup has taken priority during the async operation or request was aborted
       }
 
       const contactPersonsElement = document.getElementById(`contact-persons-landingsplass-${landingsplassId}`);
@@ -1689,7 +1846,18 @@ ${waypointElements}
       }).join('');
 
       contactPersonsElement.innerHTML = `<div style="max-height: 120px; overflow-y: auto;" class="contact-persons-scroll">${contactPersonsHTML}</div>`;
+      
+      // Clean up this request
+      pendingRequestsRef.current.delete(loadingId);
     } catch (error) {
+      // Clean up this request
+      pendingRequestsRef.current.delete(loadingId);
+      
+      // Don't show error if request was aborted
+      if (error?.name === 'AbortError' || error?.message?.includes('aborted')) {
+        return;
+      }
+      
       console.error('Error loading contact persons:', error);
       const contactPersonsElement = document.getElementById(`contact-persons-landingsplass-${landingsplassId}`);
       if (contactPersonsElement) {
@@ -1715,18 +1883,45 @@ ${waypointElements}
 
   // Memoize marker event handlers
   const handleMarkerPopupOpen = useCallback((id: number, type: 'airport' | 'landingsplass') => {
+    const now = Date.now();
+    const timeSinceLastClick = now - lastClickTimeRef.current;
+    
+    // Debounce rapid clicks
+    if (timeSinceLastClick < debounceDelayMs) {
+      return;
+    }
+    lastClickTimeRef.current = now;
+    
     // Cancel any existing loading timeout
     if (loadingTimeoutRef.current) {
       clearTimeout(loadingTimeoutRef.current);
     }
     
+    // Cancel requests for different markers only
+    const newLoadingId = `${type}-${id}`;
+    if (currentLoadingIdRef.current && currentLoadingIdRef.current !== newLoadingId) {
+      // Cancel requests from different markers
+      const currentType = currentLoadingIdRef.current.split('-')[0];
+      const currentId = currentLoadingIdRef.current.split('-')[1];
+      
+      // Cancel specific requests for the previous marker
+      if (currentType === 'airport') {
+        cancelPendingRequests(`associations-airport-${currentId}`);
+        cancelPendingRequests(`images-airport-${currentId}`);
+      } else {
+        cancelPendingRequests(`documents-landingsplass-${currentId}`);
+        cancelPendingRequests(`images-landingsplass-${currentId}`);
+        cancelPendingRequests(`waters-landingsplass-${currentId}`);
+        cancelPendingRequests(`contacts-landingsplass-${currentId}`);
+      }
+    }
+    
     // Set the current loading ID to prevent race conditions
-    const loadingId = `${type}-${id}`;
-    currentLoadingIdRef.current = loadingId;
+    currentLoadingIdRef.current = newLoadingId;
     
     loadingTimeoutRef.current = setTimeout(() => {
       // Double-check that this is still the current operation
-      if (currentLoadingIdRef.current !== loadingId) {
+      if (currentLoadingIdRef.current !== newLoadingId) {
         return;
       }
       
@@ -1746,10 +1941,28 @@ ${waypointElements}
   const handleLandingsplassPopupClose = useCallback(() => {
     hideIndividualConnections();
     // Clear loading state when popup closes
+    const currentLoadingId = currentLoadingIdRef.current;
     currentLoadingIdRef.current = null;
+    
     if (loadingTimeoutRef.current) {
       clearTimeout(loadingTimeoutRef.current);
       loadingTimeoutRef.current = null;
+    }
+    
+    // Cancel only the current marker's requests when popup closes
+    if (currentLoadingId) {
+      const currentType = currentLoadingId.split('-')[0];
+      const currentId = currentLoadingId.split('-')[1];
+      
+      if (currentType === 'airport') {
+        cancelPendingRequests(`associations-airport-${currentId}`);
+        cancelPendingRequests(`images-airport-${currentId}`);
+      } else {
+        cancelPendingRequests(`documents-landingsplass-${currentId}`);
+        cancelPendingRequests(`images-landingsplass-${currentId}`);
+        cancelPendingRequests(`waters-landingsplass-${currentId}`);
+        cancelPendingRequests(`contacts-landingsplass-${currentId}`);
+      }
     }
   }, []);
 
@@ -2423,6 +2636,47 @@ ${waypointElements}
             }}></div>
             <div style={{ color: '#6c757d', fontSize: '14px' }}>Loading map...</div>
           </div>
+        </div>
+      )}
+
+      {/* Connection Status Indicator */}
+      {isMapReady && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '10px',
+            right: '60px',
+            zIndex: 1000,
+            background: 'white',
+            border: '2px solid rgba(0,0,0,0.2)',
+            borderRadius: '4px',
+            padding: '6px 8px',
+            boxShadow: '0 1px 5px rgba(0,0,0,0.65)',
+            fontSize: '12px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px'
+          }}
+          title={`Database connection: ${connectionHealth.isHealthy ? 'Healthy' : `Issues (${connectionHealth.consecutiveFailures} failures)`}`}
+        >
+          <div
+            style={{
+              width: '8px',
+              height: '8px',
+              borderRadius: '50%',
+              backgroundColor: connectionHealth.isHealthy 
+                ? '#28a745' 
+                : connectionHealth.consecutiveFailures > 2 
+                  ? '#dc3545' 
+                  : '#ffc107'
+            }}
+          ></div>
+          <span style={{ 
+            color: connectionHealth.isHealthy ? '#28a745' : '#6c757d',
+            fontWeight: '500'
+          }}>
+            DB
+          </span>
         </div>
       )}
 

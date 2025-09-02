@@ -16,7 +16,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { User } from '@/types';
-import { supabase, completeLogout } from '@/lib/supabase';
+import { supabase, completeLogout, getConnectionStatus } from '@/lib/supabase';
 
 interface AuthGuardProps {
   children: (user: User, onLogout: () => void) => React.ReactNode;
@@ -30,6 +30,8 @@ export default function AuthGuard({ children }: AuthGuardProps) {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [loginError, setLoginError] = useState('');
   const [authTimeout, setAuthTimeout] = useState(false);
+  const [connectionIssue, setConnectionIssue] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
 
   const loadUserData = useCallback(async (email: string) => {
     try {
@@ -119,23 +121,56 @@ export default function AuthGuard({ children }: AuthGuardProps) {
     }
   }, []);
 
-  const checkAuthentication = useCallback(async () => {
+  const checkAuthentication = useCallback(async (isRetry = false) => {
+    let abortController: AbortController | null = null;
     let timeoutId: NodeJS.Timeout | null = null;
     
     try {
-      // Set up a timeout that will handle hanging, but won't reject the promise
-      timeoutId = setTimeout(() => {
-        console.warn('Authentication check is taking longer than expected');
-        // Don't reject, just log the warning
-      }, 15000);
+      // Check connection health first
+      const connectionStatus = getConnectionStatus();
+      if (!connectionStatus.isHealthy && connectionStatus.consecutiveFailures > 2) {
+        setConnectionIssue(true);
+        setIsLoading(false);
+        return;
+      }
 
-      const { data: { session } } = await supabase.auth.getSession();
+      abortController = new AbortController();
+      
+      // Set up abort timeout for hanging requests
+      timeoutId = setTimeout(() => {
+        if (abortController) {
+          abortController.abort();
+        }
+        console.warn('Authentication check timed out');
+        
+        // Only show timeout if this isn't a retry and we've been loading for a while
+        if (!isRetry && retryCount < 2) {
+          setAuthTimeout(true);
+          // Try to retry authentication
+          setRetryCount(prev => prev + 1);
+          setTimeout(() => checkAuthentication(true), 2000);
+        } else {
+          setIsLoading(false);
+          setConnectionIssue(true);
+        }
+      }, isRetry ? 10000 : 15000);
+
+      const { data: { session }, error } = await supabase.auth.getSession();
       
       // Clear timeout since we got a response
       if (timeoutId) {
         clearTimeout(timeoutId);
         timeoutId = null;
       }
+      
+      if (error) {
+        throw error;
+      }
+      
+      // Reset connection issue state on successful response
+      setConnectionIssue(false);
+      setAuthTimeout(false);
+      setRetryCount(0);
       
       if (session?.user?.email) {
         await loadUserData(session.user.email);
@@ -147,33 +182,35 @@ export default function AuthGuard({ children }: AuthGuardProps) {
       if (timeoutId) {
         clearTimeout(timeoutId);
       }
+      
+      // Check if error was due to abort
+      if (error.name === 'AbortError') {
+        return; // Don't process aborted requests
+      }
+      
       console.error('Error checking authentication:', error);
+      
+      // Handle different types of errors
+      if (error.message?.includes('network') || error.message?.includes('fetch')) {
+        setConnectionIssue(true);
+      }
+      
       setIsLoading(false);
     }
-  }, [loadUserData]);
+  }, [loadUserData, retryCount]);
+
+  const handleManualRetry = useCallback(() => {
+    setIsLoading(true);
+    setConnectionIssue(false);
+    setAuthTimeout(false);
+    setRetryCount(0);
+    checkAuthentication();
+  }, [checkAuthentication]);
 
   useEffect(() => {
     let mounted = true;
     
-    // Show timeout warning after 10 seconds
-    const warningTimeout = setTimeout(() => {
-      if (mounted) {
-        setAuthTimeout(true);
-      }
-    }, 10000); // Show warning after 10 seconds
-    
-    // Safety timeout to prevent infinite loading
-    const safetyTimeout = setTimeout(() => {
-      if (mounted) {
-        console.warn('Authentication check taking too long, showing login screen');
-        setIsLoading(false);
-      }
-    }, 20000); // 20 second safety timeout
-
-    checkAuthentication().finally(() => {
-      clearTimeout(warningTimeout);
-      clearTimeout(safetyTimeout);
-    });
+    checkAuthentication();
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
@@ -188,8 +225,6 @@ export default function AuthGuard({ children }: AuthGuardProps) {
 
     return () => {
       mounted = false;
-      clearTimeout(warningTimeout);
-      clearTimeout(safetyTimeout);
       subscription.unsubscribe();
     };
   }, [checkAuthentication, loadUserData]);
@@ -232,21 +267,55 @@ export default function AuthGuard({ children }: AuthGuardProps) {
             <span className="visually-hidden">Laster...</span>
           </div>
           <h5 className="text-muted">Sjekker innlogging...</h5>
-          {authTimeout && (
+          
+          {connectionIssue && (
+            <div className="mt-3">
+              <div className="alert alert-danger d-inline-block" style={{ fontSize: '0.9rem' }}>
+                <i className="fas fa-exclamation-triangle me-2"></i>
+                Tilkoblingsproblemer. Sjekk internettforbindelsen.
+              </div>
+              <div className="mt-2">
+                <button 
+                  className="btn btn-primary btn-sm me-2"
+                  onClick={handleManualRetry}
+                >
+                  <i className="fas fa-redo me-2"></i>
+                  Prøv igjen
+                </button>
+                <button 
+                  className="btn btn-outline-secondary btn-sm"
+                  onClick={() => window.location.reload()}
+                >
+                  <i className="fas fa-refresh me-2"></i>
+                  Last siden på nytt
+                </button>
+              </div>
+            </div>
+          )}
+          
+          {authTimeout && !connectionIssue && (
             <div className="mt-3">
               <div className="alert alert-warning d-inline-block" style={{ fontSize: '0.9rem' }}>
                 <i className="fas fa-clock me-2"></i>
-                Tilkobling tar lengre tid enn forventet. Venter...
+                Tilkobling tar lengre tid enn forventet...
               </div>
               <div className="mt-2">
                 <button 
                   className="btn btn-outline-primary btn-sm"
-                  onClick={() => window.location.reload()}
+                  onClick={handleManualRetry}
                 >
                   <i className="fas fa-redo me-2"></i>
-                  Last siden på nytt
+                  Prøv igjen
                 </button>
               </div>
+            </div>
+          )}
+          
+          {retryCount > 0 && !connectionIssue && (
+            <div className="mt-2">
+              <small className="text-muted">
+                Prøver igjen ({retryCount}/2)...
+              </small>
             </div>
           )}
         </div>
