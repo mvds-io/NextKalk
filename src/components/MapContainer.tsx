@@ -979,14 +979,14 @@ export default function MapContainer({
 
             if (error) {
               console.warn('Error fetching associations, exporting only landingsplass:', error);
-              // Use landingsplass code (lp field) for the name
-              const lpCode = (item as any).lp || (item as any).kode || name;
+              // Use landingsplass code (kode field) for the name
+              const lpCode = (item as any).kode || (item as any).lp || name;
               exportToGPX(item.latitude, item.longitude, lpCode);
               return;
             }
 
-            // Use landingsplass code (lp field) for the name
-            const lpCode = (item as any).lp || (item as any).kode || name;
+            // Use landingsplass code (kode field) for the name
+            const lpCode = (item as any).kode || (item as any).lp || name;
             
             const waypoints: Waypoint[] = [
               {
@@ -1041,7 +1041,7 @@ export default function MapContainer({
 
           } catch (fetchError) {
             console.warn('Error fetching waters, exporting only landingsplass:', fetchError);
-            const lpCode = (item as any).lp || (item as any).kode || name;
+            const lpCode = (item as any).kode || (item as any).lp || name;
             exportToGPX(item.latitude, item.longitude, lpCode);
           }
         } else {
