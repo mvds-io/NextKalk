@@ -437,8 +437,7 @@ export default function MapContainer({
               const openPopup = popup || map._popup;
               if (openPopup && openPopup.options && openPopup.options.className === 'mobile-friendly-popup') {
                 // Don't close mobile-friendly popups unless explicitly requested via close button
-                const popupElement = document.querySelector('.mobile-friendly-popup');
-                if (popupElement && !popupElement.hasAttribute('data-force-close')) {
+                if (!(openPopup as any)._forceClose) {
                   console.log('Preventing automatic popup close on mobile - only close button should close it');
                   return map; // Return map instance without closing
                 }
@@ -451,8 +450,7 @@ export default function MapContainer({
           const originalPopupClose = L.Popup.prototype.close;
           L.Popup.prototype.close = function() {
             if (window.innerWidth <= 1024 && this.options.className === 'mobile-friendly-popup') {
-              const popupElement = document.querySelector('.mobile-friendly-popup');
-              if (popupElement && !popupElement.hasAttribute('data-force-close')) {
+              if (!(this as any)._forceClose) {
                 return this; // Don't close
               }
             }
@@ -463,8 +461,7 @@ export default function MapContainer({
           const originalRemove = L.Popup.prototype.remove;
           L.Popup.prototype.remove = function() {
             if (window.innerWidth <= 1024 && this.options.className === 'mobile-friendly-popup') {
-              const popupElement = document.querySelector('.mobile-friendly-popup');
-              if (popupElement && !popupElement.hasAttribute('data-force-close')) {
+              if (!(this as any)._forceClose) {
                 return this; // Don't remove
               }
             }
@@ -475,8 +472,7 @@ export default function MapContainer({
           const originalRemoveLayer = map.removeLayer;
           map.removeLayer = function(layer: any) {
             if (window.innerWidth <= 1024 && layer instanceof L.Popup && layer.options.className === 'mobile-friendly-popup') {
-              const popupElement = document.querySelector('.mobile-friendly-popup');
-              if (popupElement && !popupElement.hasAttribute('data-force-close')) {
+              if (!(layer as any)._forceClose) {
                 return map; // Don't remove mobile-friendly popups
               }
             }
@@ -594,19 +590,26 @@ export default function MapContainer({
           document.addEventListener('click', function(e: any) {
             if (e.target && e.target.closest && e.target.closest('.leaflet-popup-close-button')) {
               if (isMobileOrTablet()) {
-                // Mark mobile-friendly popup for force closing
-                const popupElement = document.querySelector('.mobile-friendly-popup');
-                if (popupElement) {
-                  popupElement.setAttribute('data-force-close', 'true');
-                  // Close the popup
-                  const popup = map._popup;
-                  if (popup) {
-                    map.closePopup(popup);
-                  }
-                  // Clean up the attribute after closing
-                  setTimeout(() => {
-                    popupElement.removeAttribute('data-force-close');
-                  }, 100);
+                // Find the specific popup that contains this close button
+                const closeButton = e.target.closest('.leaflet-popup-close-button');
+                const popupContainer = closeButton.closest('.leaflet-popup');
+                
+                if (popupContainer) {
+                  // Find the corresponding Leaflet popup instance
+                  map.eachLayer((layer: any) => {
+                    if (layer instanceof L.Popup && layer.getElement() === popupContainer) {
+                      // Mark this specific popup for force closing
+                      (layer as any)._forceClose = true;
+                      
+                      // Close the popup using Leaflet's method
+                      map.closePopup(layer);
+                      
+                      // Clean up the flag after closing
+                      setTimeout(() => {
+                        delete (layer as any)._forceClose;
+                      }, 100);
+                    }
+                  });
                 }
               }
             }
