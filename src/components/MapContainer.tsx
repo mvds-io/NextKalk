@@ -951,7 +951,7 @@ export default function MapContainer({
     };
 
     // Handle GPX export
-    (window as any).handleGPXExport = (id: number, type: string) => {
+    (window as any).handleGPXExport = async (id: number, type: string) => {
       try {
         const item = type === 'airport' 
           ? airports.find(a => a.id === id)
@@ -963,7 +963,95 @@ export default function MapContainer({
         }
 
         const name = item.name || (item as any).navn || (item as any).lp || 'Waypoint';
-        exportToGPX(item.latitude, item.longitude, name);
+
+        // For landingsplass, include associated waters
+        if (type === 'landingsplass') {
+          try {
+            // Fetch associated waters for this landingsplass
+            const { data: associations, error } = await supabase
+              .from('vass_associations')
+              .select(`
+                vass_vann:airport_id (
+                  id, name, latitude, longitude
+                )
+              `)
+              .eq('landingsplass_id', id);
+
+            if (error) {
+              console.warn('Error fetching associations, exporting only landingsplass:', error);
+              exportToGPX(item.latitude, item.longitude, name);
+              return;
+            }
+
+            const waypoints: Waypoint[] = [
+              {
+                lat: item.latitude,
+                lng: item.longitude,
+                name: name,
+                desc: 'Landingsplass - Exported from Kalk Planner 2025'
+              }
+            ];
+
+            // Add associated waters
+            if (associations && associations.length > 0) {
+              associations.forEach((assoc: any) => {
+                if (assoc.vass_vann && assoc.vass_vann.latitude && assoc.vass_vann.longitude) {
+                  waypoints.push({
+                    lat: assoc.vass_vann.latitude,
+                    lng: assoc.vass_vann.longitude,
+                    name: assoc.vass_vann.name || 'Unknown Water',
+                    desc: 'Associated Water - Exported from Kalk Planner 2025'
+                  });
+                }
+              });
+            }
+
+            // Export multiple waypoints or single if no associations
+            if (waypoints.length > 1) {
+              exportMultipleToGPX(waypoints, `${name}_with_waters`);
+            } else {
+              exportToGPX(item.latitude, item.longitude, name);
+            }
+
+            // Log the GPX export action
+            if (user) {
+              await supabase
+                .from('user_action_logs')
+                .insert({
+                  user_email: user.email,
+                  action_type: 'export_gpx',
+                  target_type: 'landingsplass',
+                  target_id: id,
+                  target_name: name,
+                  action_details: { 
+                    waypoints_count: waypoints.length,
+                    includes_waters: waypoints.length > 1
+                  }
+                });
+            }
+
+          } catch (fetchError) {
+            console.warn('Error fetching waters, exporting only landingsplass:', fetchError);
+            exportToGPX(item.latitude, item.longitude, name);
+          }
+        } else {
+          // For airports, export single waypoint as before
+          exportToGPX(item.latitude, item.longitude, name);
+          
+          // Log the GPX export action
+          if (user) {
+            await supabase
+              .from('user_action_logs')
+              .insert({
+                user_email: user.email,
+                action_type: 'export_gpx',
+                target_type: 'airport',
+                target_id: id,
+                target_name: name,
+                action_details: { waypoints_count: 1 }
+              });
+          }
+        }
       } catch (error) {
         console.error('Error exporting GPX:', error);
         alert('Could not export GPX');
@@ -1193,7 +1281,7 @@ export default function MapContainer({
     };
   };
 
-  // Export to GPX function
+  // Export to GPX function (single waypoint)
   const exportToGPX = (lat: number, lng: number, name: string) => {
     const gpxContent = `<?xml version="1.0" encoding="UTF-8"?>
 <gpx version="1.1" creator="Kalk Planner 2025" xmlns="http://www.topografix.com/GPX/1/1">
@@ -1208,6 +1296,38 @@ export default function MapContainer({
     const a = document.createElement('a');
     a.href = url;
     a.download = `${name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.gpx`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  // Export multiple waypoints to GPX function
+  interface Waypoint {
+    lat: number;
+    lng: number;
+    name: string;
+    desc: string;
+  }
+
+  const exportMultipleToGPX = (waypoints: Waypoint[], fileName: string) => {
+    const waypointElements = waypoints.map(waypoint => 
+      `  <wpt lat="${waypoint.lat}" lon="${waypoint.lng}">
+    <name>${waypoint.name}</name>
+    <desc>${waypoint.desc}</desc>
+  </wpt>`
+    ).join('\n');
+
+    const gpxContent = `<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="Kalk Planner 2025" xmlns="http://www.topografix.com/GPX/1/1">
+${waypointElements}
+</gpx>`;
+
+    const blob = new Blob([gpxContent], { type: 'application/gpx+xml' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${fileName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.gpx`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
