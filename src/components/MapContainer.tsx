@@ -394,7 +394,7 @@ export default function MapContainer({
           (window as any).leafletMapInstance = map;
 
           // Make global functions available for popup buttons
-          setupGlobalFunctions(L, map);
+          setupGlobalFunctions(L, map, user, airports, landingsplasser, onDataUpdate);
 
 
           // Force mobile behavior on tablets/iPads
@@ -806,7 +806,7 @@ export default function MapContainer({
   }, [isMapReady]);
 
   // Setup global functions for popup interactions
-  const setupGlobalFunctions = (L: any, map: any) => {
+  const setupGlobalFunctions = useCallback((L: any, map: any, user: User | null, airports: Airport[], landingsplasser: Landingsplass[], onDataUpdate: () => void) => {
     if (typeof window === 'undefined') return;
 
     // Toggle done status
@@ -1185,8 +1185,49 @@ export default function MapContainer({
             });
         }
 
-        onDataUpdate();
+        // Update the comment display in the popup without closing it
+        const commentDisplayElement = document.getElementById(`comment-display-${id}`);
+        if (commentDisplayElement) {
+          const timestamp = new Date().toLocaleString('nb-NO', {
+            day: '2-digit',
+            month: '2-digit', 
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+          });
+          
+          if (comment) {
+            commentDisplayElement.innerHTML = comment;
+          } else {
+            commentDisplayElement.innerHTML = '<em class="text-muted">Ingen kommentarer lagt til</em>';
+          }
+          
+          // Update timestamp
+          const timestampElement = document.querySelector(`#comment-display-${id} ~ .comment-timestamp`);
+          if (timestampElement && comment) {
+            timestampElement.textContent = timestamp;
+          } else if (comment) {
+            // Add timestamp if it doesn't exist
+            const timestampDiv = document.createElement('div');
+            timestampDiv.className = 'comment-timestamp text-muted mt-1';
+            timestampDiv.style.fontSize = '0.65rem';
+            timestampDiv.textContent = timestamp;
+            commentDisplayElement.parentNode?.insertBefore(timestampDiv, commentDisplayElement.nextSibling);
+          }
+          
+          // Update button text if needed
+          const editButton = document.getElementById(`comment-btn-${id}`);
+          if (editButton) {
+            editButton.innerHTML = `<i class="fas fa-edit"></i> ${comment ? 'Rediger' : 'Legg til'}`;
+          }
+        }
+        
         (window as any).hideCommentEditor(id, type);
+        
+        // Update the data in the background without re-rendering the map
+        setTimeout(() => {
+          onDataUpdate();
+        }, 100);
       } catch (error) {
         console.error('Error saving comment:', error);
         alert('Could not save comment');
@@ -1324,7 +1365,17 @@ export default function MapContainer({
         alert('Could not upload document');
       }
     };
-  };
+  }, []);
+
+  // Re-setup global functions when data changes
+  useEffect(() => {
+    if (isMapReady && leafletMapRef.current) {
+      const L = (window as any).L;
+      if (L) {
+        setupGlobalFunctions(L, leafletMapRef.current, user, airports, landingsplasser, onDataUpdate);
+      }
+    }
+  }, [isMapReady, user, airports, landingsplasser, onDataUpdate]);
 
   // Export to GPX function (single waypoint)
   const exportToGPX = (lat: number, lng: number, name: string) => {
@@ -2257,7 +2308,7 @@ ${waypointElements}
           <div style="font-size: 0.75rem; font-weight: 600; color: #495057; margin-bottom: 0.5rem;">
             <i class="fas fa-comment me-1"></i>Kommentarer:
           </div>
-          <div class="comment-display-box">
+          <div class="comment-display-box" id="comment-display-${airport.id}">
             ${airport.comment || '<em class="text-muted">Ingen kommentarer lagt til</em>'}
           </div>
           ${timestamp ? `<div class="comment-timestamp text-muted mt-1" style="font-size: 0.65rem;">${timestamp}</div>` : ''}
@@ -2381,7 +2432,7 @@ ${waypointElements}
           <div style="font-size: 0.75rem; font-weight: 600; color: #495057; margin-bottom: 0.5rem;">
             <i class="fas fa-comment me-1"></i>Kommentarer:
           </div>
-          <div class="comment-display-box">
+          <div class="comment-display-box" id="comment-display-${landingsplass.id}">
             ${landingsplass.comment || '<em class="text-muted">Ingen kommentarer lagt til</em>'}
           </div>
           ${timestamp ? `<div class="comment-timestamp text-muted mt-1" style="font-size: 0.65rem;">${timestamp}</div>` : ''}
