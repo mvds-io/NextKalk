@@ -76,8 +76,8 @@ export default function MapContainer({
       
       try {
         const permissions = {
-          canEditMarkers: ['admin', 'manager', 'user'].includes(user.role || 'user'),
-          canEditPriority: ['admin', 'manager'].includes(user.role || 'user'),
+          canEditMarkers: user.can_edit_markers || false,
+          canEditPriority: user.can_edit_priority || false,
           canDeleteMarkers: ['admin', 'manager'].includes(user.role || 'user'),
           canViewLogs: ['admin', 'manager'].includes(user.role || 'user'),
           role: user.role || 'user',
@@ -1093,6 +1093,12 @@ export default function MapContainer({
 
     // Handle color change
     (window as any).handleColorChange = async (id: number, color: string) => {
+      // Check if user has permission to edit markers
+      if (!user?.can_edit_markers) {
+        alert('Du har ikke tillatelse til å endre markørfarger.');
+        return;
+      }
+
       try {
         const { error } = await supabase
           .from('vass_vann')
@@ -1142,6 +1148,12 @@ export default function MapContainer({
     };
 
     (window as any).saveComment = async (id: number, type: string) => {
+      // Check if user has permission to edit markers (which includes comments)
+      if (!user?.can_edit_markers) {
+        alert('Du har ikke tillatelse til å endre kommentarer.');
+        return;
+      }
+
       try {
         const textarea = document.getElementById(`comment-${id}`) as HTMLTextAreaElement;
         if (!textarea) return;
@@ -2220,7 +2232,7 @@ ${waypointElements}
           </button>` : ''}
         </div>
         
-        ${userPermissions.canEditPriority ? `
+        ${userPermissions.canEditMarkers ? `
         <div class="color-picker-section mb-2" style="background: #f8f9fa; padding: 0.5rem; border-radius: 0.375rem;">
           <div style="font-size: 0.75rem; font-weight: 600; color: #495057; margin-bottom: 0.5rem;">
             <i class="fas fa-palette me-1"></i>Marker farge:

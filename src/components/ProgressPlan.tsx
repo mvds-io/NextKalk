@@ -47,6 +47,8 @@ export default function ProgressPlan({
   const [internalIsMobile, setInternalIsMobile] = useState(false);
   const [contactPersons, setContactPersons] = useState<Record<number, ContactPerson[]>>({});
   const [isContactPersonsLoading, setIsContactPersonsLoading] = useState<Record<number, boolean>>({});
+  const [draggedItem, setDraggedItem] = useState<number | null>(null);
+  const [dragOverItem, setDragOverItem] = useState<number | null>(null);
 
   // Internal mobile detection as fallback
   useEffect(() => {
@@ -61,6 +63,85 @@ export default function ProgressPlan({
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, [isMobile, onToggleMinimized]);
+
+  // Drag and drop handlers for priority reordering
+  const handleDragStart = (e: React.DragEvent, id: number) => {
+    if (!user?.can_edit_priority) return;
+    setDraggedItem(id);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e: React.DragEvent, id: number) => {
+    if (!user?.can_edit_priority || !draggedItem) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverItem(id);
+  };
+
+  const handleDragLeave = () => {
+    setDragOverItem(null);
+  };
+
+  const handleDrop = async (e: React.DragEvent, dropTargetId: number) => {
+    e.preventDefault();
+    if (!user?.can_edit_priority || !draggedItem || draggedItem === dropTargetId) {
+      setDraggedItem(null);
+      setDragOverItem(null);
+      return;
+    }
+
+    try {
+      const draggedItemIndex = sortedLandingsplasser.findIndex(lp => lp.id === draggedItem);
+      const dropTargetIndex = sortedLandingsplasser.findIndex(lp => lp.id === dropTargetId);
+      
+      if (draggedItemIndex === -1 || dropTargetIndex === -1) return;
+
+      // Calculate new priorities - insert dragged item at the drop position
+      const updatedPriorities: { id: number; priority: number }[] = [];
+      const reorderedItems = [...sortedLandingsplasser];
+      
+      // Remove dragged item and insert at new position
+      const [draggedItemData] = reorderedItems.splice(draggedItemIndex, 1);
+      reorderedItems.splice(dropTargetIndex, 0, draggedItemData);
+      
+      // Reassign priorities based on new order
+      reorderedItems.forEach((item, index) => {
+        const newPriority = index + 1;
+        if (item.priority !== newPriority) {
+          updatedPriorities.push({ id: item.id, priority: newPriority });
+        }
+      });
+
+      // Update database with new priorities
+      for (const update of updatedPriorities) {
+        const { error } = await supabase
+          .from('vass_lasteplass')
+          .update({ priority: update.priority })
+          .eq('id', update.id);
+
+        if (error) {
+          console.error('Error updating priority:', error);
+          throw error;
+        }
+      }
+
+      // Refresh data to show updated order
+      if (_onDataUpdate) {
+        _onDataUpdate();
+      }
+    } catch (error) {
+      console.error('Error reordering priorities:', error);
+      alert('Kunne ikke oppdatere prioritetsrekkefølge');
+    } finally {
+      setDraggedItem(null);
+      setDragOverItem(null);
+    }
+  };
+
+  const handleDragEnd = () => {
+    setDraggedItem(null);
+    setDragOverItem(null);
+  };
 
   // Filter landingsplasser by county like original
   let filteredLandingsplasser = landingsplasser;
@@ -572,14 +653,23 @@ export default function ProgressPlan({
             <div 
               key={lp.id}
               data-landingsplass-id={lp.id}
-              className={`card mb-3 shadow-sm border-0 draggable-card ${isDone ? 'opacity-75' : ''}`}
+              className={`card mb-3 shadow-sm border-0 draggable-card ${isDone ? 'opacity-75' : ''} ${dragOverItem === lp.id ? 'drag-over' : ''}`}
+              draggable={user?.can_edit_priority}
+              onDragStart={(e) => handleDragStart(e, lp.id)}
+              onDragOver={(e) => handleDragOver(e, lp.id)}
+              onDragLeave={handleDragLeave}
+              onDrop={(e) => handleDrop(e, lp.id)}
+              onDragEnd={handleDragEnd}
               style={{
                 borderRadius: '12px',
                 overflow: 'hidden',
                 background: 'white',
                 transition: 'all 0.2s ease',
                 borderLeft: `4px solid ${getPriorityColor(lp.priority, isDone)} !important`,
-                boxShadow: '0 2px 8px rgba(0,0,0,0.08) !important'
+                boxShadow: '0 2px 8px rgba(0,0,0,0.08) !important',
+                cursor: user?.can_edit_priority ? 'grab' : 'default',
+                ...(draggedItem === lp.id ? { opacity: 0.5, transform: 'rotate(2deg)' } : {}),
+                ...(dragOverItem === lp.id ? { boxShadow: '0 4px 12px rgba(0,123,255,0.3) !important', transform: 'translateY(-2px)' } : {})
               }}
             >
               <div className="card-body p-3" style={{ fontSize: '0.85rem' }}>
