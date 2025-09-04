@@ -1323,7 +1323,7 @@ export default function MapContainer({
 
         // Get public URL
         const { data: { publicUrl } } = supabase.storage
-          .from('images')
+          .from('landingsplass')
           .getPublicUrl(filePath);
 
         // Save reference to database
@@ -1364,6 +1364,200 @@ export default function MapContainer({
         console.error('Error uploading document:', error);
         alert('Could not upload document');
       }
+    };
+
+    // Toggle document dropdown
+    (window as any).toggleDocumentDropdown = (docId: number, event: Event) => {
+      event.stopPropagation();
+      // Close all other dropdowns first
+      document.querySelectorAll('[id^="document-dropdown-"]').forEach(dropdown => {
+        if (dropdown.id !== `document-dropdown-${docId}`) {
+          (dropdown as HTMLElement).style.display = 'none';
+        }
+      });
+      document.querySelectorAll('[id^="image-dropdown-"]').forEach(dropdown => {
+        (dropdown as HTMLElement).style.display = 'none';
+      });
+      
+      const dropdown = document.getElementById(`document-dropdown-${docId}`);
+      if (dropdown) {
+        dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+      }
+    };
+
+    // Delete document function
+    (window as any).deleteDocument = async (docId: number, type: string, markerId: number) => {
+      if (!confirm('Er du sikker på at du vil slette dette dokumentet?')) {
+        return;
+      }
+
+      try {
+        const documentTable = type === 'airport' ? 'vass_vann_documents' : 'vass_lasteplass_documents';
+        
+        // Get document info first for storage deletion
+        const { data: docData, error: fetchError } = await supabase
+          .from(documentTable)
+          .select('document_url')
+          .eq('id', docId)
+          .single();
+
+        if (fetchError) throw fetchError;
+
+        // Delete from storage - extract file path from URL
+        if (docData?.document_url) {
+          // Extract the file path from the URL (everything after /public/)
+          const urlParts = docData.document_url.split('/public/');
+          if (urlParts.length > 1) {
+            const filePath = urlParts[1];
+            const { error: storageError } = await supabase.storage
+              .from('landingsplass')
+              .remove([filePath]);
+            
+            if (storageError) {
+              console.error('Error deleting from storage:', storageError);
+              // Continue with database deletion even if storage deletion fails
+            }
+          }
+        }
+
+        // Delete from database
+        const { error: dbError } = await supabase
+          .from(documentTable)
+          .delete()
+          .eq('id', docId);
+
+        if (dbError) throw dbError;
+
+        // Log the action
+        if (user) {
+          await supabase
+            .from('user_action_logs')
+            .insert({
+              user_email: user.email,
+              action_type: 'delete_document',
+              target_type: type,
+              target_id: markerId,
+              target_name: airports.find(a => a.id === markerId)?.name || (landingsplasser.find(l => l.id === markerId) as any)?.lp || 'Unknown',
+              action_details: { document_id: docId }
+            });
+        }
+
+        // Refresh documents display
+        loadAndDisplayDocuments(markerId, type);
+        
+        // Close dropdown
+        const dropdown = document.getElementById(`document-dropdown-${docId}`);
+        if (dropdown) dropdown.style.display = 'none';
+        
+      } catch (error) {
+        console.error('Error deleting document:', error);
+        alert('Could not delete document');
+      }
+    };
+
+    // Toggle image dropdown
+    (window as any).toggleImageDropdown = (imageId: number, event: Event) => {
+      event.stopPropagation();
+      // Close all other dropdowns first
+      document.querySelectorAll('[id^="document-dropdown-"]').forEach(dropdown => {
+        (dropdown as HTMLElement).style.display = 'none';
+      });
+      document.querySelectorAll('[id^="image-dropdown-"]').forEach(dropdown => {
+        if (dropdown.id !== `image-dropdown-${imageId}`) {
+          (dropdown as HTMLElement).style.display = 'none';
+        }
+      });
+      
+      const dropdown = document.getElementById(`image-dropdown-${imageId}`);
+      if (dropdown) {
+        dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+      }
+    };
+
+    // Delete image function
+    (window as any).deleteImage = async (imageId: number, type: string, markerId: number) => {
+      if (!confirm('Er du sikker på at du vil slette dette bildet?')) {
+        return;
+      }
+
+      try {
+        const imageTable = type === 'airport' ? 'vass_vann_images' : 'vass_lasteplass_images';
+        
+        // Get image info first for storage deletion
+        const { data: imgData, error: fetchError } = await supabase
+          .from(imageTable)
+          .select('image_url')
+          .eq('id', imageId)
+          .single();
+
+        if (fetchError) throw fetchError;
+
+        // Delete from storage - extract file path from URL
+        if (imgData?.image_url) {
+          // Extract the file path from the URL (everything after /public/)
+          const urlParts = imgData.image_url.split('/public/');
+          if (urlParts.length > 1) {
+            const filePath = urlParts[1];
+            const { error: storageError } = await supabase.storage
+              .from('vass-images')
+              .remove([filePath]);
+            
+            if (storageError) {
+              console.error('Error deleting from storage:', storageError);
+              // Continue with database deletion even if storage deletion fails
+            }
+          }
+        }
+
+        // Delete from database
+        const { error: dbError } = await supabase
+          .from(imageTable)
+          .delete()
+          .eq('id', imageId);
+
+        if (dbError) throw dbError;
+
+        // Log the action
+        if (user) {
+          await supabase
+            .from('user_action_logs')
+            .insert({
+              user_email: user.email,
+              action_type: 'delete_image',
+              target_type: type,
+              target_id: markerId,
+              target_name: airports.find(a => a.id === markerId)?.name || (landingsplasser.find(l => l.id === markerId) as any)?.lp || 'Unknown',
+              action_details: { image_id: imageId }
+            });
+        }
+
+        // Refresh images display
+        loadAndDisplayImages(markerId, type);
+        
+        // Close dropdown
+        const dropdown = document.getElementById(`image-dropdown-${imageId}`);
+        if (dropdown) dropdown.style.display = 'none';
+        
+      } catch (error) {
+        console.error('Error deleting image:', error);
+        alert('Could not delete image');
+      }
+    };
+
+    // Close all dropdowns when clicking outside
+    const handleClickOutside = (event: Event) => {
+      const target = event.target as HTMLElement;
+      if (!target.closest('.dropdown')) {
+        document.querySelectorAll('[id^="document-dropdown-"], [id^="image-dropdown-"]').forEach(dropdown => {
+          (dropdown as HTMLElement).style.display = 'none';
+        });
+      }
+    };
+
+    document.addEventListener('click', handleClickOutside);
+    
+    return () => {
+      document.removeEventListener('click', handleClickOutside);
     };
   }, []);
 
@@ -1545,15 +1739,35 @@ ${waypointElements}
         return;
       }
 
-      const imageListHTML = images.map((img: any, index: number) => `
+      const imageListHTML = images.map((img: any, index: number) => {
+        // Extract filename from URL
+        const fileName = img.image_url ? img.image_url.split('/').pop() || `Bilde ${index + 1}` : `Bilde ${index + 1}`;
+        
+        return `
         <div class="image-item mb-2" style="border: 1px solid #dee2e6; border-radius: 0.375rem; padding: 0.5rem;">
           <div class="d-flex justify-content-between align-items-center mb-1">
-            <span style="font-size: 0.7rem; font-weight: 500;">${img.file_name}</span>
-            <small class="text-muted">${new Date(img.created_at).toLocaleDateString('nb-NO')}</small>
+            <span style="font-size: 0.7rem; font-weight: 500;">${fileName}</span>
+            <div class="d-flex align-items-center">
+              <small class="text-muted me-2">${new Date(img.created_at).toLocaleDateString('nb-NO')}</small>
+              <div class="dropdown" style="position: relative;">
+                <button class="btn btn-sm" type="button" onclick="toggleImageDropdown(${img.id}, event)" style="background: none; border: none; padding: 2px 4px; font-size: 0.75rem;">
+                  <i class="fas fa-ellipsis-vertical"></i>
+                </button>
+                <div id="image-dropdown-${img.id}" class="dropdown-menu" style="display: none; position: absolute; right: 0; top: 100%; background: white; border: 1px solid #ccc; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); z-index: 1000; min-width: 120px;">
+                  <a class="dropdown-item" href="${img.image_url}" download style="padding: 6px 12px; display: block; text-decoration: none; color: #333; font-size: 0.75rem;">
+                    <i class="fas fa-download me-1"></i>Last ned
+                  </a>
+                  <button class="dropdown-item" onclick="deleteImage(${img.id}, '${type}', ${id})" style="width: 100%; text-align: left; border: none; background: none; padding: 6px 12px; color: #dc3545; font-size: 0.75rem; cursor: pointer;">
+                    <i class="fas fa-trash me-1"></i>Slett
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
-          <img src="${img.image_url}" alt="${img.file_name}" style="width: 100%; max-height: 150px; object-fit: cover; border-radius: 0.25rem; cursor: pointer;" onclick="window.open('${img.image_url}', '_blank')">
+          <img src="${img.image_url}" alt="${fileName}" style="width: 100%; max-height: 150px; object-fit: cover; border-radius: 0.25rem; cursor: pointer;" onclick="window.open('${img.image_url}', '_blank')">
         </div>
-      `).join('');
+        `;
+      }).join('');
 
       displayElement.innerHTML = imageListHTML;
       
@@ -1634,7 +1848,22 @@ ${waypointElements}
               <a href="${doc.document_url}" target="_blank" style="font-size: 0.75rem; text-decoration: none; color: #007bff;">
                 <i class="fas ${iconClass} me-1"></i>${doc.file_name}
               </a>
-              <small class="text-muted" style="font-size: 0.65rem;">${uploadDate}</small>
+              <div class="d-flex align-items-center">
+                <small class="text-muted me-2" style="font-size: 0.65rem;">${uploadDate}</small>
+                <div class="dropdown" style="position: relative;">
+                  <button class="btn btn-sm" type="button" onclick="toggleDocumentDropdown(${doc.id}, event)" style="background: none; border: none; padding: 2px 4px; font-size: 0.75rem;">
+                    <i class="fas fa-ellipsis-vertical"></i>
+                  </button>
+                  <div id="document-dropdown-${doc.id}" class="dropdown-menu" style="display: none; position: absolute; right: 0; top: 100%; background: white; border: 1px solid #ccc; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); z-index: 1000; min-width: 120px;">
+                    <a class="dropdown-item" href="${doc.document_url}" download style="padding: 6px 12px; display: block; text-decoration: none; color: #333; font-size: 0.75rem;">
+                      <i class="fas fa-download me-1"></i>Last ned
+                    </a>
+                    <button class="dropdown-item" onclick="deleteDocument(${doc.id}, '${type}', ${id})" style="width: 100%; text-align: left; border: none; background: none; padding: 6px 12px; color: #dc3545; font-size: 0.75rem; cursor: pointer;">
+                      <i class="fas fa-trash me-1"></i>Slett
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         `;
