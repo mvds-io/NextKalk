@@ -1316,7 +1316,7 @@ export default function MapContainer({
         
         // Upload to Supabase Storage
         const { error: uploadError } = await supabase.storage
-          .from('images') // Using same bucket as images
+          .from('landingsplass') // Using landingsplass bucket for documents
           .upload(filePath, file);
 
         if (uploadError) throw uploadError;
