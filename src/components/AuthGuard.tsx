@@ -16,7 +16,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { User } from '@/types';
-import { supabase, completeLogout, getConnectionStatus } from '@/lib/supabase';
+import { supabase, completeLogout, getConnectionStatus, validateSession, getSessionStatus, updateSessionHealth } from '@/lib/supabase';
 
 interface AuthGuardProps {
   children: (user: User, onLogout: () => void) => React.ReactNode;
@@ -32,6 +32,7 @@ export default function AuthGuard({ children }: AuthGuardProps) {
   const [authTimeout, setAuthTimeout] = useState(false);
   const [connectionIssue, setConnectionIssue] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
+  const [sessionExpired, setSessionExpired] = useState(false);
 
   const loadUserData = useCallback(async (email: string) => {
     try {
@@ -121,12 +122,20 @@ export default function AuthGuard({ children }: AuthGuardProps) {
     }
   }, []);
 
-  const checkAuthentication = useCallback(async (isRetry = false) => {
-    let abortController: AbortController | null = null;
+  const checkAuthentication = useCallback(async () => {
     let timeoutId: NodeJS.Timeout | null = null;
     
     try {
-      // Check connection health first
+      // Check session health first
+      const sessionStatus = getSessionStatus();
+      if (sessionStatus.needsReauth) {
+        console.log('Session needs re-authentication');
+        setSessionExpired(true);
+        setIsLoading(false);
+        return;
+      }
+      
+      // Check connection health
       const connectionStatus = getConnectionStatus();
       if (!connectionStatus.isHealthy && connectionStatus.consecutiveFailures > 2) {
         setConnectionIssue(true);
@@ -134,27 +143,14 @@ export default function AuthGuard({ children }: AuthGuardProps) {
         return;
       }
 
-      abortController = new AbortController();
-      
-      // Set up abort timeout for hanging requests
+      // Simple timeout - just fail after 10 seconds
       timeoutId = setTimeout(() => {
-        if (abortController) {
-          abortController.abort();
-        }
-        console.warn('Authentication check timed out');
-        
-        // Only show timeout if this isn't a retry and we've been loading for a while
-        if (!isRetry && retryCount < 2) {
-          setAuthTimeout(true);
-          // Try to retry authentication
-          setRetryCount(prev => prev + 1);
-          setTimeout(() => checkAuthentication(true), 2000);
-        } else {
-          setIsLoading(false);
-          setConnectionIssue(true);
-        }
-      }, isRetry ? 10000 : 15000);
+        console.warn('Authentication check timed out after 10s');
+        setIsLoading(false);
+        setConnectionIssue(true);
+      }, 10000);
 
+      // Get session directly - no retry logic in auth check
       const { data: { session }, error } = await supabase.auth.getSession();
       
       // Clear timeout since we got a response
@@ -164,48 +160,62 @@ export default function AuthGuard({ children }: AuthGuardProps) {
       }
       
       if (error) {
-        throw error;
+        console.error('Session error:', error);
+        if (error.message?.includes('expired') || error.message?.includes('JWT')) {
+          setSessionExpired(true);
+        } else {
+          setConnectionIssue(true);
+        }
+        setIsLoading(false);
+        return;
       }
       
-      // Reset connection issue state on successful response
+      if (!session?.user?.email) {
+        console.log('No session found');
+        setIsLoading(false);
+        return;
+      }
+      
+      // Reset all error states on successful authentication
       setConnectionIssue(false);
       setAuthTimeout(false);
+      setSessionExpired(false);
       setRetryCount(0);
       
-      if (session?.user?.email) {
-        await loadUserData(session.user.email);
-      } else {
-        setIsLoading(false);
-      }
+      await loadUserData(session.user.email);
+      
     } catch (error) {
       // Clear timeout on error
       if (timeoutId) {
         clearTimeout(timeoutId);
       }
       
-      // Check if error was due to abort
-      if (error.name === 'AbortError') {
-        return; // Don't process aborted requests
-      }
-      
       console.error('Error checking authentication:', error);
       
-      // Handle different types of errors
-      if (error.message?.includes('network') || error.message?.includes('fetch')) {
+      // Handle specific error types
+      if (error.message?.includes('expired') || error.message?.includes('log in again')) {
+        setSessionExpired(true);
+      } else {
         setConnectionIssue(true);
       }
       
       setIsLoading(false);
     }
-  }, [loadUserData, retryCount]);
+  }, [loadUserData]);
 
   const handleManualRetry = useCallback(() => {
     setIsLoading(true);
     setConnectionIssue(false);
     setAuthTimeout(false);
+    setSessionExpired(false);
     setRetryCount(0);
     checkAuthentication();
   }, [checkAuthentication]);
+
+  const handleSessionExpiredLogout = useCallback(async () => {
+    setSessionExpired(false);
+    await completeLogout();
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -268,7 +278,25 @@ export default function AuthGuard({ children }: AuthGuardProps) {
           </div>
           <h5 className="text-muted">Sjekker innlogging...</h5>
           
-          {connectionIssue && (
+          {sessionExpired && (
+            <div className="mt-3">
+              <div className="alert alert-warning d-inline-block" style={{ fontSize: '0.9rem' }}>
+                <i className="fas fa-clock me-2"></i>
+                Sesjonen har utløpt. Du må logge inn på nytt.
+              </div>
+              <div className="mt-2">
+                <button 
+                  className="btn btn-primary btn-sm"
+                  onClick={handleSessionExpiredLogout}
+                >
+                  <i className="fas fa-sign-in-alt me-2"></i>
+                  Logg inn på nytt
+                </button>
+              </div>
+            </div>
+          )}
+
+          {connectionIssue && !sessionExpired && (
             <div className="mt-3">
               <div className="alert alert-danger d-inline-block" style={{ fontSize: '0.9rem' }}>
                 <i className="fas fa-exclamation-triangle me-2"></i>

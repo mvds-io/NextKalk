@@ -18,6 +18,7 @@ interface CounterProps {
   onUserUpdate?: (user: User | null) => void;
   isLoading?: boolean;
   onHideAll?: () => void;
+  onZoomToLocation?: ((lat: number, lng: number, zoom?: number) => void) | null;
 }
 
 export default function Counter({ 
@@ -28,7 +29,8 @@ export default function Counter({
   user, 
   onUserUpdate,
   isLoading = false,
-  onHideAll
+  onHideAll,
+  onZoomToLocation
 }: CounterProps) {
   
   const [isLoadingConnections, setIsLoadingConnections] = useState(false);
@@ -178,6 +180,11 @@ export default function Counter({
     setSelectedSearchResult(result);
     setShowSearchModal(false);
     setShowResultModal(true);
+    
+    // Zoom to the selected location if zoom function is available
+    if (onZoomToLocation && result.latitude && result.longitude) {
+      onZoomToLocation(result.latitude, result.longitude, 16);
+    }
   };
 
   // Create legend icon element like the original

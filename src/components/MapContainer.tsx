@@ -11,6 +11,7 @@ interface MapContainerProps {
   filterState: FilterState;
   user: User | null;
   onDataUpdate: () => void;
+  onMapReady?: (zoomToLocation: (lat: number, lng: number, zoom?: number) => void) => void;
 }
 
 export default function MapContainer({ 
@@ -19,7 +20,8 @@ export default function MapContainer({
   kalkMarkers, 
   filterState, 
   user, 
-  onDataUpdate 
+  onDataUpdate,
+  onMapReady
 }: MapContainerProps) {
   const mapRef = useRef<HTMLDivElement>(null);
   const leafletMapRef = useRef<any>(null);
@@ -54,6 +56,16 @@ export default function MapContainer({
   
   // Connection health monitoring
   const [connectionHealth, setConnectionHealth] = useState({ isHealthy: true, consecutiveFailures: 0 });
+
+  // Zoom function for search results
+  const zoomToLocation = useCallback((lat: number, lng: number, zoom: number = 15) => {
+    if (leafletMapRef.current) {
+      leafletMapRef.current.setView([lat, lng], zoom, {
+        animate: true,
+        duration: 1.5
+      });
+    }
+  }, []);
 
   // Enhanced mobile/tablet detection - available throughout component
   const isMobileOrTablet = useCallback(() => {
@@ -389,6 +401,11 @@ export default function MapContainer({
           markersLayerRef.current = markersLayer;
           clusterGroupRef.current = clusterGroup;
           setIsMapReady(true);
+
+          // Call onMapReady callback with zoom function
+          if (onMapReady) {
+            onMapReady(zoomToLocation);
+          }
 
           // Make map instance available globally for zoom functionality
           (window as any).leafletMapInstance = map;

@@ -6,7 +6,7 @@ import Counter from '@/components/Counter';
 import MapContainer from '@/components/MapContainer';
 import ProgressPlan from '@/components/ProgressPlan';
 import AuthGuard from '@/components/AuthGuard';
-import { supabase, queryWithRetry } from '@/lib/supabase';
+import { supabase, queryWithRetry, validateSession, getSessionStatus } from '@/lib/supabase';
 import { Airport, Landingsplass, KalkInfo, User, CounterData, FilterState } from '@/types';
 
 // Utility function to parse European decimal numbers (handles both "1.0" and "1,0" formats)
@@ -54,10 +54,23 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
   // Desktop panel toggle state
   const [isProgressPlanMinimized, setIsProgressPlanMinimized] = useState(false);
   const [isFullScreen, setIsFullScreen] = useState(false);
+  
+  // Map zoom function for search results
+  const [mapZoomFunction, setMapZoomFunction] = useState<((lat: number, lng: number, zoom?: number) => void) | null>(null);
 
   const initializeApp = useCallback(async () => {
     try {
       setError(null);
+      
+      // Validate session before loading data
+      const isSessionValid = await validateSession();
+      if (!isSessionValid) {
+        const sessionStatus = getSessionStatus();
+        if (sessionStatus.needsReauth) {
+          setError('Session expired. Please log in again.');
+          return;
+        }
+      }
       
       // Load data in parallel (user is already authenticated via AuthGuard)
       await Promise.all([
@@ -71,7 +84,14 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
       setIsLoading(false);
     } catch (error) {
       console.error('Error initializing app:', error);
-      setError('Failed to initialize application. Please check your connection.');
+      
+      // Check if it's a session-related error
+      if (error.message?.includes('expired') || error.message?.includes('log in again')) {
+        setError('Session expired. Please refresh the page to log in again.');
+      } else {
+        setError('Failed to initialize application. Please check your connection.');
+      }
+      
       setLoadingStates(prev => ({ ...prev, initialLoad: false }));
       setIsLoading(false);
     }
@@ -79,6 +99,22 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
 
   useEffect(() => {
     initializeApp();
+    
+    // Set up periodic session validation (every 5 minutes)
+    const sessionCheckInterval = setInterval(async () => {
+      const sessionStatus = getSessionStatus();
+      if (sessionStatus.shouldRevalidate) {
+        console.log('Performing periodic session validation...');
+        const isValid = await validateSession();
+        if (!isValid && sessionStatus.needsReauth) {
+          setError('Session expired. Please refresh the page to log in again.');
+        }
+      }
+    }, 300000); // 5 minutes
+    
+    return () => {
+      clearInterval(sessionCheckInterval);
+    };
   }, [initializeApp]);
 
   const loadAirports = async () => {
@@ -430,6 +466,7 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
             onUserUpdate={() => onLogout()}
             isLoading={loadingStates.initialLoad}
             onHideAll={toggleFullScreen}
+            onZoomToLocation={mapZoomFunction}
           />
         </div>
       )}
@@ -451,11 +488,22 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
             kalkMarkers={kalkMarkers}
             filterState={filterState}
             user={user}
-            onDataUpdate={() => {
+            onDataUpdate={async () => {
+              // Validate session before refreshing data
+              const isSessionValid = await validateSession();
+              if (!isSessionValid) {
+                const sessionStatus = getSessionStatus();
+                if (sessionStatus.needsReauth) {
+                  setError('Session expired. Please refresh the page to log in again.');
+                  return;
+                }
+              }
+              
               loadAirports();
               loadLandingsplasser();
               loadKalkMarkers();
             }}
+            onMapReady={(zoomFn) => setMapZoomFunction(() => zoomFn)}
           />
         </div>
         {!isFullScreen && (
@@ -478,7 +526,17 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
             onMobileToggle={toggleMobileUI}
             isMinimized={isProgressPlanMinimized}
             onToggleMinimized={toggleProgressPlan}
-            onDataUpdate={() => {
+            onDataUpdate={async () => {
+              // Validate session before refreshing data
+              const isSessionValid = await validateSession();
+              if (!isSessionValid) {
+                const sessionStatus = getSessionStatus();
+                if (sessionStatus.needsReauth) {
+                  setError('Session expired. Please refresh the page to log in again.');
+                  return;
+                }
+              }
+              
               loadAirports();
               loadLandingsplasser();
               loadKalkMarkers();

@@ -49,6 +49,7 @@ export default function ProgressPlan({
   const [isContactPersonsLoading, setIsContactPersonsLoading] = useState<Record<number, boolean>>({});
   const [draggedItem, setDraggedItem] = useState<number | null>(null);
   const [dragOverItem, setDragOverItem] = useState<number | null>(null);
+  const [completionUsers, setCompletionUsers] = useState<Record<number, string>>({});
 
   // Internal mobile detection as fallback
   useEffect(() => {
@@ -252,6 +253,57 @@ export default function ProgressPlan({
     }
   }, [sortedLandingsplasser.length]); // Only depend on the length, not the entire array
 
+  // Load completion users from action logs
+  const loadCompletionUsers = useCallback(async () => {
+    try {
+      // Get all completed landingsplasser IDs
+      const completedLandingsplasser = sortedLandingsplasser.filter(lp => lp.done);
+      const completedIds = completedLandingsplasser.map(lp => lp.id);
+      
+      if (completedIds.length === 0) return;
+
+      // Query action logs for completion events
+      const { data: completionLogs, error } = await supabase
+        .from('user_action_logs')
+        .select('user_email, target_id, action_details, timestamp')
+        .eq('action_type', 'toggle_done')
+        .eq('target_type', 'landingsplass')
+        .in('target_id', completedIds)
+        .order('timestamp', { ascending: false });
+
+      if (error) {
+        console.error('Error loading completion users:', error);
+        return;
+      }
+
+      // Process logs to get the most recent completion event for each landingsplass
+      const userMap: Record<number, string> = {};
+      
+      completionLogs?.forEach(log => {
+        const targetId = log.target_id;
+        const actionDetails = log.action_details as any;
+        
+        // Skip if we already have a user for this landingsplass (most recent wins)
+        if (userMap[targetId]) return;
+        
+        // Handle both old and new log formats
+        const isCompleted = 
+          actionDetails?.new_status === 'completed' ||  // New format
+          actionDetails?.new_status === true;           // Old format
+        
+        if (isCompleted) {
+          // Extract just the name part from email (before @)
+          const userName = log.user_email?.split('@')[0] || log.user_email || '';
+          userMap[targetId] = userName;
+        }
+      });
+
+      setCompletionUsers(userMap);
+    } catch (error) {
+      console.error('Error loading completion users:', error);
+    }
+  }, [sortedLandingsplasser]);
+
   // Load contact persons for a specific landingsplass
   const loadContactPersonsForLandingsplass = useCallback(async (landingsplassId: number) => {
     setIsContactPersonsLoading(prev => ({ ...prev, [landingsplassId]: true }));
@@ -312,6 +364,11 @@ export default function ProgressPlan({
   }, []);
 
   // Load contact persons for all visible landingsplasser
+  // Load completion users when data changes
+  useEffect(() => {
+    loadCompletionUsers();
+  }, [loadCompletionUsers]);
+
   useEffect(() => {
     sortedLandingsplasser.forEach(lp => {
       if (!contactPersons[lp.id] && !isContactPersonsLoading[lp.id]) {
@@ -780,6 +837,11 @@ export default function ProgressPlan({
                   <div className="completion-info mb-2" style={{ background: 'linear-gradient(135deg, #d4edda, #c3e6cb)', borderRadius: '6px', padding: '0.5rem', border: '1px solid #b8dacc' }}>
                     <div style={{ fontSize: '0.7rem', color: '#155724' }}>
                       <i className="fas fa-calendar-check me-1"></i>Utført: {completedDate}
+                      {completionUsers[lp.id] && (
+                        <span style={{ fontSize: '0.65rem', color: '#495057', marginLeft: '8px' }}>
+                          av {completionUsers[lp.id]}
+                        </span>
+                      )}
                     </div>
                   </div>
                 )}

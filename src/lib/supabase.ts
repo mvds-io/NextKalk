@@ -9,11 +9,28 @@ interface ConnectionHealth {
   lastError: string | null;
 }
 
+// Session health monitoring
+interface SessionHealth {
+  isValid: boolean;
+  lastValidated: Date | null;
+  refreshFailures: number;
+  lastRefreshAttempt: Date | null;
+  needsReauth: boolean;
+}
+
 export const connectionHealth: ConnectionHealth = {
   isHealthy: true,
   lastSuccessfulQuery: null,
   consecutiveFailures: 0,
   lastError: null
+};
+
+export const sessionHealth: SessionHealth = {
+  isValid: true,
+  lastValidated: null,
+  refreshFailures: 0,
+  lastRefreshAttempt: null,
+  needsReauth: false
 };
 
 // Health monitoring functions
@@ -47,6 +64,88 @@ export const getConnectionStatus = () => {
   };
 };
 
+// Session health monitoring functions
+export const updateSessionHealth = (isValid: boolean, refreshFailed: boolean = false) => {
+  sessionHealth.isValid = isValid;
+  sessionHealth.lastValidated = new Date();
+  
+  if (refreshFailed) {
+    sessionHealth.refreshFailures++;
+    sessionHealth.lastRefreshAttempt = new Date();
+    
+    // Mark as needing reauth after 2 consecutive refresh failures
+    if (sessionHealth.refreshFailures >= 2) {
+      sessionHealth.needsReauth = true;
+      sessionHealth.isValid = false;
+    }
+  } else if (isValid) {
+    // Reset failures on successful validation
+    sessionHealth.refreshFailures = 0;
+    sessionHealth.needsReauth = false;
+  }
+};
+
+export const getSessionStatus = () => {
+  const timeSinceLastValidation = sessionHealth.lastValidated 
+    ? Date.now() - sessionHealth.lastValidated.getTime()
+    : null;
+  
+  const timeSinceLastRefresh = sessionHealth.lastRefreshAttempt
+    ? Date.now() - sessionHealth.lastRefreshAttempt.getTime()
+    : null;
+  
+  return {
+    ...sessionHealth,
+    timeSinceLastValidationMs: timeSinceLastValidation,
+    timeSinceLastRefreshMs: timeSinceLastRefresh,
+    shouldRevalidate: !sessionHealth.isValid || (timeSinceLastValidation && timeSinceLastValidation > 300000) // 5 minutes
+  };
+};
+
+// Validate current session
+export const validateSession = async (): Promise<boolean> => {
+  try {
+    const { data: { session }, error } = await supabase.auth.getSession();
+    
+    if (error) {
+      console.warn('Session validation error:', error);
+      updateSessionHealth(false, true);
+      return false;
+    }
+    
+    if (!session) {
+      updateSessionHealth(false);
+      return false;
+    }
+    
+    // Check if token is close to expiry (within 5 minutes)
+    const expiresAt = new Date((session.expires_at || 0) * 1000);
+    const now = new Date();
+    const timeToExpiry = expiresAt.getTime() - now.getTime();
+    
+    if (timeToExpiry < 300000) { // Less than 5 minutes
+      console.log('Session expires soon, attempting refresh...');
+      const { data: { session: refreshedSession }, error: refreshError } = await supabase.auth.refreshSession();
+      
+      if (refreshError) {
+        console.error('Session refresh failed:', refreshError);
+        updateSessionHealth(false, true);
+        return false;
+      }
+      
+      updateSessionHealth(true);
+      return !!refreshedSession;
+    }
+    
+    updateSessionHealth(true);
+    return true;
+  } catch (error) {
+    console.error('Session validation failed:', error);
+    updateSessionHealth(false, true);
+    return false;
+  }
+};
+
 export const supabase = createClient(
   appConfig.supabaseUrl,
   appConfig.supabaseKey,
@@ -58,9 +157,15 @@ export const supabase = createClient(
     },
     global: {
       fetch: async (url, options = {}) => {
-        // Add timeout and better error handling
+        // Check session health before making request
+        const sessionStatus = getSessionStatus();
+        if (sessionStatus.needsReauth) {
+          throw new Error('Session expired. Please log in again.');
+        }
+        
+        // Add timeout and better error handling - reduced from 30s to 10s
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
 
         try {
           const response = await fetch(url, {
@@ -68,12 +173,30 @@ export const supabase = createClient(
             signal: controller.signal,
           });
           clearTimeout(timeoutId);
+          
+          // Check for auth errors in response
+          if (response.status === 401) {
+            updateSessionHealth(false, true);
+            throw new Error('Authentication expired. Please log in again.');
+          }
+          
           return response;
         } catch (error) {
           clearTimeout(timeoutId);
           if (error instanceof Error && error.name === 'AbortError') {
-            throw new Error('Database request timed out after 30 seconds');
+            throw new Error('Database request timed out after 10 seconds');
           }
+          
+          // Handle auth errors
+          if (error instanceof Error && (
+            error.message.includes('JWT') || 
+            error.message.includes('unauthorized') ||
+            error.message.includes('401')
+          )) {
+            updateSessionHealth(false, true);
+            throw new Error('Authentication expired. Please log in again.');
+          }
+          
           throw error;
         }
       }
@@ -113,7 +236,7 @@ export const completeLogout = async () => {
   }
 };
 
-// Retry wrapper with exponential backoff
+// Retry wrapper with exponential backoff and session awareness
 export const retryWithBackoff = async <T>(
   operation: () => Promise<T>,
   maxRetries: number = 3,
@@ -124,13 +247,26 @@ export const retryWithBackoff = async <T>(
   
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
+      // Validate session before each attempt (except first)
+      if (attempt > 0) {
+        const isSessionValid = await validateSession();
+        if (!isSessionValid) {
+          const sessionStatus = getSessionStatus();
+          if (sessionStatus.needsReauth) {
+            throw new Error('Session expired. Please log in again.');
+          }
+        }
+      }
+      
       return await operation();
     } catch (error) {
       lastError = error as Error;
       
-      // Don't retry on authentication errors or client errors (4xx)
+      // Don't retry on authentication/session errors or client errors (4xx)
       if (lastError.message.includes('JWT') || 
           lastError.message.includes('unauthorized') ||
+          lastError.message.includes('expired') ||
+          lastError.message.includes('log in again') ||
           lastError.message.includes('not found')) {
         throw lastError;
       }
