@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 
 interface UserLog {
@@ -12,6 +12,8 @@ interface UserLog {
   target_id: number;
   target_name: string;
   action_details: any;
+  lasteplass_code?: string;
+  lasteplass_name?: string;
 }
 
 interface UserLogsModalProps {
@@ -30,6 +32,7 @@ export default function UserLogsModal({ isOpen, onClose }: UserLogsModalProps) {
     dateFrom: ''
   });
   const [hasMore, setHasMore] = useState(true);
+  const filtersRef = useRef(filters);
 
   const fetchUserLogs = useCallback(async (limit = 50, offset = 0, filterParams = filters) => {
     let query = supabase
@@ -49,6 +52,7 @@ export default function UserLogsModal({ isOpen, onClose }: UserLogsModalProps) {
       query = query.ilike('user_email', `%${filterParams.userEmail}%`);
     }
     if (filterParams.dateFrom) {
+      console.log('Applying date filter:', filterParams.dateFrom, 'ISO:', new Date(filterParams.dateFrom).toISOString());
       query = query.gte('timestamp', new Date(filterParams.dateFrom).toISOString());
     }
 
@@ -59,15 +63,49 @@ export default function UserLogsModal({ isOpen, onClose }: UserLogsModalProps) {
       throw error;
     }
 
-    return data || [];
-  }, [filters]);
+    // Enhance logs with additional data for landingsplass entries
+    const enhancedLogs = await Promise.all(
+      (data || []).map(async (log) => {
+        if (log.target_type === 'landingsplass' && log.target_id && log.target_id > 0) {
+          try {
+            // First try vass_lasteplass table
+            const { data: vassData } = await supabase
+              .from('vass_lasteplass')
+              .select('lp, kode')
+              .eq('id', log.target_id)
+              .single();
+            
+            if (vassData) {
+              return { ...log, lasteplass_code: vassData.kode, lasteplass_name: vassData.lp };
+            }
+            
+            // If not found, try landingsplass table
+            const { data: landingData } = await supabase
+              .from('landingsplass')
+              .select('lp')
+              .eq('id', log.target_id)
+              .single();
+              
+            if (landingData) {
+              return { ...log, lasteplass_name: landingData.lp };
+            }
+          } catch (error) {
+            // Silently ignore errors for individual lookups
+          }
+        }
+        return log;
+      })
+    );
 
-  const loadUserLogs = useCallback(async (reset = true) => {
+    return enhancedLogs;
+  }, []);
+
+  const loadUserLogs = useCallback(async (reset = true, filterParams = filters) => {
     setIsLoading(true);
     
     try {
       const offset = reset ? 0 : currentOffset;
-      const newLogs = await fetchUserLogs(50, offset, filters);
+      const newLogs = await fetchUserLogs(50, offset, filterParams);
       
       if (reset) {
         setLogs(newLogs);
@@ -83,38 +121,43 @@ export default function UserLogsModal({ isOpen, onClose }: UserLogsModalProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [currentOffset, filters, fetchUserLogs]);
+  }, [currentOffset, fetchUserLogs]);
 
   useEffect(() => {
     if (isOpen) {
-      loadUserLogs(true);
+      loadUserLogs(true, filters);
     }
-  }, [isOpen, loadUserLogs]);
+  }, [isOpen]);
 
   const handleFilterChange = (field: string, value: string) => {
-    setFilters(prev => ({
-      ...prev,
+    const newFilters = {
+      ...filters,
       [field]: value
-    }));
+    };
+    setFilters(newFilters);
+    filtersRef.current = newFilters;
   };
 
   const applyFilters = () => {
-    loadUserLogs(true);
+    console.log('Applying filters:', filtersRef.current);
+    setCurrentOffset(0); // Reset offset when applying filters
+    loadUserLogs(true, filtersRef.current);
   };
 
   const clearFilters = () => {
-    setFilters({
+    const newFilters = {
       actionType: '',
       targetType: '',
       userEmail: '',
       dateFrom: ''
-    });
-    setTimeout(() => loadUserLogs(true), 0);
+    };
+    setFilters(newFilters);
+    setTimeout(() => loadUserLogs(true, newFilters), 0);
   };
 
   const loadMore = () => {
     if (!isLoading && hasMore) {
-      loadUserLogs(false);
+      loadUserLogs(false, filters);
     }
   };
 
@@ -324,7 +367,17 @@ export default function UserLogsModal({ isOpen, onClose }: UserLogsModalProps) {
                           </span>
                         </td>
                         <td style={{ fontSize: '0.8rem', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {log.target_name || '-'}
+                          {(() => {
+                            const name = log.target_name || '-';
+                            
+                            // For landingsplass entries, try to show code + name if we have additional data
+                            if (log.target_type === 'landingsplass' && log.lasteplass_code) {
+                              return `${log.lasteplass_code} - ${log.lasteplass_name || name}`;
+                            }
+                            
+                            // For all other cases, just show the name (which might already include codes)
+                            return name;
+                          })()}
                         </td>
                         <td style={{ fontSize: '0.7rem', maxWidth: '250px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                           {formatDetails(log.action_details)}
