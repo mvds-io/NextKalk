@@ -6,6 +6,9 @@ import Counter from '@/components/Counter';
 import MapContainer from '@/components/MapContainer';
 import ProgressPlan from '@/components/ProgressPlan';
 import AuthGuard from '@/components/AuthGuard';
+import SkeletonMap from '@/components/SkeletonMap';
+import SkeletonTopBar from '@/components/SkeletonTopBar';
+import SkeletonSidePanel from '@/components/SkeletonSidePanel';
 import { supabase, queryWithRetry, validateSession, getSessionStatus } from '@/lib/supabase';
 import { Airport, Landingsplass, KalkInfo, User, CounterData, FilterState } from '@/types';
 
@@ -46,6 +49,11 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
     initialLoad: true
   });
 
+  // Progress tracking state
+  const [loadingProgress, setLoadingProgress] = useState(0);
+  const [currentLoadingStep, setCurrentLoadingStep] = useState('Starter...');
+  const [stepStartTime, setStepStartTime] = useState(Date.now());
+
   // Mobile UI state
   const [isMobileUIMinimized, setIsMobileUIMinimized] = useState(false);
   const [isMobileTopBarHidden, setIsMobileTopBarHidden] = useState(false);
@@ -61,7 +69,10 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
   const initializeApp = useCallback(async () => {
     try {
       setError(null);
-      
+      setLoadingProgress(0);
+      setCurrentLoadingStep('Validerer sesjon...');
+      setStepStartTime(Date.now());
+
       // Validate session before loading data
       const isSessionValid = await validateSession();
       if (!isSessionValid) {
@@ -71,27 +82,47 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
           return;
         }
       }
-      
-      // Load data in parallel (user is already authenticated via AuthGuard)
-      await Promise.all([
-        loadAirports(),
-        loadLandingsplasser(),
-        loadKalkMarkers(),
-        loadCounties()
-      ]);
+
+      setLoadingProgress(10);
+
+      // Load data sequentially to track progress accurately
+      setCurrentLoadingStep('Laster vann-data...');
+      setStepStartTime(Date.now());
+      await loadAirports();
+      setLoadingProgress(35);
+
+      setCurrentLoadingStep('Laster landingsplass-data...');
+      setStepStartTime(Date.now());
+      await loadLandingsplasser();
+      setLoadingProgress(65);
+
+      setCurrentLoadingStep('Laster kommentar-data...');
+      setStepStartTime(Date.now());
+      await loadKalkMarkers();
+      setLoadingProgress(85);
+
+      setCurrentLoadingStep('Laster fylker...');
+      setStepStartTime(Date.now());
+      await loadCounties();
+      setLoadingProgress(95);
+
+      setCurrentLoadingStep('Ferdiggjør...');
+      setStepStartTime(Date.now());
+      setLoadingProgress(100);
 
       setLoadingStates(prev => ({ ...prev, initialLoad: false }));
       setIsLoading(false);
     } catch (error) {
       console.error('Error initializing app:', error);
-      
+
       // Check if it's a session-related error
-      if (error.message?.includes('expired') || error.message?.includes('log in again')) {
+      const errorMessage = error instanceof Error ? error.message : '';
+      if (errorMessage.includes('expired') || errorMessage.includes('log in again')) {
         setError('Session expired. Please refresh the page to log in again.');
       } else {
         setError('Failed to initialize application. Please check your connection.');
       }
-      
+
       setLoadingStates(prev => ({ ...prev, initialLoad: false }));
       setIsLoading(false);
     }
@@ -427,7 +458,37 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
   };
 
   if (isLoading) {
-    return <LoadingScreen />;
+    return (
+      <>
+        {/* Show skeleton UI for app structure */}
+        <div style={{ position: 'relative', height: '100vh', display: 'flex', flexDirection: 'column' }}>
+          {/* Top bar skeleton */}
+          <SkeletonTopBar />
+
+          {/* Main content area */}
+          <div style={{ display: 'flex', flex: 1, position: 'relative', overflow: 'hidden' }}>
+            {/* Map skeleton */}
+            <div style={{ flex: 1, position: 'relative' }}>
+              <SkeletonMap />
+            </div>
+
+            {/* Side panel skeleton (desktop only) */}
+            {!isMobile && (
+              <div style={{ width: '400px', borderLeft: '1px solid #dee2e6' }}>
+                <SkeletonSidePanel />
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Loading screen overlay with real progress */}
+        <LoadingScreen
+          progress={loadingProgress}
+          currentStep={currentLoadingStep}
+          stepStartTime={stepStartTime}
+        />
+      </>
+    );
   }
 
   if (error) {

@@ -1,22 +1,50 @@
 import { useState, useEffect } from 'react';
-import { loadingSteps } from '@/lib/config';
+import { getConnectionStatus } from '@/lib/supabase';
 
-export default function LoadingScreen() {
-  const [progress, setProgress] = useState(0);
-  const [currentStepIndex, setCurrentStepIndex] = useState(0);
+interface LoadingScreenProps {
+  progress?: number;
+  currentStep?: string;
+  stepStartTime?: number;
+}
+
+export default function LoadingScreen({
+  progress = 0,
+  currentStep = 'Laster...',
+  stepStartTime = Date.now()
+}: LoadingScreenProps) {
+  const [elapsedTime, setElapsedTime] = useState(0);
+  const [showSlowWarning, setShowSlowWarning] = useState(false);
+  const [connectionHealth, setConnectionHealth] = useState({ isHealthy: true, consecutiveFailures: 0 });
 
   useEffect(() => {
+    // Update elapsed time every second
     const interval = setInterval(() => {
-      setProgress(prev => {
-        const newProgress = prev + 2;
-        const stepIndex = Math.floor((newProgress / 100) * loadingSteps.length);
-        setCurrentStepIndex(Math.min(stepIndex, loadingSteps.length - 1));
-        return Math.min(newProgress, 100);
-      });
-    }, 50);
+      const elapsed = Math.floor((Date.now() - stepStartTime) / 1000);
+      setElapsedTime(elapsed);
 
-    return () => clearInterval(interval);
-  }, []);
+      // Show warning if step takes more than 3 seconds
+      if (elapsed > 3) {
+        setShowSlowWarning(true);
+      }
+    }, 1000);
+
+    // Check connection health
+    const healthInterval = setInterval(() => {
+      const status = getConnectionStatus();
+      setConnectionHealth(status);
+    }, 2000);
+
+    return () => {
+      clearInterval(interval);
+      clearInterval(healthInterval);
+    };
+  }, [stepStartTime]);
+
+  // Reset warning when step changes
+  useEffect(() => {
+    setShowSlowWarning(false);
+    setElapsedTime(0);
+  }, [currentStep]);
 
   return (
     <div id="loading-screen" style={{
@@ -51,13 +79,13 @@ export default function LoadingScreen() {
         </div>
         <div className="progress-container">
           <div className="progress" style={{ height: '8px', borderRadius: '4px', backgroundColor: '#e9ecef' }}>
-            <div 
+            <div
               className="progress-bar progress-bar-striped progress-bar-animated"
-              role="progressbar" 
-              style={{ 
-                width: `${progress}%`, 
-                backgroundColor: '#0066cc', 
-                transition: 'width 0.3s ease' 
+              role="progressbar"
+              style={{
+                width: `${progress}%`,
+                backgroundColor: showSlowWarning ? '#ffc107' : '#0066cc',
+                transition: 'width 0.3s ease'
               }}
             ></div>
           </div>
@@ -66,8 +94,30 @@ export default function LoadingScreen() {
               {Math.round(progress)}% fullført
             </p>
             <div className="loading-details" style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: '#999' }}>
-              <span>{loadingSteps[currentStepIndex] || 'Laster...'}</span>
+              <span>
+                <i className="fas fa-circle-notch fa-spin me-2"></i>
+                {currentStep}
+              </span>
+              {elapsedTime > 0 && (
+                <span className="ms-2 text-muted">({elapsedTime}s)</span>
+              )}
             </div>
+
+            {/* Slow loading warning */}
+            {showSlowWarning && (
+              <div className="alert alert-warning mt-3 mb-0" style={{ fontSize: '0.75rem', padding: '0.5rem' }}>
+                <i className="fas fa-exclamation-triangle me-2"></i>
+                Dette steget tar lengre tid enn forventet. Sjekk internettforbindelsen.
+              </div>
+            )}
+
+            {/* Network status indicator */}
+            {!connectionHealth.isHealthy && (
+              <div className="alert alert-danger mt-2 mb-0" style={{ fontSize: '0.75rem', padding: '0.5rem' }}>
+                <i className="fas fa-wifi me-2"></i>
+                Nettverksproblemer oppdaget ({connectionHealth.consecutiveFailures} feil på rad)
+              </div>
+            )}
           </div>
         </div>
       </div>

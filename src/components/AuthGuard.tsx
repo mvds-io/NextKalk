@@ -33,6 +33,7 @@ export default function AuthGuard({ children }: AuthGuardProps) {
   const [connectionIssue, setConnectionIssue] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const [sessionExpired, setSessionExpired] = useState(false);
+  const [timeoutCountdown, setTimeoutCountdown] = useState(5);
 
   const loadUserData = useCallback(async (email: string) => {
     try {
@@ -124,8 +125,12 @@ export default function AuthGuard({ children }: AuthGuardProps) {
 
   const checkAuthentication = useCallback(async () => {
     let timeoutId: NodeJS.Timeout | null = null;
-    
+    let countdownIntervalId: NodeJS.Timeout | null = null;
+
     try {
+      // Reset countdown
+      setTimeoutCountdown(5);
+
       // Check session health first
       const sessionStatus = getSessionStatus();
       if (sessionStatus.needsReauth) {
@@ -134,7 +139,7 @@ export default function AuthGuard({ children }: AuthGuardProps) {
         setIsLoading(false);
         return;
       }
-      
+
       // Check connection health
       const connectionStatus = getConnectionStatus();
       if (!connectionStatus.isHealthy && connectionStatus.consecutiveFailures > 2) {
@@ -143,20 +148,35 @@ export default function AuthGuard({ children }: AuthGuardProps) {
         return;
       }
 
-      // Simple timeout - just fail after 10 seconds
+      // Countdown timer for timeout indicator
+      let countdown = 5;
+      countdownIntervalId = setInterval(() => {
+        countdown--;
+        setTimeoutCountdown(countdown);
+        if (countdown <= 0 && countdownIntervalId) {
+          clearInterval(countdownIntervalId);
+        }
+      }, 1000);
+
+      // Reduced timeout - fail after 5 seconds with specific error
       timeoutId = setTimeout(() => {
-        console.warn('Authentication check timed out after 10s');
+        console.warn('Authentication check timed out after 5s');
+        setAuthTimeout(true);
         setIsLoading(false);
-        setConnectionIssue(true);
-      }, 10000);
+        if (countdownIntervalId) clearInterval(countdownIntervalId);
+      }, 5000);
 
       // Get session directly - no retry logic in auth check
       const { data: { session }, error } = await supabase.auth.getSession();
-      
-      // Clear timeout since we got a response
+
+      // Clear timeout and countdown since we got a response
       if (timeoutId) {
         clearTimeout(timeoutId);
         timeoutId = null;
+      }
+      if (countdownIntervalId) {
+        clearInterval(countdownIntervalId);
+        countdownIntervalId = null;
       }
       
       if (error) {
@@ -185,20 +205,23 @@ export default function AuthGuard({ children }: AuthGuardProps) {
       await loadUserData(session.user.email);
       
     } catch (error) {
-      // Clear timeout on error
+      // Clear timeout and countdown on error
       if (timeoutId) {
         clearTimeout(timeoutId);
       }
-      
+      if (countdownIntervalId) {
+        clearInterval(countdownIntervalId);
+      }
+
       console.error('Error checking authentication:', error);
-      
+
       // Handle specific error types
       if (error.message?.includes('expired') || error.message?.includes('log in again')) {
         setSessionExpired(true);
       } else {
         setConnectionIssue(true);
       }
-      
+
       setIsLoading(false);
     }
   }, [loadUserData]);
@@ -277,6 +300,16 @@ export default function AuthGuard({ children }: AuthGuardProps) {
             <span className="visually-hidden">Laster...</span>
           </div>
           <h5 className="text-muted">Sjekker innlogging...</h5>
+
+          {/* Show countdown if loading takes time */}
+          {!sessionExpired && !connectionIssue && !authTimeout && timeoutCountdown <= 3 && (
+            <div className="mt-2">
+              <small className="text-warning">
+                <i className="fas fa-clock me-1"></i>
+                Timeout om {timeoutCountdown}s...
+              </small>
+            </div>
+          )}
           
           {sessionExpired && (
             <div className="mt-3">
@@ -321,19 +354,26 @@ export default function AuthGuard({ children }: AuthGuardProps) {
             </div>
           )}
           
-          {authTimeout && !connectionIssue && (
+          {authTimeout && !connectionIssue && !sessionExpired && (
             <div className="mt-3">
               <div className="alert alert-warning d-inline-block" style={{ fontSize: '0.9rem' }}>
                 <i className="fas fa-clock me-2"></i>
-                Tilkobling tar lengre tid enn forventet...
+                Autentisering tok for lang tid (&gt;5s). Dette kan være et midlertidig nettverksproblem.
               </div>
               <div className="mt-2">
-                <button 
-                  className="btn btn-outline-primary btn-sm"
+                <button
+                  className="btn btn-primary btn-sm me-2"
                   onClick={handleManualRetry}
                 >
                   <i className="fas fa-redo me-2"></i>
                   Prøv igjen
+                </button>
+                <button
+                  className="btn btn-outline-secondary btn-sm"
+                  onClick={() => window.location.reload()}
+                >
+                  <i className="fas fa-refresh me-2"></i>
+                  Last siden på nytt
                 </button>
               </div>
             </div>
