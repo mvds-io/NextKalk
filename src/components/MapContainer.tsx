@@ -57,6 +57,9 @@ export default function MapContainer({
   // Connection health monitoring
   const [connectionHealth, setConnectionHealth] = useState({ isHealthy: true, consecutiveFailures: 0 });
 
+  // Completion users state
+  const [completionUsers, setCompletionUsers] = useState<Record<number, string>>({});
+
   // Zoom function for search results
   const zoomToLocation = useCallback((lat: number, lng: number, zoom: number = 15) => {
     if (leafletMapRef.current) {
@@ -105,6 +108,65 @@ export default function MapContainer({
 
     getUserPermissions();
   }, [user]);
+
+  // Load completion users from action logs
+  const loadCompletionUsers = useCallback(async () => {
+    try {
+      // Get all completed landingsplasser IDs
+      const completedLandingsplasser = landingsplasser.filter(lp => lp.done || lp.is_done);
+      const completedIds = completedLandingsplasser.map(lp => lp.id);
+
+      if (completedIds.length === 0) {
+        setCompletionUsers({});
+        return;
+      }
+
+      // Query action logs for completion events
+      const { data: completionLogs, error } = await supabase
+        .from('user_action_logs')
+        .select('user_email, target_id, action_details, timestamp')
+        .eq('action_type', 'toggle_done')
+        .eq('target_type', 'landingsplass')
+        .in('target_id', completedIds)
+        .order('timestamp', { ascending: false });
+
+      if (error) {
+        console.error('Error loading completion users:', error);
+        return;
+      }
+
+      // Process logs to get the most recent completion event for each landingsplass
+      const userMap: Record<number, string> = {};
+
+      completionLogs?.forEach(log => {
+        const targetId = log.target_id;
+        const actionDetails = log.action_details as any;
+
+        // Skip if we already have a user for this landingsplass (most recent wins)
+        if (userMap[targetId]) return;
+
+        // Handle both old and new log formats
+        const isCompleted =
+          actionDetails?.new_status === 'completed' ||  // New format
+          actionDetails?.new_status === true;           // Old format
+
+        if (isCompleted) {
+          // Extract just the name part from email (before @)
+          const userName = log.user_email?.split('@')[0] || log.user_email || '';
+          userMap[targetId] = userName;
+        }
+      });
+
+      setCompletionUsers(userMap);
+    } catch (error) {
+      console.error('Error loading completion users:', error);
+    }
+  }, [landingsplasser]);
+
+  // Load completion users when landingsplasser data changes
+  useEffect(() => {
+    loadCompletionUsers();
+  }, [loadCompletionUsers]);
 
   // Connection functions
   const showAllConnections = async () => {
@@ -2361,7 +2423,8 @@ ${waypointElements}
           })
         });
 
-        const popupContent = createLandingsplassPopupContent(landingsplass);
+        const completionUser = completionUsers[landingsplass.id];
+        const popupContent = createLandingsplassPopupContent(landingsplass, completionUser);
         marker.bindPopup(popupContent, { 
           maxWidth: isMobileOrTablet() ? 350 : 400,
           closeOnEscapeKey: false,
@@ -2430,7 +2493,7 @@ ${waypointElements}
         console.error('Error creating kalk marker:', error);
       }
     });
-  }, [isMapReady, filteredAirports, filteredLandingsplasser, kalkMarkers, userPermissions, handleMarkerPopupOpen, handleLandingsplassPopupClose, isMobileOrTablet]);
+  }, [isMapReady, filteredAirports, filteredLandingsplasser, kalkMarkers, userPermissions, handleMarkerPopupOpen, handleLandingsplassPopupClose, isMobileOrTablet, completionUsers]);
 
   // Toggle satellite view function
   const toggleSatelliteView = () => {
@@ -2607,23 +2670,23 @@ ${waypointElements}
     `;
   };
 
-  const createLandingsplassPopupContent = (landingsplass: Landingsplass): string => {
+  const createLandingsplassPopupContent = (landingsplass: Landingsplass, completionUser?: string): string => {
     const isDone = landingsplass.is_done || landingsplass.done;
     const completedClass = isDone ? 'completed' : '';
-    
-    const timestamp = (landingsplass as any).comment_timestamp ? 
-      new Date((landingsplass as any).comment_timestamp).toLocaleString('nb-NO', { 
-        year: 'numeric', month: 'short', day: 'numeric', 
-        hour: '2-digit', minute: '2-digit' 
+
+    const timestamp = (landingsplass as any).comment_timestamp ?
+      new Date((landingsplass as any).comment_timestamp).toLocaleString('nb-NO', {
+        year: 'numeric', month: 'short', day: 'numeric',
+        hour: '2-digit', minute: '2-digit'
       }) : '';
-    
-    const priorityBadge = landingsplass.priority ? 
+
+    const priorityBadge = landingsplass.priority ?
       `<span class="badge ${landingsplass.priority <= 3 ? 'bg-danger' : landingsplass.priority <= 6 ? 'bg-warning' : 'bg-secondary'}" style="font-size: 0.65rem; white-space: nowrap;">P${landingsplass.priority}</span>` : '';
-    
-    const completedDate = (landingsplass as any).completed_at ? 
-      new Date((landingsplass as any).completed_at).toLocaleString('nb-NO', { 
-        year: 'numeric', month: 'short', day: 'numeric', 
-        hour: '2-digit', minute: '2-digit' 
+
+    const completedDate = (landingsplass as any).completed_at ?
+      new Date((landingsplass as any).completed_at).toLocaleString('nb-NO', {
+        year: 'numeric', month: 'short', day: 'numeric',
+        hour: '2-digit', minute: '2-digit'
       }) : '';
     
     return `
@@ -2646,7 +2709,7 @@ ${waypointElements}
         ${isDone && completedDate ? `
         <div class="completion-info mb-2" style="background: #d4edda; padding: 0.375rem; border-radius: 0.25rem; border: 1px solid #c3e6cb;">
           <div style="font-size: 0.7rem; color: #155724;">
-            <i class="fas fa-calendar-check me-1"></i>Utført: ${completedDate}
+            <i class="fas fa-calendar-check me-1"></i>Utført: ${completedDate}${completionUser ? `<span style="font-size: 0.65rem; color: #495057; margin-left: 8px;">av ${completionUser}</span>` : ''}
           </div>
         </div>` : ''}
         
