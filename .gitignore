@@ -40,6 +40,4 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# Large data files (use external storage or CDN)
-/public/data/*.geojson
-/public/data/*.pmtiles
+# Large data files are tracked with Git LFS (see .gitattributes)
