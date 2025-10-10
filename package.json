@@ -25,6 +25,8 @@
     "leaflet.awesome-markers": "^2.0.5",
     "leaflet.markercluster": "^1.5.3",
     "next": "15.4.4",
+    "pmtiles": "^4.3.0",
+    "protomaps-leaflet": "^5.1.0",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-leaflet": "^5.0.0",

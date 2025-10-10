@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Large data files (use external storage or CDN)
+/public/data/*.geojson
+/public/data/*.pmtiles
