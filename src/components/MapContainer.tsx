@@ -389,7 +389,8 @@ export default function MapContainer({
       const { PMTiles } = await import('pmtiles');
       const protomapsL = await import('protomaps-leaflet');
 
-      const pmtiles = new PMTiles('/data/powerlines.pmtiles');
+      // Load PMTiles from GitHub Release (publicly accessible)
+      const pmtiles = new PMTiles('https://github.com/mvds-io/NextKalk/releases/download/v1.0.0-data/powerlines.pmtiles');
 
       // Custom paint rules for powerlines styling
       const paintRules = [
@@ -505,7 +506,7 @@ export default function MapContainer({
     try {
       // Load PMTiles to access raw data
       const { PMTiles } = await import('pmtiles');
-      const pmtiles = new PMTiles('/data/powerlines.pmtiles');
+      const pmtiles = new PMTiles('https://github.com/mvds-io/NextKalk/releases/download/v1.0.0-data/powerlines.pmtiles');
 
       // Get current map zoom to determine which tile to fetch
       const zoom = leafletMapRef.current?.getZoom() || 12;
