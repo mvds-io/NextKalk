@@ -8,6 +8,7 @@
     "dev:legacy": "next dev --port 3000",
     "dev:https": "concurrently \"next dev --turbopack --port 3001\" \"local-ssl-proxy --source 3000 --target 3001\"",
     "dev:https-safari": "concurrently \"next dev --port 3001\" \"local-ssl-proxy --source 3000 --target 3001\"",
+    "postinstall": "node scripts/download-powerlines.js",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"
