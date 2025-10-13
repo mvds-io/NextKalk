@@ -621,11 +621,6 @@ export default function MapContainer({
 
   // Play audio warning based on proximity level
   const playProximityWarning = (level: 'caution' | 'warning' | 'critical', distance: number) => {
-    if (!audioContextRef.current) {
-      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-    }
-
-    const audioContext = audioContextRef.current;
     const now = Date.now();
 
     // Throttle warnings based on level
@@ -635,31 +630,62 @@ export default function MapContainer({
     }
     lastWarningTimeRef.current = now;
 
-    // Create oscillator for beep
-    const oscillator = audioContext.createOscillator();
-    const gainNode = audioContext.createGain();
+    // Play beep sound
+    if (audioContextRef.current) {
+      try {
+        const audioContext = audioContextRef.current;
 
-    oscillator.connect(gainNode);
-    gainNode.connect(audioContext.destination);
+        // Resume if suspended (iOS requirement)
+        if (audioContext.state === 'suspended') {
+          audioContext.resume();
+        }
 
-    // Set frequency based on level
-    const frequency = level === 'critical' ? 1000 : level === 'warning' ? 800 : 600;
-    oscillator.frequency.value = frequency;
-    oscillator.type = 'sine';
+        // Create oscillator for beep
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
 
-    // Set volume and duration
-    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
 
-    oscillator.start(audioContext.currentTime);
-    oscillator.stop(audioContext.currentTime + 0.2);
+        // Set frequency based on level
+        const frequency = level === 'critical' ? 1000 : level === 'warning' ? 800 : 600;
+        oscillator.frequency.value = frequency;
+        oscillator.type = 'sine';
+
+        // Set volume and duration
+        gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
+
+        oscillator.start(audioContext.currentTime);
+        oscillator.stop(audioContext.currentTime + 0.2);
+
+        console.log(`Playing ${level} warning beep (${frequency}Hz)`);
+      } catch (err) {
+        console.error('Failed to play warning beep:', err);
+      }
+    }
 
     // Voice announcement for critical warnings
     if (level === 'critical' && 'speechSynthesis' in window) {
-      const utterance = new SpeechSynthesisUtterance(`Advarsel: Kraftlinje ${Math.round(distance)} meter`);
-      utterance.lang = 'nb-NO';
-      utterance.rate = 1.2;
-      window.speechSynthesis.speak(utterance);
+      try {
+        // Cancel any ongoing speech
+        window.speechSynthesis.cancel();
+
+        const utterance = new SpeechSynthesisUtterance(`Advarsel: Kraftlinje ${Math.round(distance)} meter`);
+        utterance.lang = 'nb-NO';
+        utterance.rate = 1.2;
+        utterance.volume = 1.0;
+
+        // iOS specific: Ensure speech synthesis is ready
+        if (window.speechSynthesis.paused) {
+          window.speechSynthesis.resume();
+        }
+
+        window.speechSynthesis.speak(utterance);
+        console.log(`Playing voice warning: ${Math.round(distance)}m`);
+      } catch (err) {
+        console.error('Failed to play voice warning:', err);
+      }
     }
   };
 
@@ -716,6 +742,23 @@ export default function MapContainer({
     if (!navigator.geolocation) {
       alert('GPS er ikke tilgjengelig på denne enheten');
       return;
+    }
+
+    // Initialize audio context for iOS (requires user interaction)
+    if (gpsSettings.audioEnabled && !audioContextRef.current) {
+      try {
+        const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+        audioContextRef.current = new AudioContext();
+
+        // Resume context for iOS (required after user gesture)
+        if (audioContextRef.current.state === 'suspended') {
+          audioContextRef.current.resume();
+        }
+
+        console.log('Audio context initialized for warnings');
+      } catch (err) {
+        console.error('Failed to initialize audio context:', err);
+      }
     }
 
     // Request wake lock to keep screen on
@@ -3777,7 +3820,7 @@ ${waypointElements}
         <div
           style={{
             position: 'absolute',
-            bottom: '20px',
+            bottom: '80px',
             left: '10px',
             zIndex: 1000,
             background: 'rgba(255, 255, 255, 0.95)',
@@ -3785,11 +3828,12 @@ ${waypointElements}
             borderRadius: '8px',
             padding: '12px',
             boxShadow: '0 2px 10px rgba(0,0,0,0.3)',
-            fontSize: '12px',
-            minWidth: '200px'
+            fontSize: '13px',
+            minWidth: '220px',
+            maxWidth: '300px'
           }}
         >
-          <h4 style={{ margin: '0 0 8px 0', fontSize: '14px', fontWeight: 'bold' }}>GPS Info</h4>
+          <h4 style={{ margin: '0 0 8px 0', fontSize: '15px', fontWeight: 'bold' }}>GPS Info</h4>
           <div>📍 Nøyaktighet: {helicopterPosition.accuracy.toFixed(1)}m</div>
           {helicopterPosition.altitude !== null && (
             <div>⛰️ Høyde: {helicopterPosition.altitude.toFixed(0)}m</div>
@@ -3799,6 +3843,19 @@ ${waypointElements}
           )}
           {helicopterPosition.heading !== null && (
             <div>🧭 Retning: {helicopterPosition.heading.toFixed(0)}°</div>
+          )}
+          {proximityWarning && proximityWarning.distance < 1000 && (
+            <div style={{
+              marginTop: '8px',
+              paddingTop: '8px',
+              borderTop: '1px solid rgba(0,0,0,0.1)',
+              fontWeight: 'bold',
+              color: proximityWarning.level === 'critical' ? '#DC143C' :
+                     proximityWarning.level === 'warning' ? '#FF8C00' :
+                     '#1E90FF'
+            }}>
+              ⚡ Kraftlinje: {proximityWarning.distance.toFixed(0)}m
+            </div>
           )}
         </div>
       )}
@@ -3831,32 +3888,33 @@ ${waypointElements}
           <div
             style={{
               position: 'absolute',
-              top: '50%',
+              top: '20px',
               left: '50%',
-              transform: 'translate(-50%, -50%)',
+              transform: 'translateX(-50%)',
               zIndex: 1001,
               background: proximityWarning.level === 'critical' ? 'rgba(220, 20, 60, 0.95)' :
                          proximityWarning.level === 'warning' ? 'rgba(255, 140, 0, 0.95)' :
                          'rgba(30, 144, 255, 0.90)',
               color: 'white',
-              padding: '20px 40px',
+              padding: '16px 32px',
               borderRadius: '12px',
               boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
               textAlign: 'center',
-              fontSize: '24px',
+              fontSize: '20px',
               fontWeight: 'bold',
               pointerEvents: 'none',
-              animation: proximityWarning.level === 'critical' ? 'pulse 0.5s infinite' : 'none'
+              animation: proximityWarning.level === 'critical' ? 'pulse 0.5s infinite' : 'none',
+              maxWidth: '90%'
             }}
           >
-            <div style={{ fontSize: '48px', marginBottom: '10px' }}>
+            <div style={{ fontSize: '36px', marginBottom: '8px' }}>
               {proximityWarning.level === 'critical' ? '⚠️ ADVARSEL! ⚠️' :
                proximityWarning.level === 'warning' ? '⚠️ OBS!' :
                'ℹ️ FORSIKTIG'}
             </div>
-            <div>Kraftlinje: {proximityWarning.distance.toFixed(0)}m</div>
+            <div style={{ fontSize: '28px' }}>Kraftlinje: {proximityWarning.distance.toFixed(0)}m</div>
             {proximityWarning.level === 'critical' && (
-              <div style={{ fontSize: '18px', marginTop: '10px' }}>
+              <div style={{ fontSize: '16px', marginTop: '8px' }}>
                 HOLD AVSTAND!
               </div>
             )}
