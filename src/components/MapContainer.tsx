@@ -509,40 +509,86 @@ export default function MapContainer({
     }
 
     try {
-      // Load PMTiles to access raw data
+      // Load PMTiles and vector tile parsing libraries
       const { PMTiles } = await import('pmtiles');
+      const VectorTile = (await import('@mapbox/vector-tile')).default;
+      const Pbf = (await import('pbf')).default;
+
       const pmtiles = new PMTiles('/data/powerlines.pmtiles');
 
-      // Get current map zoom to determine which tile to fetch
-      const zoom = leafletMapRef.current?.getZoom() || 12;
+      // Use zoom level 14 for detailed powerline data
+      const zoom = 14;
 
       // Convert lat/lng to tile coordinates
       const x = Math.floor((lng + 180) / 360 * Math.pow(2, zoom));
       const y = Math.floor((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, zoom));
 
       // Fetch the tile
-      const tile = await pmtiles.getZxy(zoom, x, y);
+      const tileData = await pmtiles.getZxy(zoom, x, y);
 
-      if (!tile) {
+      if (!tileData || !tileData.data) {
         setProximityWarning(null);
         return;
       }
 
-      // Parse vector tile (simplified - in production you'd use a proper VT parser)
-      // For now, we'll use a simpler approach with threshold-based warnings
+      // Parse vector tile
+      const tile = new VectorTile(new Pbf(tileData.data));
+      const layer = tile.layers['powerlines'];
+
+      if (!layer) {
+        console.log('No powerlines layer found in tile');
+        setProximityWarning(null);
+        return;
+      }
+
       let minDistance = Infinity;
       let nearestPowerline = null;
 
-      // Since parsing PMTiles vectors is complex, we'll use a proximity-based estimate
-      // This checks if we're near visible powerlines on the map
-      const searchRadius = gpsSettings.cautionDistance / 111320; // Convert meters to degrees (approximate)
+      // Helper function to convert tile coordinates to lat/lng
+      const tileToLng = (tileX: number, tileXCoord: number, z: number) => {
+        const extent = 4096; // Standard MVT extent
+        return (tileX + tileXCoord / extent) / Math.pow(2, z) * 360 - 180;
+      };
 
-      // Create a simple warning based on distance to visible map bounds
-      // In a production environment, you'd parse the actual vector tile geometry
+      const tileToLat = (tileY: number, tileYCoord: number, z: number) => {
+        const extent = 4096;
+        const n = Math.PI - 2 * Math.PI * (tileY + tileYCoord / extent) / Math.pow(2, z);
+        return 180 / Math.PI * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n)));
+      };
 
-      // For now, set a basic proximity warning
-      // TODO: Implement proper vector tile parsing for accurate powerline detection
-      minDistance = 1000; // Default safe distance
+      // Iterate through all features in the powerlines layer
+      for (let i = 0; i < layer.length; i++) {
+        const feature = layer.feature(i);
+        const geometry = feature.loadGeometry();
+        const properties = feature.properties;
+
+        // Process each geometry (LineString or MultiLineString)
+        for (const ring of geometry) {
+          // Process each line segment
+          for (let j = 0; j < ring.length - 1; j++) {
+            const pt1 = ring[j];
+            const pt2 = ring[j + 1];
+
+            // Convert tile coordinates to lat/lng
+            const lng1 = tileToLng(x, pt1.x, zoom);
+            const lat1 = tileToLat(y, pt1.y, zoom);
+            const lng2 = tileToLng(x, pt2.x, zoom);
+            const lat2 = tileToLat(y, pt2.y, zoom);
+
+            // Calculate distance from current position to this line segment
+            const distance = distanceToLineSegment(lat, lng, lat1, lng1, lat2, lng2);
+
+            if (distance < minDistance) {
+              minDistance = distance;
+              nearestPowerline = {
+                voltage: properties.spenning_kV,
+                owner: properties.eier,
+                name: properties.navn
+              };
+            }
+          }
+        }
+      }
 
       // Determine warning level
       let level: 'none' | 'caution' | 'warning' | 'critical' = 'none';
@@ -553,6 +599,8 @@ export default function MapContainer({
       } else if (minDistance < gpsSettings.cautionDistance) {
         level = 'caution';
       }
+
+      console.log(`Proximity check: ${minDistance.toFixed(1)}m to nearest powerline (${nearestPowerline?.voltage || 'unknown'} kV)`);
 
       setProximityWarning({
         level,
