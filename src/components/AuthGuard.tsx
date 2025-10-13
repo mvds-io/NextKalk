@@ -16,7 +16,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { User } from '@/types';
-import { supabase, completeLogout, getConnectionStatus, validateSession, getSessionStatus, updateSessionHealth } from '@/lib/supabase';
+import { supabase, completeLogout, cleanStaleSession, getConnectionStatus, validateSession, getSessionStatus, updateSessionHealth } from '@/lib/supabase';
 
 interface AuthGuardProps {
   children: (user: User, onLogout: () => void) => React.ReactNode;
@@ -128,6 +128,9 @@ export default function AuthGuard({ children }: AuthGuardProps) {
     let countdownIntervalId: NodeJS.Timeout | null = null;
 
     try {
+      // Clean any stale sessions from cache first
+      cleanStaleSession();
+
       // Reset countdown
       setTimeoutCountdown(5);
 
@@ -216,7 +219,8 @@ export default function AuthGuard({ children }: AuthGuardProps) {
       console.error('Error checking authentication:', error);
 
       // Handle specific error types
-      if (error.message?.includes('expired') || error.message?.includes('log in again')) {
+      const errorMessage = error instanceof Error ? error.message : '';
+      if (errorMessage.includes('expired') || errorMessage.includes('log in again')) {
         setSessionExpired(true);
       } else {
         setConnectionIssue(true);
@@ -269,19 +273,26 @@ export default function AuthGuard({ children }: AuthGuardProps) {
     setLoginError('');
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email: email.trim(),
         password
       });
 
       if (error) throw error;
-      
+
+      if (data.session) {
+        // Wait a moment for the session to be fully established
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        // Manually trigger user data load
+        await loadUserData(data.session.user.email!);
+      }
+
       setEmail('');
       setPassword('');
     } catch (error: unknown) {
       console.error('Login error:', error);
       setLoginError(error instanceof Error ? error.message : 'Innlogging feilet. Sjekk e-post og passord.');
-    } finally {
       setIsLoggingIn(false);
     }
   };

@@ -155,52 +155,6 @@ export const supabase = createClient(
       autoRefreshToken: true,
       detectSessionInUrl: true
     },
-    global: {
-      fetch: async (url, options = {}) => {
-        // Check session health before making request
-        const sessionStatus = getSessionStatus();
-        if (sessionStatus.needsReauth) {
-          throw new Error('Session expired. Please log in again.');
-        }
-        
-        // Add timeout and better error handling - reduced from 30s to 10s
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
-
-        try {
-          const response = await fetch(url, {
-            ...options,
-            signal: controller.signal,
-          });
-          clearTimeout(timeoutId);
-          
-          // Check for auth errors in response
-          if (response.status === 401) {
-            updateSessionHealth(false, true);
-            throw new Error('Authentication expired. Please log in again.');
-          }
-          
-          return response;
-        } catch (error) {
-          clearTimeout(timeoutId);
-          if (error instanceof Error && error.name === 'AbortError') {
-            throw new Error('Database request timed out after 10 seconds');
-          }
-          
-          // Handle auth errors
-          if (error instanceof Error && (
-            error.message.includes('JWT') || 
-            error.message.includes('unauthorized') ||
-            error.message.includes('401')
-          )) {
-            updateSessionHealth(false, true);
-            throw new Error('Authentication expired. Please log in again.');
-          }
-          
-          throw error;
-        }
-      }
-    },
     db: {
       schema: 'public'
     },
@@ -212,21 +166,53 @@ export const supabase = createClient(
   }
 );
 
+// Helper function to check and clean stale sessions
+export const cleanStaleSession = () => {
+  if (typeof window === 'undefined') return;
+
+  try {
+    // Check all localStorage keys for Supabase auth data
+    const keys = Object.keys(localStorage);
+    const supabaseKeys = keys.filter(key => key.includes('supabase.auth.token'));
+
+    supabaseKeys.forEach(key => {
+      try {
+        const item = localStorage.getItem(key);
+        if (!item) return;
+
+        const parsed = JSON.parse(item);
+        if (parsed && typeof parsed === 'object' && parsed.expires_at) {
+          const expiresAt = new Date(parsed.expires_at * 1000);
+          const now = new Date();
+          if (now > expiresAt) {
+            console.warn('🔴 Removing stale session from cache');
+            localStorage.removeItem(key);
+          }
+        }
+      } catch (e) {
+        // Ignore parse errors
+      }
+    });
+  } catch (error) {
+    console.error('Error cleaning stale session:', error);
+  }
+};
+
 // Helper function for complete logout
 export const completeLogout = async () => {
   try {
     // Sign out from Supabase
     await supabase.auth.signOut({ scope: 'local' });
-    
+
     // Clear all possible storage
     localStorage.clear();
     sessionStorage.clear();
-    
+
     // Clear any cookies
     document.cookie.split(";").forEach((c) => {
       document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
     });
-    
+
     // Force reload
     window.location.href = window.location.pathname;
   } catch (error) {
