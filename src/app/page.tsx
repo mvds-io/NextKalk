@@ -5,6 +5,7 @@ import LoadingScreen from '@/components/LoadingScreen';
 import Counter from '@/components/Counter';
 import MapContainer from '@/components/MapContainer';
 import ProgressPlan from '@/components/ProgressPlan';
+import MarkerDetailPanel from '@/components/MarkerDetailPanel';
 import AuthGuard from '@/components/AuthGuard';
 import SkeletonMap from '@/components/SkeletonMap';
 import SkeletonTopBar from '@/components/SkeletonTopBar';
@@ -62,9 +63,68 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
   // Desktop panel toggle state
   const [isProgressPlanMinimized, setIsProgressPlanMinimized] = useState(false);
   const [isFullScreen, setIsFullScreen] = useState(false);
-  
+
+  // Selected marker state for detail panel
+  const [selectedMarker, setSelectedMarker] = useState<{ type: 'airport' | 'landingsplass'; id: number } | null>(null);
+
+  // Completion users for landingsplasser
+  const [completionUsers, setCompletionUsers] = useState<Record<number, string>>({});
+
   // Map zoom function for search results
   const [mapZoomFunction, setMapZoomFunction] = useState<((lat: number, lng: number, zoom?: number) => void) | null>(null);
+
+  // Load completion users from action logs
+  useEffect(() => {
+    const loadCompletionUsers = async () => {
+      try {
+        const completedLandingsplasser = landingsplasser.filter(lp => lp.done || lp.is_done);
+        const completedIds = completedLandingsplasser.map(lp => lp.id);
+
+        if (completedIds.length === 0) {
+          setCompletionUsers({});
+          return;
+        }
+
+        const { data: completionLogs, error } = await supabase
+          .from('user_action_logs')
+          .select('user_email, target_id, action_details, timestamp')
+          .eq('action_type', 'toggle_done')
+          .eq('target_type', 'landingsplass')
+          .in('target_id', completedIds)
+          .order('timestamp', { ascending: false });
+
+        if (error) {
+          console.error('Error loading completion users:', error);
+          return;
+        }
+
+        const userMap: Record<number, string> = {};
+        completionLogs?.forEach(log => {
+          const targetId = log.target_id;
+          const actionDetails = log.action_details as any;
+
+          if (userMap[targetId]) return;
+
+          const isCompleted =
+            actionDetails?.new_status === 'completed' ||
+            actionDetails?.new_status === true;
+
+          if (isCompleted) {
+            const userName = log.user_email?.split('@')[0] || log.user_email || '';
+            userMap[targetId] = userName;
+          }
+        });
+
+        setCompletionUsers(userMap);
+      } catch (error) {
+        console.error('Error loading completion users:', error);
+      }
+    };
+
+    if (landingsplasser.length > 0) {
+      loadCompletionUsers();
+    }
+  }, [landingsplasser]);
 
   const initializeApp = useCallback(async () => {
     try {
@@ -543,12 +603,13 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
           height: '100%',
           minWidth: 0
         }}>
-          <MapContainer 
+          <MapContainer
             airports={airports}
             landingsplasser={landingsplasser}
             kalkMarkers={kalkMarkers}
             filterState={filterState}
             user={user}
+            onMarkerSelect={setSelectedMarker}
             onDataUpdate={async () => {
               // Validate session before refreshing data
               const isSessionValid = await validateSession();
@@ -559,7 +620,7 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
                   return;
                 }
               }
-              
+
               loadAirports();
               loadLandingsplasser();
               loadKalkMarkers();
@@ -568,41 +629,70 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
           />
         </div>
         {!isFullScreen && (
-          <div className={`right-panel ${isMobile && isMobileUIMinimized ? 'panel-minimized' : ''} ${!isMobile && isProgressPlanMinimized ? 'panel-minimized' : ''}`} style={{ 
+          <div className={`right-panel ${isMobile && isMobileUIMinimized ? 'panel-minimized' : ''} ${!isMobile && isProgressPlanMinimized ? 'panel-minimized' : ''}`} style={{
             flex: !isMobile && isProgressPlanMinimized ? '0 0 40px' : '0 0 30%',
             height: '100%',
-            borderLeft: '1px solid #dee2e6', 
+            borderLeft: '1px solid #dee2e6',
             background: '#f8f9fa',
             overflow: 'hidden',
             position: 'relative',
             scrollbarWidth: 'none',
             msOverflowStyle: 'none'
           }}>
-          <ProgressPlan 
-            landingsplasser={landingsplasser}
-            filterState={filterState}
-            user={user}
-            isLoading={loadingStates.landingsplasser}
-            isMobile={isMobile}
-            onMobileToggle={toggleMobileUI}
-            isMinimized={isProgressPlanMinimized}
-            onToggleMinimized={toggleProgressPlan}
-            onDataUpdate={async () => {
-              // Validate session before refreshing data
-              const isSessionValid = await validateSession();
-              if (!isSessionValid) {
-                const sessionStatus = getSessionStatus();
-                if (sessionStatus.needsReauth) {
-                  setError('Session expired. Please refresh the page to log in again.');
-                  return;
+          {selectedMarker ? (
+            <MarkerDetailPanel
+              markerType={selectedMarker.type}
+              markerId={selectedMarker.id}
+              airports={airports}
+              landingsplasser={landingsplasser}
+              user={user}
+              completionUsers={completionUsers}
+              onClose={() => setSelectedMarker(null)}
+              onDataUpdate={async () => {
+                // Validate session before refreshing data
+                const isSessionValid = await validateSession();
+                if (!isSessionValid) {
+                  const sessionStatus = getSessionStatus();
+                  if (sessionStatus.needsReauth) {
+                    setError('Session expired. Please refresh the page to log in again.');
+                    return;
+                  }
                 }
-              }
-              
-              loadAirports();
-              loadLandingsplasser();
-              loadKalkMarkers();
-            }}
-          />
+
+                loadAirports();
+                loadLandingsplasser();
+                loadKalkMarkers();
+              }}
+            />
+          ) : (
+            <ProgressPlan
+              landingsplasser={landingsplasser}
+              filterState={filterState}
+              user={user}
+              isLoading={loadingStates.landingsplasser}
+              isMobile={isMobile}
+              onMobileToggle={toggleMobileUI}
+              isMinimized={isProgressPlanMinimized}
+              onToggleMinimized={toggleProgressPlan}
+              onMarkerSelect={setSelectedMarker}
+              onZoomToLocation={mapZoomFunction}
+              onDataUpdate={async () => {
+                // Validate session before refreshing data
+                const isSessionValid = await validateSession();
+                if (!isSessionValid) {
+                  const sessionStatus = getSessionStatus();
+                  if (sessionStatus.needsReauth) {
+                    setError('Session expired. Please refresh the page to log in again.');
+                    return;
+                  }
+                }
+
+                loadAirports();
+                loadLandingsplasser();
+                loadKalkMarkers();
+              }}
+            />
+          )}
           {/* Show button when panel is minimized - positioned at same height as hide button */}
           {!isMobile && isProgressPlanMinimized && (
             <div style={{ position: 'absolute', top: '8px', right: '12px', width: '40px', height: '40px', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', paddingTop: '8px' }}>

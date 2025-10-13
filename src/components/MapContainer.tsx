@@ -11,16 +11,18 @@ interface MapContainerProps {
   filterState: FilterState;
   user: User | null;
   onDataUpdate: () => void;
+  onMarkerSelect?: (marker: { type: 'airport' | 'landingsplass'; id: number }) => void;
   onMapReady?: (zoomToLocation: (lat: number, lng: number, zoom?: number) => void) => void;
 }
 
-export default function MapContainer({ 
-  airports, 
-  landingsplasser, 
-  kalkMarkers, 
-  filterState, 
-  user, 
+export default function MapContainer({
+  airports,
+  landingsplasser,
+  kalkMarkers,
+  filterState,
+  user,
   onDataUpdate,
+  onMarkerSelect,
   onMapReady
 }: MapContainerProps) {
   const mapRef = useRef<HTMLDivElement>(null);
@@ -3054,14 +3056,51 @@ ${waypointElements}
 
   const createAirportPopupContent = (airport: Airport): string => {
     const isDone = airport.is_done || airport.done;
+
+    return `
+      <div class="marker-card-simple" style="min-width: 200px; max-width: 250px; font-size: 0.9rem; padding: 1rem; text-align: center; cursor: pointer;" onclick="window.handleMarkerClick && window.handleMarkerClick(${airport.id}, 'airport')">
+        <div style="font-size: 1.5rem; color: ${isDone ? '#28a745' : '#CB2B3E'}; margin-bottom: 0.5rem;">
+          <i class="fas fa-water"></i>
+        </div>
+        <h6 class="mb-2" style="font-weight: 600; color: #333; word-break: break-word;">${airport.name || airport.navn || 'Ukjent navn'}</h6>
+        ${isDone ? '<span class="badge bg-success mb-2" style="font-size: 0.75rem;">UTFØRT</span><br>' : ''}
+        <small class="text-muted" style="font-size: 0.85rem;">
+          <i class="fas fa-hand-pointer me-1"></i>Klikk for mer informasjon
+        </small>
+      </div>
+    `;
+  };
+
+  const createLandingsplassPopupContent = (landingsplass: Landingsplass, completionUser?: string): string => {
+    const isDone = landingsplass.is_done || landingsplass.done;
+
+    return `
+      <div class="marker-card-simple" style="min-width: 200px; max-width: 250px; font-size: 0.9rem; padding: 1rem; text-align: center; cursor: pointer;" onclick="window.handleMarkerClick && window.handleMarkerClick(${landingsplass.id}, 'landingsplass')">
+        <div style="font-size: 1.5rem; color: ${isDone ? '#28a745' : '#667eea'}; margin-bottom: 0.5rem;">
+          <i class="fas fa-helicopter-symbol"></i>
+        </div>
+        <h6 class="mb-2" style="font-weight: 600; color: #333; word-break: break-word;">
+          ${(landingsplass as any).kode ? `${(landingsplass as any).kode} - ` : ''}LP ${(landingsplass as any).lp || 'N/A'}
+        </h6>
+        ${isDone ? '<span class="badge bg-success mb-2" style="font-size: 0.75rem;">UTFØRT</span><br>' : ''}
+        <small class="text-muted" style="font-size: 0.85rem;">
+          <i class="fas fa-hand-pointer me-1"></i>Klikk for mer informasjon
+        </small>
+      </div>
+    `;
+  };
+
+  // Keep the old detailed functions for reference but rename them
+  const _createOldAirportPopupContent = (airport: Airport): string => {
+    const isDone = airport.is_done || airport.done;
     const completedClass = isDone ? 'completed' : '';
-    
-    const timestamp = airport.comment_timestamp ? 
-      new Date(airport.comment_timestamp).toLocaleString('nb-NO', { 
-        year: 'numeric', month: 'short', day: 'numeric', 
-        hour: '2-digit', minute: '2-digit' 
+
+    const timestamp = airport.comment_timestamp ?
+      new Date(airport.comment_timestamp).toLocaleString('nb-NO', {
+        year: 'numeric', month: 'short', day: 'numeric',
+        hour: '2-digit', minute: '2-digit'
       }) : '';
-    
+
     return `
       <div class="marker-card ${completedClass}" style="min-width: 300px; max-width: 380px; font-size: 0.85rem; box-sizing: border-box; padding: 0;">
         <div class="mobile-drag-handle d-md-none" style="width: 100%; height: 30px; background: linear-gradient(90deg, ${isDone ? '#28a745' : '#CB2B3E'} 0%, ${isDone ? '#32cd32' : '#dc3545'} 100%); cursor: grab; display: flex; align-items: center; justify-content: center; border-radius: 0.375rem 0.375rem 0 0; margin-bottom: 0;">
@@ -3207,162 +3246,22 @@ ${waypointElements}
     `;
   };
 
-  const createLandingsplassPopupContent = (landingsplass: Landingsplass, completionUser?: string): string => {
-    const isDone = landingsplass.is_done || landingsplass.done;
-    const completedClass = isDone ? 'completed' : '';
+  // Add handler for marker clicks
+  useEffect(() => {
+    if (!onMarkerSelect) return;
 
-    const timestamp = (landingsplass as any).comment_timestamp ?
-      new Date((landingsplass as any).comment_timestamp).toLocaleString('nb-NO', {
-        year: 'numeric', month: 'short', day: 'numeric',
-        hour: '2-digit', minute: '2-digit'
-      }) : '';
+    (window as any).handleMarkerClick = (id: number, type: 'airport' | 'landingsplass') => {
+      onMarkerSelect({ type, id });
+      // Close the popup after selecting
+      if (leafletMapRef.current) {
+        leafletMapRef.current.closePopup();
+      }
+    };
 
-    const priorityBadge = landingsplass.priority ?
-      `<span class="badge ${landingsplass.priority <= 3 ? 'bg-danger' : landingsplass.priority <= 6 ? 'bg-warning' : 'bg-secondary'}" style="font-size: 0.65rem; white-space: nowrap;">P${landingsplass.priority}</span>` : '';
-
-    const completedDate = (landingsplass as any).completed_at ?
-      new Date((landingsplass as any).completed_at).toLocaleString('nb-NO', {
-        year: 'numeric', month: 'short', day: 'numeric',
-        hour: '2-digit', minute: '2-digit'
-      }) : '';
-    
-    return `
-      <div class="marker-card ${completedClass}" style="min-width: 300px; max-width: 380px; font-size: 0.85rem; box-sizing: border-box; padding: 0;">
-        <div class="mobile-drag-handle d-md-none" style="width: 100%; height: 30px; background: linear-gradient(90deg, ${isDone ? '#28a745' : '#17a2b8'} 0%, ${isDone ? '#32cd32' : '#20c997'} 100%); cursor: grab; display: flex; align-items: center; justify-content: center; border-radius: 0.375rem 0.375rem 0 0; margin-bottom: 0;">
-          <div style="width: 40px; height: 4px; background: rgba(255,255,255,0.8); border-radius: 2px;"></div>
-        </div>
-        <div style="padding: 0.75rem;">
-        <div class="popup-header d-flex justify-content-between align-items-start mb-2" style="border-bottom: 2px solid ${isDone ? '#28a745' : '#17a2b8'}; padding-bottom: 0.5rem;">
-          <div class="d-flex align-items-center" style="flex: 1; min-width: 0; overflow: hidden; margin-right: 0.5rem;">
-            <div class="me-2" style="font-size: 1.1rem; color: ${isDone ? '#28a745' : '#17a2b8'}; flex-shrink: 0;"><i class="fas fa-helicopter-symbol"></i></div>
-            <h6 class="mb-0" style="font-weight: 600; color: #333; word-wrap: break-word; overflow-wrap: break-word; line-height: 1.2; flex: 1; min-width: 0;">${landingsplass.kode || ''} - ${landingsplass.lp || 'N/A'}</h6>
-          </div>
-          <div class="d-flex flex-column align-items-end gap-1" style="flex-shrink: 0;">
-            ${priorityBadge}
-            ${isDone ? '<span class="badge bg-success" style="font-size: 0.65rem; white-space: nowrap;">UTFØRT</span>' : ''}
-          </div>
-        </div>
-        
-        ${isDone && completedDate ? `
-        <div class="completion-info mb-2" style="background: #d4edda; padding: 0.375rem; border-radius: 0.25rem; border: 1px solid #c3e6cb;">
-          <div style="font-size: 0.7rem; color: #155724;">
-            <i class="fas fa-calendar-check me-1"></i>Utført: ${completedDate}${completionUser ? `<span style="font-size: 0.65rem; color: #495057; margin-left: 8px;">av ${completionUser}</span>` : ''}
-          </div>
-        </div>` : ''}
-        
-        <div class="row g-2 mb-2" style="font-size: 0.75rem; margin: 0;">
-          <div class="col-6">
-            <div class="info-item-compact">
-              <span class="text-muted" style="font-size: 0.7rem;"><i class="fas fa-weight-hanging me-1"></i>Totalt tonn:</span>
-              <div class="fw-semibold" style="word-wrap: break-word; overflow-wrap: break-word;">${landingsplass.calculated_tonn !== undefined ? landingsplass.calculated_tonn : (landingsplass.tonn_lp || 'N/A')}</div>
-            </div>
-          </div>
-          <div class="col-6">
-            <div class="info-item-compact">
-              <span class="text-muted" style="font-size: 0.7rem;"><i class="fas fa-map-pin me-1"></i>Koordinat:</span>
-              <div class="fw-semibold" style="word-wrap: break-word; overflow-wrap: break-word; font-size: 0.65rem; line-height: 1.2;">${landingsplass.latitude ? landingsplass.latitude.toFixed(4) : 'N/A'}, ${landingsplass.longitude ? landingsplass.longitude.toFixed(4) : 'N/A'}</div>
-            </div>
-          </div>
-        </div>
-        
-        <div class="d-flex gap-1 mb-2">
-          <button class="btn btn-outline-primary flex-fill${isDone ? ' disabled' : ''}" ${isDone ? 'disabled' : ''} style="font-size: 0.7rem; padding: 0.25rem 0.5rem; white-space: nowrap;" onclick="window.handleRoute && window.handleRoute(${landingsplass.id}, 'landingsplass')">
-            <i class="fas fa-route"></i> Rute
-          </button>
-          <button class="btn btn-outline-secondary flex-fill" style="font-size: 0.7rem; padding: 0.25rem 0.5rem; white-space: nowrap;" onclick="window.handleGPXExport && window.handleGPXExport(${landingsplass.id}, 'landingsplass')">
-            <i class="fas fa-download"></i> GPX
-          </button>
-        </div>
-        
-        <div class="comment-section mb-2" style="background: #f8f9fa; padding: 0.5rem; border-radius: 0.375rem;">
-          <div style="font-size: 0.75rem; font-weight: 600; color: #495057; margin-bottom: 0.5rem;">
-            <i class="fas fa-comment me-1"></i>Kommentarer:
-          </div>
-          <div class="comment-display-box" id="comment-display-${landingsplass.id}">
-            ${landingsplass.comment || '<em class="text-muted">Ingen kommentarer lagt til</em>'}
-          </div>
-          ${timestamp ? `<div class="comment-timestamp text-muted mt-1" style="font-size: 0.65rem;">${timestamp}</div>` : ''}
-          ${userPermissions.canEditMarkers && !isDone ? `
-          <button class="btn btn-outline-primary" id="comment-btn-${landingsplass.id}" style="font-size: 0.7rem; padding: 0.2rem 0.4rem; margin-top: 0.5rem; white-space: nowrap;" onclick="window.showCommentEditor && window.showCommentEditor(${landingsplass.id}, 'landingsplass')">
-            <i class="fas fa-edit"></i> ${landingsplass.comment ? 'Rediger' : 'Legg til'}
-          </button>
-          <div class="comment-editor mt-2" id="editor-${landingsplass.id}" style="display: none;">
-            <textarea class="form-control mb-2" id="comment-${landingsplass.id}" rows="3" style="font-size: 0.75rem; resize: vertical;">${landingsplass.comment || ''}</textarea>
-            <div class="d-flex gap-1">
-              <button class="btn btn-success flex-fill" style="font-size: 0.7rem; padding: 0.25rem 0.5rem; white-space: nowrap;" onclick="window.saveComment && window.saveComment(${landingsplass.id}, 'landingsplass')">
-                <i class="fas fa-save"></i> Lagre
-              </button>
-              <button class="btn btn-outline-secondary flex-fill" style="font-size: 0.7rem; padding: 0.25rem 0.5rem; white-space: nowrap;" onclick="window.hideCommentEditor && window.hideCommentEditor(${landingsplass.id}, 'landingsplass')">
-                <i class="fas fa-times"></i> Avbryt
-              </button>
-            </div>
-          </div>
-          ` : ''}
-        </div>
-        
-        <div class="contact-persons-section mb-2" style="background: #f0f8ff; padding: 0.5rem; border-radius: 0.375rem;">
-          <div style="font-size: 0.75rem; font-weight: 600; color: #495057; margin-bottom: 8px;">
-            <i class="fas fa-address-book me-1" style="color: #4a90e2;"></i>Kontaktpersoner:
-          </div>
-          <div id="contact-persons-landingsplass-${landingsplass.id}" class="contact-persons-display" style="font-size: 0.7rem;">
-            <em class="text-muted">Laster...</em>
-          </div>
-        </div>
-        
-        <div class="related-waters-section mb-2" style="background: #f1f3f4; padding: 0.5rem; border-radius: 0.375rem;">
-          <div style="font-size: 0.75rem; font-weight: 600; color: #495057; margin-bottom: 0.5rem;">
-            <i class="fas fa-water me-1" style="color: #667eea;"></i>Relaterte vann:
-          </div>
-          <div id="related-waters-landingsplass-${landingsplass.id}" class="related-waters-display" style="font-size: 0.7rem;">
-            <em class="text-muted">Laster...</em>
-          </div>
-        </div>
-        
-        <div class="images-section mb-2" style="background: #fff8f0; padding: 0.5rem; border-radius: 0.375rem;">
-          <div style="font-size: 0.75rem; font-weight: 600; color: #495057; margin-bottom: 0.5rem;">
-            <i class="fas fa-images me-1"></i>Bilder:
-          </div>
-          <div id="images-display-${landingsplass.id}" class="images-display mb-2" style="font-size: 0.7rem;">
-            <em class="text-muted">Laster...</em>
-          </div>
-          ${!isDone ? `
-          <input type="file" id="file-input-landingsplass-${landingsplass.id}" accept="image/*" style="display: none;" onchange="handleFileUpload(event, ${landingsplass.id}, 'landingsplass')">
-          <button class="btn btn-outline-primary" style="font-size: 0.7rem; padding: 0.25rem 0.5rem; white-space: nowrap;" onclick="document.getElementById('file-input-landingsplass-${landingsplass.id}').click()">
-            <i class="fas fa-image"></i> Last opp bilde
-          </button>
-          ` : ''}
-        </div>
-        
-        <div class="documents-section mb-2" style="background: #f1f8ff; padding: 0.5rem; border-radius: 0.375rem;">
-          <div style="font-size: 0.75rem; font-weight: 600; color: #495057; margin-bottom: 0.5rem;">
-            <i class="fas fa-file-alt me-1"></i>Dokumenter:
-          </div>
-          <div id="documents-display-landingsplass-${landingsplass.id}" class="documents-display mb-2" style="font-size: 0.7rem; word-wrap: break-word; overflow-wrap: break-word;">
-            <em class="text-muted">Laster...</em>
-          </div>
-          ${!isDone ? `
-          <input type="file" id="document-input-landingsplass-${landingsplass.id}" accept=".pdf,.xlsx,.xls,.doc,.docx" style="display: none;" onchange="handleDocumentFileUpload(event, ${landingsplass.id}, 'landingsplass')">
-          <button class="btn btn-outline-primary" style="font-size: 0.7rem; padding: 0.25rem 0.5rem; white-space: nowrap;" onclick="document.getElementById('document-input-landingsplass-${landingsplass.id}').click()">
-            <i class="fas fa-file-upload"></i> Last opp dokument
-          </button>
-          ` : ''}
-        </div>
-        
-        <div class="popup-footer d-flex justify-content-end" style="border-top: 1px solid #dee2e6; padding-top: 0.5rem;">
-          ${userPermissions.canEditMarkers ? `
-          <button class="btn ${isDone ? 'btn-warning' : 'btn-success'}" style="font-size: 0.8rem; padding: 0.4rem 0.8rem; white-space: nowrap;" onclick="window.handleToggleDone && window.handleToggleDone(${landingsplass.id}, 'landingsplass')">
-            <i class="fas fa-${isDone ? 'undo' : 'check'}"></i> ${isDone ? 'Angre' : 'Utført'}
-          </button>
-          ` : `
-          <div class="text-muted" style="font-size: 0.75rem; padding: 0.4rem 0.8rem;">
-            <i class="fas fa-lock me-1"></i>Du har ikke tilgang til å endre status
-          </div>
-          `}
-        </div>
-        </div>
-      </div>
-    `;
-  };
+    return () => {
+      delete (window as any).handleMarkerClick;
+    };
+  }, [onMarkerSelect]);
 
   const createKalkPopupContent = (kalk: KalkInfo) => {
     return `
