@@ -158,6 +158,43 @@ export const supabase = createClient(
     db: {
       schema: 'public'
     },
+    global: {
+      headers: {
+        'X-Client-Info': 'nextkalk-web-app'
+      },
+      fetch: (url, options = {}) => {
+        // Add timeout to all requests to prevent hanging
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+
+        return fetch(url, {
+          ...options,
+          signal: controller.signal,
+        }).then(response => {
+          clearTimeout(timeoutId);
+
+          // Track successful connections
+          if (response.ok) {
+            updateConnectionHealth(true);
+          } else if (response.status >= 500) {
+            updateConnectionHealth(false, `Server error: ${response.status}`);
+          }
+
+          return response;
+        }).catch(error => {
+          clearTimeout(timeoutId);
+
+          // Track connection failures
+          if (error.name === 'AbortError') {
+            updateConnectionHealth(false, 'Request timeout');
+            throw new Error('Request timed out after 30 seconds');
+          }
+
+          updateConnectionHealth(false, error.message);
+          throw error;
+        });
+      }
+    },
     realtime: {
       params: {
         eventsPerSecond: 10

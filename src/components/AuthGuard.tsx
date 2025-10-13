@@ -344,17 +344,19 @@ export default function AuthGuard({ children }: AuthGuardProps) {
             <div className="mt-3">
               <div className="alert alert-danger d-inline-block" style={{ fontSize: '0.9rem' }}>
                 <i className="fas fa-exclamation-triangle me-2"></i>
-                Tilkoblingsproblemer. Sjekk internettforbindelsen.
+                Tilkoblingsproblemer med databasen. Dette kan skyldes for mange samtidige tilkoblinger.
+                <br />
+                <small className="mt-1 d-block">Prøv igjen om noen sekunder.</small>
               </div>
               <div className="mt-2">
-                <button 
+                <button
                   className="btn btn-primary btn-sm me-2"
                   onClick={handleManualRetry}
                 >
                   <i className="fas fa-redo me-2"></i>
                   Prøv igjen
                 </button>
-                <button 
+                <button
                   className="btn btn-outline-secondary btn-sm"
                   onClick={() => window.location.reload()}
                 >
