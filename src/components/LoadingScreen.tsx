@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import { getConnectionStatus } from '@/lib/supabase';
 
 interface LoadingScreenProps {
@@ -73,21 +74,32 @@ export default function LoadingScreen({
         position: 'relative',
         margin: 'auto'
       }}>
-        <div className="app-logo">
-          <i className="fas fa-helicopter" style={{ fontSize: '3rem', color: '#0066cc', marginBottom: '1rem' }}></i>
+        <motion.div
+          className="app-logo"
+          initial={{ scale: 0.8, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ duration: 0.5 }}
+        >
+          <motion.i
+            className="fas fa-helicopter"
+            style={{ fontSize: '3rem', color: '#0066cc', marginBottom: '1rem', display: 'inline-block' }}
+            animate={{ rotate: [0, -10, 10, 0] }}
+            transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+          />
           <h2 style={{ color: '#333', marginBottom: '2rem' }}>Kalk Planner 2025</h2>
-        </div>
+        </motion.div>
         <div className="progress-container">
           <div className="progress" style={{ height: '8px', borderRadius: '4px', backgroundColor: '#e9ecef' }}>
-            <div
+            <motion.div
               className="progress-bar progress-bar-striped progress-bar-animated"
               role="progressbar"
+              initial={{ width: '0%' }}
+              animate={{ width: `${progress}%` }}
+              transition={{ duration: 0.5, ease: 'easeOut' }}
               style={{
-                width: `${progress}%`,
-                backgroundColor: showSlowWarning ? '#ffc107' : '#0066cc',
-                transition: 'width 0.3s ease'
+                backgroundColor: showSlowWarning ? '#ffc107' : '#0066cc'
               }}
-            ></div>
+            />
           </div>
           <div className="loading-text">
             <p style={{ marginTop: '1rem', color: '#666', fontSize: '0.9rem' }}>
@@ -105,18 +117,30 @@ export default function LoadingScreen({
 
             {/* Slow loading warning */}
             {showSlowWarning && (
-              <div className="alert alert-warning mt-3 mb-0" style={{ fontSize: '0.75rem', padding: '0.5rem' }}>
+              <motion.div
+                className="alert alert-warning mt-3 mb-0"
+                style={{ fontSize: '0.75rem', padding: '0.5rem' }}
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3 }}
+              >
                 <i className="fas fa-exclamation-triangle me-2"></i>
                 Dette steget tar lengre tid enn forventet. Sjekk internettforbindelsen.
-              </div>
+              </motion.div>
             )}
 
             {/* Network status indicator */}
             {!connectionHealth.isHealthy && (
-              <div className="alert alert-danger mt-2 mb-0" style={{ fontSize: '0.75rem', padding: '0.5rem' }}>
+              <motion.div
+                className="alert alert-danger mt-2 mb-0"
+                style={{ fontSize: '0.75rem', padding: '0.5rem' }}
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.3 }}
+              >
                 <i className="fas fa-wifi me-2"></i>
                 Nettverksproblemer oppdaget ({connectionHealth.consecutiveFailures} feil på rad)
-              </div>
+              </motion.div>
             )}
           </div>
         </div>

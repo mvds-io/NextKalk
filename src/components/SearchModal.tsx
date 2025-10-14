@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { authenticatedFetch } from '@/lib/auth';
 
 interface SearchResult {
@@ -114,16 +115,27 @@ export default function SearchModal({ isOpen, onClose, onResultSelect }: SearchM
     );
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div 
-      className="modal show d-block" 
-      style={{ backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1050 }}
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div className="modal-dialog modal-dialog-centered" style={{ maxWidth: '500px' }}>
-        <div className="modal-content">
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          className="modal show d-block"
+          style={{ backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1050 }}
+          onClick={(e) => e.target === e.currentTarget && onClose()}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
+        >
+          <motion.div
+            className="modal-dialog modal-dialog-centered"
+            style={{ maxWidth: '500px' }}
+            initial={{ scale: 0.9, opacity: 0, y: -20 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            exit={{ scale: 0.9, opacity: 0, y: -20 }}
+            transition={{ duration: 0.25, ease: "easeOut" }}
+          >
+            <div className="modal-content">
           <div className="modal-header border-0 pb-0">
             <div className="w-100">
               <div className="d-flex align-items-center gap-2 mb-2">
@@ -163,17 +175,24 @@ export default function SearchModal({ isOpen, onClose, onResultSelect }: SearchM
             )}
 
             {!isLoading && results.length > 0 && (
-              <div ref={resultsRef}>
+              <motion.div ref={resultsRef}>
                 {results.map((result, index) => (
-                  <div
+                  <motion.div
                     key={`${result.source}-${result.id}`}
                     className={`search-result d-flex align-items-center gap-3 p-3 border-bottom cursor-pointer ${
                       index === selectedIndex ? 'bg-light' : ''
                     }`}
-                    style={{ 
-                      cursor: 'pointer',
-                      transition: 'background-color 0.15s ease'
+                    style={{
+                      cursor: 'pointer'
                     }}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{
+                      duration: 0.2,
+                      delay: index * 0.05,
+                      ease: "easeOut"
+                    }}
+                    whileHover={{ backgroundColor: '#f8f9fa' }}
                     onClick={() => handleResultClick(result)}
                     onMouseEnter={() => setSelectedIndex(index)}
                   >
@@ -222,9 +241,9 @@ export default function SearchModal({ isOpen, onClose, onResultSelect }: SearchM
                         </div>
                       )}
                     </div>
-                  </div>
+                  </motion.div>
                 ))}
-              </div>
+              </motion.div>
             )}
 
             {query.length > 0 && query.length < 2 && (
@@ -240,8 +259,10 @@ export default function SearchModal({ isOpen, onClose, onResultSelect }: SearchM
               </small>
             </div>
           )}
-        </div>
-      </div>
-    </div>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }

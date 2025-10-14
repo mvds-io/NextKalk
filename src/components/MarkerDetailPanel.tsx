@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { motion } from 'framer-motion';
 import { Airport, Landingsplass, User } from '@/types';
 import { supabase } from '@/lib/supabase';
 
@@ -625,13 +626,20 @@ export default function MarkerDetailPanel({
     }) : '';
 
   return (
-    <div className="marker-detail-panel" style={{
-      height: '100%',
-      background: '#f8f9fa',
-      display: 'flex',
-      flexDirection: 'column',
-      position: 'relative'
-    }}>
+    <motion.div
+      className="marker-detail-panel"
+      style={{
+        height: '100%',
+        background: '#f8f9fa',
+        display: 'flex',
+        flexDirection: 'column',
+        position: 'relative'
+      }}
+      initial={{ x: '100%', opacity: 0 }}
+      animate={{ x: 0, opacity: 1 }}
+      exit={{ x: '100%', opacity: 0 }}
+      transition={{ duration: 0.3, ease: 'easeInOut' }}
+    >
       {/* Header */}
       <div className="card mb-2 mx-2 mt-2" style={{
         border: '1px solid #dee2e6',
@@ -1258,6 +1266,6 @@ ${waypointsXml}
           </div>
         )}
       </div>
-    </div>
+    </motion.div>
   );
 }

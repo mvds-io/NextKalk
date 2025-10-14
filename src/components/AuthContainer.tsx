@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { User } from '@/types';
 import { supabase, completeLogout } from '@/lib/supabase';
 
@@ -90,7 +91,7 @@ export default function AuthContainer({ user, onUserUpdate }: AuthContainerProps
   return (
     <>
       <div className="auth-container">
-        <button 
+        <button
           className="btn btn-primary btn-sm"
           onClick={() => setShowLoginModal(true)}
           style={{ fontSize: '0.8rem' }}
@@ -100,10 +101,24 @@ export default function AuthContainer({ user, onUserUpdate }: AuthContainerProps
         </button>
       </div>
 
-      {showLoginModal && (
-        <div className="modal show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }}>
-          <div className="modal-dialog modal-sm">
-            <div className="modal-content">
+      <AnimatePresence>
+        {showLoginModal && (
+          <motion.div
+            className="modal show"
+            style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            <motion.div
+              className="modal-dialog modal-sm"
+              initial={{ scale: 0.9, opacity: 0, y: -20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: -20 }}
+              transition={{ duration: 0.25, ease: 'easeOut' }}
+            >
+              <div className="modal-content">
               <div className="modal-header">
                 <h5 className="modal-title">Logg inn</h5>
                 <button 
@@ -114,11 +129,20 @@ export default function AuthContainer({ user, onUserUpdate }: AuthContainerProps
               </div>
               <div className="modal-body">
                 <form onSubmit={handleLogin}>
-                  {error && (
-                    <div className="alert alert-danger" style={{ fontSize: '0.8rem' }}>
-                      {error}
-                    </div>
-                  )}
+                  <AnimatePresence>
+                    {error && (
+                      <motion.div
+                        className="alert alert-danger"
+                        style={{ fontSize: '0.8rem' }}
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        transition={{ duration: 0.2 }}
+                      >
+                        {error}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                   
                   <div className="mb-3">
                     <label htmlFor="email" className="form-label" style={{ fontSize: '0.8rem' }}>
@@ -174,10 +198,11 @@ export default function AuthContainer({ user, onUserUpdate }: AuthContainerProps
                   </div>
                 </form>
               </div>
-            </div>
-          </div>
-        </div>
-      )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </>
   );
 } 

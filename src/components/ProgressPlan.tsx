@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { Reorder, motion } from 'framer-motion';
 import { Landingsplass, User } from '@/types';
 import { supabase } from '@/lib/supabase';
 
@@ -51,9 +52,8 @@ export default function ProgressPlan({
   const [internalIsMobile, setInternalIsMobile] = useState(false);
   const [contactPersons, setContactPersons] = useState<Record<number, ContactPerson[]>>({});
   const [isContactPersonsLoading, setIsContactPersonsLoading] = useState<Record<number, boolean>>({});
-  const [draggedItem, setDraggedItem] = useState<number | null>(null);
-  const [dragOverItem, setDragOverItem] = useState<number | null>(null);
   const [completionUsers, setCompletionUsers] = useState<Record<number, string>>({});
+  const [reorderedLandingsplasser, setReorderedLandingsplasser] = useState<Landingsplass[]>([]);
 
   // Internal mobile detection as fallback
   useEffect(() => {
@@ -69,48 +69,17 @@ export default function ProgressPlan({
     return () => window.removeEventListener('resize', checkMobile);
   }, [isMobile, onToggleMinimized]);
 
-  // Drag and drop handlers for priority reordering
-  const handleDragStart = (e: React.DragEvent, id: number) => {
+  // Handle reorder with Framer Motion
+  const handleReorder = async (newOrder: Landingsplass[]) => {
     if (!user?.can_edit_priority) return;
-    setDraggedItem(id);
-    e.dataTransfer.effectAllowed = 'move';
-  };
 
-  const handleDragOver = (e: React.DragEvent, id: number) => {
-    if (!user?.can_edit_priority || !draggedItem) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    setDragOverItem(id);
-  };
-
-  const handleDragLeave = () => {
-    setDragOverItem(null);
-  };
-
-  const handleDrop = async (e: React.DragEvent, dropTargetId: number) => {
-    e.preventDefault();
-    if (!user?.can_edit_priority || !draggedItem || draggedItem === dropTargetId) {
-      setDraggedItem(null);
-      setDragOverItem(null);
-      return;
-    }
+    // Update local state immediately for smooth UX
+    setReorderedLandingsplasser(newOrder);
 
     try {
-      const draggedItemIndex = sortedLandingsplasser.findIndex(lp => lp.id === draggedItem);
-      const dropTargetIndex = sortedLandingsplasser.findIndex(lp => lp.id === dropTargetId);
-      
-      if (draggedItemIndex === -1 || dropTargetIndex === -1) return;
-
-      // Calculate new priorities - insert dragged item at the drop position
+      // Calculate new priorities based on new order
       const updatedPriorities: { id: number; priority: number }[] = [];
-      const reorderedItems = [...sortedLandingsplasser];
-      
-      // Remove dragged item and insert at new position
-      const [draggedItemData] = reorderedItems.splice(draggedItemIndex, 1);
-      reorderedItems.splice(dropTargetIndex, 0, draggedItemData);
-      
-      // Reassign priorities based on new order
-      reorderedItems.forEach((item, index) => {
+      newOrder.forEach((item, index) => {
         const newPriority = index + 1;
         if (item.priority !== newPriority) {
           updatedPriorities.push({ id: item.id, priority: newPriority });
@@ -137,15 +106,9 @@ export default function ProgressPlan({
     } catch (error) {
       console.error('Error reordering priorities:', error);
       alert('Kunne ikke oppdatere prioritetsrekkefølge');
-    } finally {
-      setDraggedItem(null);
-      setDragOverItem(null);
+      // Reset on error
+      setReorderedLandingsplasser([]);
     }
-  };
-
-  const handleDragEnd = () => {
-    setDraggedItem(null);
-    setDragOverItem(null);
   };
 
   // Filter landingsplasser by county like original
@@ -162,13 +125,25 @@ export default function ProgressPlan({
     if (aPriority !== bPriority) {
       return aPriority - bPriority;
     }
-    
+
     // Secondary sort: lp (try numeric, fallback to string)
     const aNum = parseFloat(a.lp || '0');
     const bNum = parseFloat(b.lp || '0');
     if (!isNaN(aNum) && !isNaN(bNum)) return aNum - bNum;
     return String(a.lp || '').localeCompare(String(b.lp || ''));
   });
+
+  // Use reordered list if available, otherwise use sorted list
+  const displayedLandingsplasser = reorderedLandingsplasser.length > 0
+    ? reorderedLandingsplasser
+    : sortedLandingsplasser;
+
+  // Update reordered list when sorted list changes
+  useEffect(() => {
+    if (reorderedLandingsplasser.length === 0) {
+      setReorderedLandingsplasser(sortedLandingsplasser);
+    }
+  }, [sortedLandingsplasser.length]);
 
   // Load associations for all landingsplasser
   useEffect(() => {
@@ -653,21 +628,23 @@ export default function ProgressPlan({
           )}
         </div>
       </div>
-      <div className="fremdriftsplan-list" style={{ padding: '0 0.5rem' }}>
-        {sortedLandingsplasser.map((lp) => {
+      <Reorder.Group
+        axis="y"
+        values={displayedLandingsplasser}
+        onReorder={handleReorder}
+        style={{ padding: '0 0.5rem', listStyle: 'none', margin: 0 }}
+        className="fremdriftsplan-list"
+      >
+        {displayedLandingsplasser.map((lp) => {
           const isDone = lp.done;
 
           return (
-            <div
+            <Reorder.Item
               key={lp.id}
+              value={lp}
               data-landingsplass-id={lp.id}
-              className={`landingsplass-list-item ${isDone ? 'opacity-75' : ''} ${dragOverItem === lp.id ? 'drag-over' : ''}`}
-              draggable={user?.can_edit_priority}
-              onDragStart={(e) => handleDragStart(e, lp.id)}
-              onDragOver={(e) => handleDragOver(e, lp.id)}
-              onDragLeave={handleDragLeave}
-              onDrop={(e) => handleDrop(e, lp.id)}
-              onDragEnd={handleDragEnd}
+              className={`landingsplass-list-item ${isDone ? 'opacity-75' : ''}`}
+              dragListener={user?.can_edit_priority}
               onClick={() => handleLandingsplassClick(lp)}
               style={{
                 display: 'flex',
@@ -678,9 +655,12 @@ export default function ProgressPlan({
                 borderRadius: '8px',
                 border: '1px solid #e9ecef',
                 cursor: user?.can_edit_priority ? 'grab' : 'pointer',
-                transition: 'all 0.2s ease',
-                ...(draggedItem === lp.id ? { opacity: 0.5, transform: 'rotate(1deg)' } : {}),
-                ...(dragOverItem === lp.id ? { boxShadow: '0 4px 12px rgba(0,123,255,0.3)', transform: 'translateY(-2px)' } : {})
+                listStyle: 'none'
+              }}
+              whileDrag={{
+                scale: 1.05,
+                boxShadow: '0 8px 16px rgba(0,0,0,0.15)',
+                zIndex: 1
               }}
             >
               {user?.can_edit_priority && (
@@ -731,10 +711,10 @@ export default function ProgressPlan({
                   P{lp.priority}
                 </span>
               )}
-            </div>
+            </Reorder.Item>
           );
         })}
-      </div>
+      </Reorder.Group>
 
       {user?.can_edit_priority && (
         <div className="info-footer" style={{
