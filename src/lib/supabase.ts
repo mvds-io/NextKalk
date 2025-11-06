@@ -236,11 +236,33 @@ export const supabase = createClient(
   }
 );
 
+// Proactive IndexedDB cleanup for Edge browser compatibility
+// This runs on every page load to prevent stale session issues in Edge
+export const clearSupabaseIndexedDB = async (): Promise<void> => {
+  if (typeof window === 'undefined' || !indexedDB.databases) return;
+
+  try {
+    const databases = await indexedDB.databases();
+    for (const db of databases) {
+      if (db.name?.includes('supabase')) {
+        indexedDB.deleteDatabase(db.name);
+        console.log('🔵 Proactively cleared IndexedDB:', db.name);
+      }
+    }
+  } catch (error) {
+    console.warn('Could not proactively clear IndexedDB:', error);
+  }
+};
+
 // Helper function to check and clean stale sessions
 export const cleanStaleSession = async (): Promise<boolean> => {
   if (typeof window === 'undefined') return false;
 
   try {
+    // CRITICAL FOR EDGE: Clear IndexedDB proactively on every session check
+    // Edge aggressively caches IndexedDB even with no-cache headers
+    await clearSupabaseIndexedDB();
+
     // First, check timestamp-based expiry in localStorage
     const keys = Object.keys(localStorage);
     const supabaseKeys = keys.filter(key => key.includes('supabase.auth.token'));

@@ -276,8 +276,24 @@ export default function AuthGuard({ children }: AuthGuardProps) {
       }
     };
 
+    // Listen for visibility changes (user returns to tab after idle)
+    // CRITICAL: This fixes the 15-minute timeout issue
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState === 'visible' && user) {
+        console.log('🔵 Tab became visible, validating session...');
+        // User returned to tab - validate session immediately
+        const isValid = await validateSession();
+        if (!isValid) {
+          console.warn('🔴 Session invalid after returning to tab');
+          setSessionExpired(true);
+          setIsLoading(false);
+        }
+      }
+    };
+
     if (typeof window !== 'undefined') {
       window.addEventListener('storage', handleStorageChange);
+      document.addEventListener('visibilitychange', handleVisibilityChange);
     }
 
     return () => {
@@ -285,9 +301,10 @@ export default function AuthGuard({ children }: AuthGuardProps) {
       subscription.unsubscribe();
       if (typeof window !== 'undefined') {
         window.removeEventListener('storage', handleStorageChange);
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
       }
     };
-  }, [checkAuthentication, loadUserData]);
+  }, [checkAuthentication, loadUserData, user]);
 
 
   const handleLogin = async (e: React.FormEvent) => {

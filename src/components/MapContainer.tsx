@@ -998,15 +998,10 @@ export default function MapContainer({
             if (/iPad/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) {
               document.body.classList.add('ipad-device');
             }
-            
-            // Ensure proper viewport meta tag for tablets
-            let viewport = document.querySelector('meta[name=viewport]') as HTMLMetaElement;
-            if (!viewport) {
-              viewport = document.createElement('meta');
-              viewport.name = 'viewport';
-              document.head.appendChild(viewport);
-            }
-            viewport.content = 'width=device-width, initial-scale=1.0, user-scalable=no';
+
+            // REMOVED: Duplicate viewport manipulation
+            // Next.js layout.tsx already handles viewport configuration
+            // Manipulating it here caused conflicts with Edge browser
           }
 
           // Override popup behavior to prevent auto-closing on mobile/tablet

@@ -21,7 +21,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1.0,
   viewportFit: "cover",
-  userScalable: false,
+  // userScalable removed - deprecated in Edge and causes W3C validation warnings
 };
 
 export default function RootLayout({
