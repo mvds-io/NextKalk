@@ -25,6 +25,7 @@ interface Association {
 }
 
 interface ContactPerson {
+  wassId: number;
   kontaktperson: string;
   forening: string;
   phone: string;
@@ -67,6 +68,8 @@ export default function MarkerDetailPanel({
   const [commentText, setCommentText] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [isUploadingDocument, setIsUploadingDocument] = useState(false);
+  const [editingContactId, setEditingContactId] = useState<number | null>(null);
+  const [editingContactData, setEditingContactData] = useState<{forening: string; kontaktperson: string; phone: string} | null>(null);
 
   // Get the current marker data
   const markerData = markerType === 'airport'
@@ -89,7 +92,7 @@ export default function MarkerDetailPanel({
             .select(`
               landingsplass_id,
               vass_lasteplass:landingsplass_id (
-                id, lp, kode, latitude, longitude, calculated_tonn
+                id, lp, kode, latitude, longitude, tonn_lp
               )
             `)
             .eq('airport_id', markerId);
@@ -101,7 +104,7 @@ export default function MarkerDetailPanel({
             .map((assoc: any) => ({
               id: assoc.vass_lasteplass.id,
               name: `LP ${assoc.vass_lasteplass.lp}${assoc.vass_lasteplass.kode ? ` - ${assoc.vass_lasteplass.kode}` : ''}`,
-              tonn: assoc.vass_lasteplass.calculated_tonn || 0,
+              tonn: assoc.vass_lasteplass.tonn_lp || 0,
               latitude: assoc.vass_lasteplass.latitude,
               longitude: assoc.vass_lasteplass.longitude
             }));
@@ -156,25 +159,26 @@ export default function MarkerDetailPanel({
           .select(`
             airport_id,
             vass_vann:airport_id (
-              forening, kontaktperson, phone, tonn
+              id, forening, kontaktperson, phone, tonn
             )
           `)
           .eq('landingsplass_id', markerId);
 
         if (error) throw error;
 
-        // Extract and deduplicate contact persons
+        // Extract and deduplicate contact persons, keeping track of the first wassId for each
         const contactPersonsMap = new Map();
         (associations || []).forEach((assoc: any) => {
           const water = assoc.vass_vann;
           if (!water) return;
 
-          const { forening, kontaktperson, phone, tonn } = water;
+          const { id, forening, kontaktperson, phone, tonn } = water;
           if (kontaktperson || forening || phone) {
             const phoneStr = phone ? String(phone) : '';
             const key = `${kontaktperson || ''}-${phoneStr}`;
             if (!contactPersonsMap.has(key)) {
               contactPersonsMap.set(key, {
+                wassId: id,
                 forening,
                 kontaktperson,
                 phone: phoneStr,
@@ -404,6 +408,72 @@ export default function MarkerDetailPanel({
     } catch (error) {
       console.error('Error saving comment:', error);
       alert('Kunne ikke lagre kommentar');
+    }
+  };
+
+  const handleSaveContact = async () => {
+    if (!user?.can_edit_markers || !editingContactData || editingContactId === null) return;
+
+    try {
+      // Validate phone number length (max integer value is 2,147,483,647)
+      const phoneValue = editingContactData.phone.trim();
+      if (phoneValue && (!/^\d*$/.test(phoneValue) || parseInt(phoneValue) > 2147483647)) {
+        alert('Telefonnummeret er for langt eller ugyldig. Bruk maksimalt 10 siffer.');
+        return;
+      }
+
+      // First, get the original contact info to find all matching records
+      const { data: originalContact } = await supabase
+        .from('vass_vann')
+        .select('kontaktperson, phone')
+        .eq('id', editingContactId)
+        .single();
+
+      if (!originalContact) {
+        alert('Kunne ikke finne kontaktperson');
+        return;
+      }
+
+      // Update ALL vass_vann records that have the same kontaktperson and phone
+      const { error } = await supabase
+        .from('vass_vann')
+        .update({
+          forening: editingContactData.forening.trim(),
+          kontaktperson: editingContactData.kontaktperson.trim(),
+          phone: phoneValue || null
+        })
+        .eq('kontaktperson', originalContact.kontaktperson)
+        .eq('phone', originalContact.phone);
+
+      if (error) throw error;
+
+      // Log the action
+      if (user) {
+        await supabase
+          .from('user_action_logs')
+          .insert({
+            user_email: user.email,
+            action_type: 'edit_contact',
+            target_type: 'vass_vann',
+            target_id: editingContactId,
+            target_name: editingContactData.kontaktperson || 'Unknown',
+            action_details: {
+              original_kontaktperson: originalContact.kontaktperson,
+              original_phone: originalContact.phone,
+              new_forening: editingContactData.forening,
+              new_kontaktperson: editingContactData.kontaktperson,
+              new_phone: editingContactData.phone,
+              update_type: 'bulk_update_matching_contacts'
+            }
+          });
+      }
+
+      setEditingContactId(null);
+      setEditingContactData(null);
+      onDataUpdate();
+    } catch (error) {
+      console.error('Error saving contact:', error);
+      alert('Kunne ikke lagre kontaktperson');
     }
   };
 
@@ -865,38 +935,128 @@ ${waypointsXml}
                   <em>Ingen kontaktpersoner</em>
                 </p>
               ) : (
-                <div style={{ maxHeight: '150px', overflowY: 'auto' }}>
+                <div style={{ maxHeight: '250px', overflowY: 'auto' }}>
                   {contactPersons.map((contact, index) => (
                     <div
-                      key={`${contact.kontaktperson}-${contact.phone}-${index}`}
+                      key={`${contact.wassId}-${index}`}
                       className="mb-1 pb-1"
                       style={{ borderBottom: index < contactPersons.length - 1 ? '1px solid #e9ecef' : 'none' }}
                     >
-                      <div className="d-flex justify-content-between align-items-start">
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontWeight: 600, fontSize: '0.8rem' }}>
-                            <i className="fas fa-user me-1 text-secondary" style={{ fontSize: '0.7rem' }}></i>
-                            {contact.kontaktperson || 'Ukjent'}
+                      {editingContactId === contact.wassId ? (
+                        // Edit mode
+                        <div>
+                          <div className="mb-2">
+                            <label style={{ fontSize: '0.7rem', color: '#6c757d', display: 'block', marginBottom: '0.25rem' }}>
+                              Forening:
+                            </label>
+                            <input
+                              type="text"
+                              className="form-control form-control-sm"
+                              style={{ fontSize: '0.75rem' }}
+                              value={editingContactData?.forening || ''}
+                              onChange={(e) => setEditingContactData({
+                                ...editingContactData!,
+                                forening: e.target.value
+                              })}
+                            />
                           </div>
-                          {contact.forening && (
-                            <div style={{ fontSize: '0.75rem', color: '#6c757d', marginLeft: '1rem' }}>
-                              <i className="fas fa-users me-1" style={{ fontSize: '0.65rem' }}></i>
-                              {contact.forening}
-                            </div>
-                          )}
-                          {contact.phone && contact.phone.trim() && (
-                            <div style={{ fontSize: '0.75rem', color: '#6c757d', marginLeft: '1rem' }}>
-                              <i className="fas fa-phone me-1" style={{ fontSize: '0.65rem' }}></i>
-                              {contact.phone}
-                            </div>
-                          )}
+                          <div className="mb-2">
+                            <label style={{ fontSize: '0.7rem', color: '#6c757d', display: 'block', marginBottom: '0.25rem' }}>
+                              Kontaktperson:
+                            </label>
+                            <input
+                              type="text"
+                              className="form-control form-control-sm"
+                              style={{ fontSize: '0.75rem' }}
+                              value={editingContactData?.kontaktperson || ''}
+                              onChange={(e) => setEditingContactData({
+                                ...editingContactData!,
+                                kontaktperson: e.target.value
+                              })}
+                            />
+                          </div>
+                          <div className="mb-2">
+                            <label style={{ fontSize: '0.7rem', color: '#6c757d', display: 'block', marginBottom: '0.25rem' }}>
+                              Telefon:
+                            </label>
+                            <input
+                              type="text"
+                              className="form-control form-control-sm"
+                              style={{ fontSize: '0.75rem' }}
+                              value={editingContactData?.phone || ''}
+                              onChange={(e) => setEditingContactData({
+                                ...editingContactData!,
+                                phone: e.target.value
+                              })}
+                            />
+                          </div>
+                          <div className="d-flex gap-2">
+                            <button
+                              className="btn btn-success btn-sm flex-fill"
+                              style={{ fontSize: '0.75rem' }}
+                              onClick={handleSaveContact}
+                            >
+                              <i className="fas fa-save me-1"></i>Lagre
+                            </button>
+                            <button
+                              className="btn btn-outline-secondary btn-sm flex-fill"
+                              style={{ fontSize: '0.75rem' }}
+                              onClick={() => {
+                                setEditingContactId(null);
+                                setEditingContactData(null);
+                              }}
+                            >
+                              <i className="fas fa-times me-1"></i>Avbryt
+                            </button>
+                          </div>
                         </div>
-                        {contact.totalTonn > 0 && (
-                          <span className="badge bg-success" style={{ fontSize: '0.65rem' }}>
-                            {contact.totalTonn.toFixed(1)}t
-                          </span>
-                        )}
-                      </div>
+                      ) : (
+                        // View mode
+                        <div className="d-flex justify-content-between align-items-start">
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontWeight: 600, fontSize: '0.8rem' }}>
+                              <i className="fas fa-user me-1 text-secondary" style={{ fontSize: '0.7rem' }}></i>
+                              {contact.kontaktperson || 'Ukjent'}
+                            </div>
+                            {contact.forening && (
+                              <div style={{ fontSize: '0.75rem', color: '#6c757d', marginLeft: '1rem' }}>
+                                <i className="fas fa-users me-1" style={{ fontSize: '0.65rem' }}></i>
+                                {contact.forening}
+                              </div>
+                            )}
+                            {contact.phone && contact.phone.trim() && (
+                              <div style={{ fontSize: '0.75rem', color: '#6c757d', marginLeft: '1rem' }}>
+                                <i className="fas fa-phone me-1" style={{ fontSize: '0.65rem' }}></i>
+                                {contact.phone}
+                              </div>
+                            )}
+                          </div>
+                          <div className="d-flex align-items-center gap-1">
+                            {contact.totalTonn > 0 && (
+                              <span className="badge bg-success" style={{ fontSize: '0.65rem' }}>
+                                {contact.totalTonn.toFixed(1)}t
+                              </span>
+                            )}
+                            {user?.can_edit_markers && (
+                              <button
+                                className="btn btn-outline-primary btn-sm"
+                                style={{ fontSize: '0.65rem', padding: '0.15rem 0.35rem' }}
+                                onClick={() => {
+                                  setEditingContactId(contact.wassId);
+                                  setEditingContactData({
+                                    forening: contact.forening,
+                                    kontaktperson: contact.kontaktperson,
+                                    phone: contact.phone
+                                  });
+                                }}
+                                title="Rediger kontaktperson"
+                              >
+                                <i className="fas fa-edit"></i>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
