@@ -2243,25 +2243,32 @@ ${waypointElements}
   };
 
   // Helper functions for managing AbortControllers
-  const cancelPendingRequests = (loadingId?: string) => {
+  const cancelPendingRequests = async (loadingId?: string) => {
     if (loadingId) {
       // Cancel specific request
       const controller = pendingRequestsRef.current.get(loadingId);
       if (controller) {
         controller.abort();
+        // Wait for promises to settle before removing from Map
+        await new Promise(resolve => setTimeout(resolve, 200));
         pendingRequestsRef.current.delete(loadingId);
       }
     } else {
       // Cancel all pending requests
-      pendingRequestsRef.current.forEach((controller) => {
+      const controllers = Array.from(pendingRequestsRef.current.values());
+      controllers.forEach((controller) => {
         controller.abort();
       });
+
+      // Wait for all aborted promises to settle before clearing the Map
+      await new Promise(resolve => setTimeout(resolve, 200));
       pendingRequestsRef.current.clear();
     }
-    
+
     // Also cancel the current abort controller
     if (currentAbortControllerRef.current) {
       currentAbortControllerRef.current.abort();
+      await new Promise(resolve => setTimeout(resolve, 100));
       currentAbortControllerRef.current = null;
     }
   };
@@ -2271,14 +2278,18 @@ ${waypointElements}
     const existingController = pendingRequestsRef.current.get(loadingId);
     if (existingController) {
       existingController.abort();
-      pendingRequestsRef.current.delete(loadingId);
+      // Don't delete immediately - wait for the promise to settle
+      setTimeout(() => {
+        pendingRequestsRef.current.delete(loadingId);
+      }, 100);
     }
-    
+
     // Create new AbortController
     const controller = new AbortController();
     pendingRequestsRef.current.set(loadingId, controller);
-    currentAbortControllerRef.current = controller;
-    
+    // Don't overwrite currentAbortControllerRef - it causes memory leak
+    // Each request should manage its own controller via the Map
+
     return controller;
   };
 
@@ -2832,21 +2843,38 @@ ${waypointElements}
     // Set the current loading ID to prevent race conditions
     currentLoadingIdRef.current = newLoadingId;
     
-    loadingTimeoutRef.current = setTimeout(() => {
+    loadingTimeoutRef.current = setTimeout(async () => {
       // Double-check that this is still the current operation
       if (currentLoadingIdRef.current !== newLoadingId) {
         return;
       }
-      
+
       if (type === 'airport') {
-        loadCurrentAssociations(id);
-        loadAndDisplayImages(id, 'airport');
+        // Load queries sequentially to prevent connection pool exhaustion
+        await loadCurrentAssociations(id);
+        if (currentLoadingIdRef.current === newLoadingId) {
+          await loadAndDisplayImages(id, 'airport');
+        }
       } else {
-        loadAndDisplayDocuments(id, 'landingsplass');
-        loadAndDisplayImages(id, 'landingsplass');
-        showIndividualConnections(id);
-        loadRelatedWaters(id);
-        loadContactPersons(id);
+        // Load landingsplass data in sequence, not parallel
+        // This prevents 5 simultaneous queries from exhausting the connection pool
+        await loadAndDisplayDocuments(id, 'landingsplass');
+
+        if (currentLoadingIdRef.current === newLoadingId) {
+          await loadAndDisplayImages(id, 'landingsplass');
+        }
+
+        if (currentLoadingIdRef.current === newLoadingId) {
+          await showIndividualConnections(id);
+        }
+
+        if (currentLoadingIdRef.current === newLoadingId) {
+          await loadRelatedWaters(id);
+        }
+
+        if (currentLoadingIdRef.current === newLoadingId) {
+          await loadContactPersons(id);
+        }
       }
     }, 100);
   }, []);

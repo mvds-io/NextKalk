@@ -191,7 +191,8 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
   useEffect(() => {
     initializeApp();
 
-    // Set up periodic session validation (every 2 minutes for better responsiveness)
+    // Set up periodic session validation (every 5 minutes to reduce connection spam)
+    // Reduced from 2 minutes to prevent connection pool exhaustion
     const sessionCheckInterval = setInterval(async () => {
       const sessionStatus = getSessionStatus();
       if (sessionStatus.shouldRevalidate) {
@@ -206,7 +207,7 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
           }, 2000);
         }
       }
-    }, 120000); // 2 minutes (more frequent for better UX)
+    }, 300000); // 5 minutes (reduced frequency to prevent connection accumulation)
 
     return () => {
       clearInterval(sessionCheckInterval);

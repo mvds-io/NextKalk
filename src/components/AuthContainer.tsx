@@ -15,28 +15,9 @@ export default function AuthContainer({ user, onUserUpdate }: AuthContainerProps
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' && session?.user) {
-        // Fetch user data from users table
-        const { data: userData } = await supabase
-          .from('users')
-          .select('*')
-          .eq('email', session.user.email)
-          .single();
-
-        if (userData) {
-          onUserUpdate(userData);
-        }
-        setShowLoginModal(false);
-      } else if (event === 'SIGNED_OUT') {
-        onUserUpdate(null);
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, [onUserUpdate]);
+  // REMOVED: Duplicate auth state listener
+  // AuthGuard already handles onAuthStateChange events
+  // Having two listeners was causing duplicate database queries and connection accumulation
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();

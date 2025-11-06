@@ -14,7 +14,7 @@ const nextConfig: NextConfig = {
       static: 0,
     },
   },
-  // Add cache control headers
+  // Add cache control headers with Edge browser compatibility
   async headers() {
     return [
       {
@@ -25,15 +25,31 @@ const nextConfig: NextConfig = {
             key: 'Cache-Control',
             value: 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
           },
+          {
+            key: 'Pragma',
+            value: 'no-cache',
+          },
+          {
+            key: 'Expires',
+            value: '0',
+          },
         ],
       },
       {
-        // Apply to all dynamic pages
+        // Apply to all dynamic pages with Edge-specific headers
         source: '/((?!_next/static|_next/image|favicon.ico).*)',
         headers: [
           {
             key: 'Cache-Control',
-            value: 'no-store, must-revalidate',
+            value: 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+          },
+          {
+            key: 'Pragma',
+            value: 'no-cache',
+          },
+          {
+            key: 'Expires',
+            value: '0',
           },
         ],
       },

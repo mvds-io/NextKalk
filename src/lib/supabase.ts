@@ -146,6 +146,35 @@ export const validateSession = async (): Promise<boolean> => {
   }
 };
 
+// Connection pool management
+let activeRequests = 0;
+const MAX_CONCURRENT_REQUESTS = 6; // Limit concurrent requests to prevent pool exhaustion
+const requestQueue: Array<() => void> = [];
+
+const manageConnectionPool = async (requestFn: () => Promise<Response>): Promise<Response> => {
+  // If we're at max capacity, queue the request
+  if (activeRequests >= MAX_CONCURRENT_REQUESTS) {
+    await new Promise<void>((resolve) => {
+      requestQueue.push(resolve);
+    });
+  }
+
+  activeRequests++;
+
+  try {
+    const response = await requestFn();
+    return response;
+  } finally {
+    activeRequests--;
+
+    // Process next queued request
+    const nextRequest = requestQueue.shift();
+    if (nextRequest) {
+      nextRequest();
+    }
+  }
+};
+
 export const supabase = createClient(
   appConfig.supabaseUrl,
   appConfig.supabaseKey,
@@ -163,41 +192,45 @@ export const supabase = createClient(
         'X-Client-Info': 'nextkalk-web-app'
       },
       fetch: (url, options = {}) => {
-        // Add timeout to all requests to prevent hanging
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+        return manageConnectionPool(async () => {
+          // Reduce timeout to 15 seconds to fail faster and free up connections
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout (reduced from 30)
 
-        return fetch(url, {
-          ...options,
-          signal: controller.signal,
-        }).then(response => {
-          clearTimeout(timeoutId);
+          try {
+            const response = await fetch(url, {
+              ...options,
+              signal: controller.signal,
+            });
 
-          // Track successful connections
-          if (response.ok) {
-            updateConnectionHealth(true);
-          } else if (response.status >= 500) {
-            updateConnectionHealth(false, `Server error: ${response.status}`);
+            clearTimeout(timeoutId);
+
+            // Track successful connections
+            if (response.ok) {
+              updateConnectionHealth(true);
+            } else if (response.status >= 500) {
+              updateConnectionHealth(false, `Server error: ${response.status}`);
+            }
+
+            return response;
+          } catch (error) {
+            clearTimeout(timeoutId);
+
+            // Track connection failures
+            if (error instanceof Error && error.name === 'AbortError') {
+              updateConnectionHealth(false, 'Request timeout');
+              throw new Error('Request timed out after 15 seconds');
+            }
+
+            updateConnectionHealth(false, error instanceof Error ? error.message : 'Unknown error');
+            throw error;
           }
-
-          return response;
-        }).catch(error => {
-          clearTimeout(timeoutId);
-
-          // Track connection failures
-          if (error.name === 'AbortError') {
-            updateConnectionHealth(false, 'Request timeout');
-            throw new Error('Request timed out after 30 seconds');
-          }
-
-          updateConnectionHealth(false, error.message);
-          throw error;
         });
       }
     },
     realtime: {
       params: {
-        eventsPerSecond: 10
+        eventsPerSecond: 2 // Reduced from 10 to prevent connection spam
       }
     }
   }
@@ -271,9 +304,23 @@ export const cleanStaleSession = async (): Promise<boolean> => {
     return false;
   } catch (error) {
     console.error('Error cleaning stale session:', error);
-    // On any error, clear storage to be safe
+    // On any error, clear all storage to be safe (including IndexedDB for Edge browser)
     localStorage.clear();
     sessionStorage.clear();
+
+    // Clear IndexedDB for Edge browser compatibility
+    try {
+      const databases = await indexedDB.databases();
+      for (const db of databases) {
+        if (db.name?.includes('supabase')) {
+          indexedDB.deleteDatabase(db.name);
+          console.log('🔴 Cleared IndexedDB:', db.name);
+        }
+      }
+    } catch (idbError) {
+      console.warn('Could not clear IndexedDB:', idbError);
+    }
+
     updateSessionHealth(false, true);
     return false;
   }
@@ -288,6 +335,19 @@ export const completeLogout = async () => {
     // Clear all possible storage
     localStorage.clear();
     sessionStorage.clear();
+
+    // Clear IndexedDB for Edge browser compatibility
+    try {
+      const databases = await indexedDB.databases();
+      for (const db of databases) {
+        if (db.name?.includes('supabase')) {
+          indexedDB.deleteDatabase(db.name);
+          console.log('🔴 Cleared IndexedDB on logout:', db.name);
+        }
+      }
+    } catch (idbError) {
+      console.warn('Could not clear IndexedDB on logout:', idbError);
+    }
 
     // Clear any cookies
     document.cookie.split(";").forEach((c) => {
