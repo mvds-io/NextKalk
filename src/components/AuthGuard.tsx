@@ -277,13 +277,14 @@ export default function AuthGuard({ children }: AuthGuardProps) {
     };
 
     // Listen for visibility changes (user returns to tab after idle)
-    // CRITICAL: This fixes the 15-minute timeout issue
+    // Check if session might be expired without calling validateSession
     const handleVisibilityChange = async () => {
-      if (document.visibilityState === 'visible' && user) {
-        console.log('🔵 Tab became visible, validating session...');
-        // User returned to tab - validate session immediately
-        const isValid = await validateSession();
-        if (!isValid) {
+      if (document.visibilityState === 'visible') {
+        console.log('🔵 Tab became visible, checking session...');
+        // Just get the session without refreshing (to avoid rate limits)
+        const { data: { session }, error } = await supabase.auth.getSession();
+
+        if (error || !session) {
           console.warn('🔴 Session invalid after returning to tab');
           setSessionExpired(true);
           setIsLoading(false);
@@ -304,7 +305,7 @@ export default function AuthGuard({ children }: AuthGuardProps) {
         document.removeEventListener('visibilitychange', handleVisibilityChange);
       }
     };
-  }, [checkAuthentication, loadUserData, user]);
+  }, [checkAuthentication, loadUserData]); // FIXED: Removed 'user' from dependencies to prevent infinite loop
 
 
   const handleLogin = async (e: React.FormEvent) => {

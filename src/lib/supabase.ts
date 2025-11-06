@@ -148,12 +148,13 @@ export const validateSession = async (): Promise<boolean> => {
 
 // Connection pool management
 let activeRequests = 0;
-const MAX_CONCURRENT_REQUESTS = 6; // Limit concurrent requests to prevent pool exhaustion
+const MAX_CONCURRENT_REQUESTS = 12; // Increased from 6 to reduce queueing lag
 const requestQueue: Array<() => void> = [];
 
 const manageConnectionPool = async (requestFn: () => Promise<Response>): Promise<Response> => {
   // If we're at max capacity, queue the request
   if (activeRequests >= MAX_CONCURRENT_REQUESTS) {
+    console.log(`🔶 CONNECTION POOL: Queueing request (${activeRequests}/${MAX_CONCURRENT_REQUESTS} active, ${requestQueue.length} queued)`);
     await new Promise<void>((resolve) => {
       requestQueue.push(resolve);
     });
@@ -166,6 +167,7 @@ const manageConnectionPool = async (requestFn: () => Promise<Response>): Promise
     return response;
   } finally {
     activeRequests--;
+    // console.log(`🔷 CONNECTION POOL: Request completed (${activeRequests}/${MAX_CONCURRENT_REQUESTS} active, ${requestQueue.length} queued)`);
 
     // Process next queued request
     const nextRequest = requestQueue.shift();
@@ -259,10 +261,6 @@ export const cleanStaleSession = async (): Promise<boolean> => {
   if (typeof window === 'undefined') return false;
 
   try {
-    // CRITICAL FOR EDGE: Clear IndexedDB proactively on every session check
-    // Edge aggressively caches IndexedDB even with no-cache headers
-    await clearSupabaseIndexedDB();
-
     // First, check timestamp-based expiry in localStorage
     const keys = Object.keys(localStorage);
     const supabaseKeys = keys.filter(key => key.includes('supabase.auth.token'));
@@ -286,38 +284,36 @@ export const cleanStaleSession = async (): Promise<boolean> => {
       }
     });
 
-    // Now validate the session server-side
+    // Get session (don't validate/refresh on every call - causes rate limiting)
     const { data: { session }, error } = await supabase.auth.getSession();
 
     if (error) {
       console.warn('🔴 Session validation error, clearing storage:', error.message);
       localStorage.clear();
       sessionStorage.clear();
+      // Clear IndexedDB only when there's an actual error
+      await clearSupabaseIndexedDB();
       updateSessionHealth(false, true);
       return false;
     }
 
     if (session) {
-      // Try to refresh the session to ensure it's actually valid on the server
-      const { data: { session: refreshedSession }, error: refreshError } = await supabase.auth.refreshSession();
+      // Don't refresh on every call - causes rate limiting (429 errors)
+      // Session refresh is handled by Supabase autoRefreshToken
+      // Only clear storage if session is actually expired
+      const expiresAt = session.expires_at ? new Date(session.expires_at * 1000) : null;
+      const now = new Date();
 
-      if (refreshError) {
-        console.warn('🔴 Session refresh failed, clearing stale session:', refreshError.message);
+      if (expiresAt && now > expiresAt) {
+        console.warn('🔴 Session expired, clearing storage');
         localStorage.clear();
         sessionStorage.clear();
+        await clearSupabaseIndexedDB();
         updateSessionHealth(false, true);
         return false;
       }
 
-      if (!refreshedSession) {
-        console.warn('🔴 No refreshed session returned, clearing storage');
-        localStorage.clear();
-        sessionStorage.clear();
-        updateSessionHealth(false, true);
-        return false;
-      }
-
-      // Session is valid
+      // Session exists and is not expired
       updateSessionHealth(true);
       return true;
     }

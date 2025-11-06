@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Airport, Landingsplass, User } from '@/types';
-import { supabase, validateSession } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase';
 
 interface MarkerDetailPanelProps {
   markerType: 'airport' | 'landingsplass';
@@ -85,14 +85,6 @@ export default function MarkerDetailPanel({
 
       setIsLoadingAssociations(true);
       try {
-        // CRITICAL: Validate session before database query to prevent infinite spinner
-        const isSessionValid = await validateSession();
-        if (!isSessionValid) {
-          console.warn('🔴 Session invalid when loading associations');
-          setIsLoadingAssociations(false);
-          return;
-        }
-
         if (markerType === 'airport') {
           // For airports, get associated landingsplasser
           const { data, error } = await supabase
@@ -162,14 +154,6 @@ export default function MarkerDetailPanel({
 
       setIsLoadingContactPersons(true);
       try {
-        // CRITICAL: Validate session before database query to prevent infinite spinner
-        const isSessionValid = await validateSession();
-        if (!isSessionValid) {
-          console.warn('🔴 Session invalid when loading contact persons');
-          setIsLoadingContactPersons(false);
-          return;
-        }
-
         const { data: associations, error } = await supabase
           .from('vass_associations')
           .select(`
@@ -233,14 +217,6 @@ export default function MarkerDetailPanel({
 
       setIsLoadingImages(true);
       try {
-        // CRITICAL: Validate session before database query to prevent infinite spinner
-        const isSessionValid = await validateSession();
-        if (!isSessionValid) {
-          console.warn('🔴 Session invalid when loading images');
-          setIsLoadingImages(false);
-          return;
-        }
-
         const tableName = markerType === 'airport' ? 'vass_vann_images' : 'vass_lasteplass_images';
 
         const { data, error } = await supabase
@@ -277,14 +253,6 @@ export default function MarkerDetailPanel({
 
       setIsLoadingDocuments(true);
       try {
-        // CRITICAL: Validate session before database query to prevent infinite spinner
-        const isSessionValid = await validateSession();
-        if (!isSessionValid) {
-          console.warn('🔴 Session invalid when loading documents');
-          setIsLoadingDocuments(false);
-          return;
-        }
-
         const tableName = markerType === 'airport' ? 'vass_vann_documents' : 'vass_lasteplass_documents';
 
         const { data, error } = await supabase

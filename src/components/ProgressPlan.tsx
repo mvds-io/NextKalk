@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Reorder, motion } from 'framer-motion';
 import { Landingsplass, User } from '@/types';
 import { supabase } from '@/lib/supabase';
@@ -233,13 +233,29 @@ export default function ProgressPlan({
   }, [sortedLandingsplasser.length]); // Only depend on the length, not the entire array
 
   // Load completion users from action logs
+  // Use ref to prevent infinite loop
+  const lastCompletedIdsRef = useRef<string>('');
+
   const loadCompletionUsers = useCallback(async () => {
     try {
       // Get all completed landingsplasser IDs
       const completedLandingsplasser = sortedLandingsplasser.filter(lp => lp.done);
       const completedIds = completedLandingsplasser.map(lp => lp.id);
-      
-      if (completedIds.length === 0) return;
+
+      // Create stable key from IDs
+      const idsKey = completedIds.sort().join(',');
+
+      // Only reload if IDs have actually changed
+      if (idsKey === lastCompletedIdsRef.current) {
+        return;
+      }
+
+      lastCompletedIdsRef.current = idsKey;
+
+      if (completedIds.length === 0) {
+        setCompletionUsers({});
+        return;
+      }
 
       // Query action logs for completion events
       const { data: completionLogs, error } = await supabase
@@ -257,19 +273,19 @@ export default function ProgressPlan({
 
       // Process logs to get the most recent completion event for each landingsplass
       const userMap: Record<number, string> = {};
-      
+
       completionLogs?.forEach(log => {
         const targetId = log.target_id;
         const actionDetails = log.action_details as any;
-        
+
         // Skip if we already have a user for this landingsplass (most recent wins)
         if (userMap[targetId]) return;
-        
+
         // Handle both old and new log formats
-        const isCompleted = 
+        const isCompleted =
           actionDetails?.new_status === 'completed' ||  // New format
           actionDetails?.new_status === true;           // Old format
-        
+
         if (isCompleted) {
           // Extract just the name part from email (before @)
           const userName = log.user_email?.split('@')[0] || log.user_email || '';
@@ -348,13 +364,16 @@ export default function ProgressPlan({
     loadCompletionUsers();
   }, [loadCompletionUsers]);
 
-  useEffect(() => {
-    sortedLandingsplasser.forEach(lp => {
-      if (!contactPersons[lp.id] && !isContactPersonsLoading[lp.id]) {
-        loadContactPersonsForLandingsplass(lp.id);
-      }
-    });
-  }, [sortedLandingsplasser.length, loadContactPersonsForLandingsplass]);
+  // REMOVED: This useEffect was causing an N+1 query problem, loading contact persons
+  // for ALL landingsplasser (100+) on every render. Contact persons are now only loaded
+  // when a landingsplass row is actually clicked/expanded by the user.
+  // useEffect(() => {
+  //   sortedLandingsplasser.forEach(lp => {
+  //     if (!contactPersons[lp.id] && !isContactPersonsLoading[lp.id]) {
+  //       loadContactPersonsForLandingsplass(lp.id);
+  //     }
+  //   });
+  // }, [sortedLandingsplasser.length, loadContactPersonsForLandingsplass]);
 
   // Auto-scroll to first incomplete landingsplass after all data is loaded
   useEffect(() => {

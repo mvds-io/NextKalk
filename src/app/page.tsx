@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import LoadingScreen from '@/components/LoadingScreen';
 import Counter from '@/components/Counter';
 import MapContainer from '@/components/MapContainer';
@@ -10,7 +10,7 @@ import AuthGuard from '@/components/AuthGuard';
 import SkeletonMap from '@/components/SkeletonMap';
 import SkeletonTopBar from '@/components/SkeletonTopBar';
 import SkeletonSidePanel from '@/components/SkeletonSidePanel';
-import { supabase, queryWithRetry, validateSession, getSessionStatus } from '@/lib/supabase';
+import { supabase, queryWithRetry } from '@/lib/supabase';
 import { Airport, Landingsplass, KalkInfo, User, CounterData, FilterState } from '@/types';
 
 // Utility function to parse European decimal numbers (handles both "1.0" and "1,0" formats)
@@ -67,6 +67,7 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
   // Selected marker state for detail panel
   const [selectedMarker, setSelectedMarker] = useState<{ type: 'airport' | 'landingsplass'; id: number } | null>(null);
 
+
   // Completion users for landingsplasser
   const [completionUsers, setCompletionUsers] = useState<Record<number, string>>({});
 
@@ -74,11 +75,24 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
   const [mapZoomFunction, setMapZoomFunction] = useState<((lat: number, lng: number, zoom?: number) => void) | null>(null);
 
   // Load completion users from action logs
+  // Use a ref to track the last loaded landingsplasser IDs to prevent infinite loop
+  const lastLoadedIdsRef = useRef<string>('');
+
   useEffect(() => {
     const loadCompletionUsers = async () => {
       try {
         const completedLandingsplasser = landingsplasser.filter(lp => lp.done || lp.is_done);
         const completedIds = completedLandingsplasser.map(lp => lp.id);
+
+        // Create a stable key from the IDs
+        const idsKey = completedIds.sort().join(',');
+
+        // Only reload if the IDs have actually changed
+        if (idsKey === lastLoadedIdsRef.current) {
+          return;
+        }
+
+        lastLoadedIdsRef.current = idsKey;
 
         if (completedIds.length === 0) {
           setCompletionUsers({});
@@ -130,18 +144,8 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
     try {
       setError(null);
       setLoadingProgress(0);
-      setCurrentLoadingStep('Validerer sesjon...');
+      setCurrentLoadingStep('Starter...');
       setStepStartTime(Date.now());
-
-      // Validate session before loading data
-      const isSessionValid = await validateSession();
-      if (!isSessionValid) {
-        const sessionStatus = getSessionStatus();
-        if (sessionStatus.needsReauth) {
-          setError('Session expired. Please log in again.');
-          return;
-        }
-      }
 
       setLoadingProgress(10);
 
@@ -191,26 +195,12 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
   useEffect(() => {
     initializeApp();
 
-    // Set up periodic session validation (every 5 minutes to reduce connection spam)
-    // Reduced from 2 minutes to prevent connection pool exhaustion
-    const sessionCheckInterval = setInterval(async () => {
-      const sessionStatus = getSessionStatus();
-      if (sessionStatus.shouldRevalidate) {
-        console.log('Performing periodic session validation...');
-        const isValid = await validateSession();
-        if (!isValid && sessionStatus.needsReauth) {
-          console.error('🔴 Session validation failed, forcing logout');
-          setError('Session expired. Redirecting to login...');
-          // Force reload after a brief delay to allow user to see the message
-          setTimeout(() => {
-            window.location.reload();
-          }, 2000);
-        }
-      }
-    }, 300000); // 5 minutes (reduced frequency to prevent connection accumulation)
+    // DISABLED: Periodic session validation was causing performance issues
+    // Supabase autoRefreshToken handles session refresh automatically
+    // Session expiry is caught by error handlers in queries
 
     return () => {
-      clearInterval(sessionCheckInterval);
+      // Cleanup if needed
     };
   }, [initializeApp]);
 
@@ -617,16 +607,7 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
             user={user}
             onMarkerSelect={setSelectedMarker}
             onDataUpdate={async () => {
-              // Validate session before refreshing data
-              const isSessionValid = await validateSession();
-              if (!isSessionValid) {
-                const sessionStatus = getSessionStatus();
-                if (sessionStatus.needsReauth) {
-                  setError('Session expired. Please refresh the page to log in again.');
-                  return;
-                }
-              }
-
+              // Reload data (session validation removed to prevent rate limiting)
               loadAirports();
               loadLandingsplasser();
               loadKalkMarkers();
@@ -655,16 +636,7 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
               completionUsers={completionUsers}
               onClose={() => setSelectedMarker(null)}
               onDataUpdate={async () => {
-                // Validate session before refreshing data
-                const isSessionValid = await validateSession();
-                if (!isSessionValid) {
-                  const sessionStatus = getSessionStatus();
-                  if (sessionStatus.needsReauth) {
-                    setError('Session expired. Please refresh the page to log in again.');
-                    return;
-                  }
-                }
-
+                // Reload data (session validation removed to prevent rate limiting)
                 loadAirports();
                 loadLandingsplasser();
                 loadKalkMarkers();
@@ -683,16 +655,7 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
               onMarkerSelect={setSelectedMarker}
               onZoomToLocation={mapZoomFunction}
               onDataUpdate={async () => {
-                // Validate session before refreshing data
-                const isSessionValid = await validateSession();
-                if (!isSessionValid) {
-                  const sessionStatus = getSessionStatus();
-                  if (sessionStatus.needsReauth) {
-                    setError('Session expired. Please refresh the page to log in again.');
-                    return;
-                  }
-                }
-
+                // Reload data (session validation removed to prevent rate limiting)
                 loadAirports();
                 loadLandingsplasser();
                 loadKalkMarkers();
