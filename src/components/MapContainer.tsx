@@ -2845,31 +2845,17 @@ ${waypointElements}
       }
 
       if (type === 'airport') {
-        // Load queries sequentially to prevent connection pool exhaustion
-        await loadCurrentAssociations(id);
-        if (currentLoadingIdRef.current === newLoadingId) {
-          await loadAndDisplayImages(id, 'airport');
-        }
+        // Load airport data (2 queries in parallel is fine)
+        loadCurrentAssociations(id);
+        loadAndDisplayImages(id, 'airport');
       } else {
-        // Load landingsplass data in sequence, not parallel
-        // This prevents 5 simultaneous queries from exhausting the connection pool
-        await loadAndDisplayDocuments(id, 'landingsplass');
-
-        if (currentLoadingIdRef.current === newLoadingId) {
-          await loadAndDisplayImages(id, 'landingsplass');
-        }
-
-        if (currentLoadingIdRef.current === newLoadingId) {
-          await showIndividualConnections(id);
-        }
-
-        if (currentLoadingIdRef.current === newLoadingId) {
-          await loadRelatedWaters(id);
-        }
-
-        if (currentLoadingIdRef.current === newLoadingId) {
-          await loadContactPersons(id);
-        }
+        // Load landingsplass data in parallel
+        // Connection pool now handles queueing (MAX_CONCURRENT_REQUESTS = 12)
+        loadAndDisplayDocuments(id, 'landingsplass');
+        loadAndDisplayImages(id, 'landingsplass');
+        showIndividualConnections(id);
+        loadRelatedWaters(id);
+        loadContactPersons(id);
       }
     }, 100);
   }, []);

@@ -149,15 +149,12 @@ export const validateSession = async (): Promise<boolean> => {
 // Connection pool management
 let activeRequests = 0;
 const MAX_CONCURRENT_REQUESTS = 12; // Increased from 6 to reduce queueing lag
-const requestQueue: Array<() => void> = [];
 
 const manageConnectionPool = async (requestFn: () => Promise<Response>): Promise<Response> => {
-  // If we're at max capacity, queue the request
-  if (activeRequests >= MAX_CONCURRENT_REQUESTS) {
-    console.log(`🔶 CONNECTION POOL: Queueing request (${activeRequests}/${MAX_CONCURRENT_REQUESTS} active, ${requestQueue.length} queued)`);
-    await new Promise<void>((resolve) => {
-      requestQueue.push(resolve);
-    });
+  // Don't queue - just limit concurrent requests and execute immediately
+  // This prevents the queue from getting stuck in Chromium's module cache
+  while (activeRequests >= MAX_CONCURRENT_REQUESTS) {
+    await new Promise(resolve => setTimeout(resolve, 100));
   }
 
   activeRequests++;
@@ -167,13 +164,6 @@ const manageConnectionPool = async (requestFn: () => Promise<Response>): Promise
     return response;
   } finally {
     activeRequests--;
-    // console.log(`🔷 CONNECTION POOL: Request completed (${activeRequests}/${MAX_CONCURRENT_REQUESTS} active, ${requestQueue.length} queued)`);
-
-    // Process next queued request
-    const nextRequest = requestQueue.shift();
-    if (nextRequest) {
-      nextRequest();
-    }
   }
 };
 
@@ -194,7 +184,10 @@ export const supabase = createClient(
         'X-Client-Info': 'nextkalk-web-app'
       },
       fetch: (url, options = {}) => {
-        return manageConnectionPool(async () => {
+        // Bypass connection pool for auth requests to prevent Chromium reload hang
+        const isAuthRequest = typeof url === 'string' && (url.includes('/auth/') || url.includes('token?'));
+
+        const fetchFn = async () => {
           // Reduce timeout to 15 seconds to fail faster and free up connections
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout (reduced from 30)
@@ -227,7 +220,14 @@ export const supabase = createClient(
             updateConnectionHealth(false, error instanceof Error ? error.message : 'Unknown error');
             throw error;
           }
-        });
+        };
+
+        // Auth requests bypass the connection pool
+        if (isAuthRequest) {
+          return fetchFn();
+        }
+
+        return manageConnectionPool(fetchFn);
       }
     },
     realtime: {
@@ -239,7 +239,7 @@ export const supabase = createClient(
 );
 
 // Proactive IndexedDB cleanup for Edge browser compatibility
-// This runs on every page load to prevent stale session issues in Edge
+// Not used during normal operation to avoid Chromium hang issues
 export const clearSupabaseIndexedDB = async (): Promise<void> => {
   if (typeof window === 'undefined' || !indexedDB.databases) return;
 
@@ -248,12 +248,19 @@ export const clearSupabaseIndexedDB = async (): Promise<void> => {
     for (const db of databases) {
       if (db.name?.includes('supabase')) {
         indexedDB.deleteDatabase(db.name);
-        console.log('🔵 Proactively cleared IndexedDB:', db.name);
+        console.log('🔵 Cleared IndexedDB:', db.name);
       }
     }
   } catch (error) {
-    console.warn('Could not proactively clear IndexedDB:', error);
+    console.warn('Could not clear IndexedDB:', error);
   }
+};
+
+// Detect if we're in a Chromium browser
+const isChromiumBrowser = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  const ua = navigator.userAgent.toLowerCase();
+  return (ua.includes('chrome') || ua.includes('chromium') || ua.includes('edg')) && !ua.includes('firefox');
 };
 
 // Helper function to check and clean stale sessions
@@ -261,28 +268,27 @@ export const cleanStaleSession = async (): Promise<boolean> => {
   if (typeof window === 'undefined') return false;
 
   try {
-    // First, check timestamp-based expiry in localStorage
-    const keys = Object.keys(localStorage);
-    const supabaseKeys = keys.filter(key => key.includes('supabase.auth.token'));
+    // CHROMIUM FIX: Clear all Supabase localStorage on every page load in Chromium
+    // This prevents the hanging issue caused by stale cached auth state
+    if (isChromiumBrowser()) {
+      const keys = Object.keys(localStorage);
+      const supabaseKeys = keys.filter(key => key.includes('supabase'));
 
-    supabaseKeys.forEach(key => {
-      try {
-        const item = localStorage.getItem(key);
-        if (!item) return;
+      // Check if we have a valid recent session before clearing
+      const lastActivity = localStorage.getItem('supabase.last.activity');
+      const lastActivityTime = lastActivity ? parseInt(lastActivity) : 0;
+      const timeSinceActivity = Date.now() - lastActivityTime;
 
-        const parsed = JSON.parse(item);
-        if (parsed && typeof parsed === 'object' && parsed.expires_at) {
-          const expiresAt = new Date(parsed.expires_at * 1000);
-          const now = new Date();
-          if (now > expiresAt) {
-            console.warn('🔴 Removing expired session from cache (timestamp)');
-            localStorage.removeItem(key);
-          }
-        }
-      } catch (e) {
-        // Ignore parse errors
+      // If last activity was more than 30 seconds ago, clear everything (likely a page reload)
+      if (!lastActivity || timeSinceActivity > 30000) {
+        console.log('🔵 Clearing Chromium cache on page load to prevent hang');
+        supabaseKeys.forEach(key => localStorage.removeItem(key));
+        sessionStorage.clear();
       }
-    });
+
+      // Update last activity timestamp
+      localStorage.setItem('supabase.last.activity', Date.now().toString());
+    }
 
     // Get session (don't validate/refresh on every call - causes rate limiting)
     const { data: { session }, error } = await supabase.auth.getSession();
@@ -291,8 +297,8 @@ export const cleanStaleSession = async (): Promise<boolean> => {
       console.warn('🔴 Session validation error, clearing storage:', error.message);
       localStorage.clear();
       sessionStorage.clear();
-      // Clear IndexedDB only when there's an actual error
-      await clearSupabaseIndexedDB();
+      // Skip IndexedDB clear to avoid Chromium hang - only clear localStorage/sessionStorage
+      // IndexedDB will be cleared on logout if needed
       updateSessionHealth(false, true);
       return false;
     }
@@ -308,7 +314,7 @@ export const cleanStaleSession = async (): Promise<boolean> => {
         console.warn('🔴 Session expired, clearing storage');
         localStorage.clear();
         sessionStorage.clear();
-        await clearSupabaseIndexedDB();
+        // Skip IndexedDB clear to avoid Chromium hang
         updateSessionHealth(false, true);
         return false;
       }
@@ -322,22 +328,10 @@ export const cleanStaleSession = async (): Promise<boolean> => {
     return false;
   } catch (error) {
     console.error('Error cleaning stale session:', error);
-    // On any error, clear all storage to be safe (including IndexedDB for Edge browser)
+    // On any error, clear localStorage/sessionStorage only
     localStorage.clear();
     sessionStorage.clear();
-
-    // Clear IndexedDB for Edge browser compatibility
-    try {
-      const databases = await indexedDB.databases();
-      for (const db of databases) {
-        if (db.name?.includes('supabase')) {
-          indexedDB.deleteDatabase(db.name);
-          console.log('🔴 Cleared IndexedDB:', db.name);
-        }
-      }
-    } catch (idbError) {
-      console.warn('Could not clear IndexedDB:', idbError);
-    }
+    // Skip IndexedDB clear to avoid Chromium hang during normal operation
 
     updateSessionHealth(false, true);
     return false;
@@ -354,18 +348,8 @@ export const completeLogout = async () => {
     localStorage.clear();
     sessionStorage.clear();
 
-    // Clear IndexedDB for Edge browser compatibility
-    try {
-      const databases = await indexedDB.databases();
-      for (const db of databases) {
-        if (db.name?.includes('supabase')) {
-          indexedDB.deleteDatabase(db.name);
-          console.log('🔴 Cleared IndexedDB on logout:', db.name);
-        }
-      }
-    } catch (idbError) {
-      console.warn('Could not clear IndexedDB on logout:', idbError);
-    }
+    // Clear IndexedDB for Edge browser compatibility (non-blocking to prevent Chromium hang)
+    clearSupabaseIndexedDB().catch(err => console.warn('Background IndexedDB clear on logout failed:', err));
 
     // Clear any cookies
     document.cookie.split(";").forEach((c) => {
