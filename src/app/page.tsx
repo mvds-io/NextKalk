@@ -190,19 +190,24 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
 
   useEffect(() => {
     initializeApp();
-    
-    // Set up periodic session validation (every 5 minutes)
+
+    // Set up periodic session validation (every 2 minutes for better responsiveness)
     const sessionCheckInterval = setInterval(async () => {
       const sessionStatus = getSessionStatus();
       if (sessionStatus.shouldRevalidate) {
         console.log('Performing periodic session validation...');
         const isValid = await validateSession();
         if (!isValid && sessionStatus.needsReauth) {
-          setError('Session expired. Please refresh the page to log in again.');
+          console.error('🔴 Session validation failed, forcing logout');
+          setError('Session expired. Redirecting to login...');
+          // Force reload after a brief delay to allow user to see the message
+          setTimeout(() => {
+            window.location.reload();
+          }, 2000);
         }
       }
-    }, 300000); // 5 minutes
-    
+    }, 120000); // 2 minutes (more frequent for better UX)
+
     return () => {
       clearInterval(sessionCheckInterval);
     };

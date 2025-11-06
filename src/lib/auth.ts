@@ -1,13 +1,16 @@
-import { supabase } from './supabase';
+import { supabase, completeLogout } from './supabase';
 
 /**
  * Get authenticated fetch headers for API calls
  */
 export async function getAuthHeaders(): Promise<Record<string, string>> {
-  const { data: { session } } = await supabase.auth.getSession();
-  
-  if (!session?.access_token) {
-    throw new Error('No authentication token available');
+  const { data: { session }, error } = await supabase.auth.getSession();
+
+  if (error || !session?.access_token) {
+    // Clear stale session and force re-login
+    console.warn('🔴 No valid session found in getAuthHeaders, clearing storage');
+    await completeLogout();
+    throw new Error('Session expired - please log in again');
   }
 
   return {
@@ -45,11 +48,30 @@ export async function authenticatedFetch(url: string, options: RequestInit = {})
 }
 
 /**
- * Check if user is authenticated
+ * Check if user is authenticated (with server-side validation)
  */
 export async function isAuthenticated(): Promise<boolean> {
-  const { data: { session } } = await supabase.auth.getSession();
-  return !!session?.user;
+  try {
+    const { data: { session }, error } = await supabase.auth.getSession();
+
+    if (error || !session) {
+      return false;
+    }
+
+    // Validate the session by attempting a refresh
+    const { data: { session: refreshedSession }, error: refreshError } = await supabase.auth.refreshSession();
+
+    if (refreshError || !refreshedSession) {
+      // Session is stale, clear it
+      await completeLogout();
+      return false;
+    }
+
+    return !!refreshedSession.user;
+  } catch (error) {
+    console.error('Error checking authentication:', error);
+    return false;
+  }
 }
 
 /**

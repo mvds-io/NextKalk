@@ -128,8 +128,15 @@ export default function AuthGuard({ children }: AuthGuardProps) {
     let countdownIntervalId: NodeJS.Timeout | null = null;
 
     try {
-      // Clean any stale sessions from cache first
-      cleanStaleSession();
+      // CRITICAL: Clean and validate any stale sessions from cache first
+      // This now validates server-side and clears stale sessions automatically
+      const sessionIsValid = await cleanStaleSession();
+
+      if (!sessionIsValid) {
+        console.log('No valid session found after cleaning stale sessions');
+        setIsLoading(false);
+        return;
+      }
 
       // Reset countdown
       setTimeoutCountdown(5);
@@ -169,7 +176,7 @@ export default function AuthGuard({ children }: AuthGuardProps) {
         if (countdownIntervalId) clearInterval(countdownIntervalId);
       }, 5000);
 
-      // Get session directly - no retry logic in auth check
+      // Get session - it's already been validated by cleanStaleSession
       const { data: { session }, error } = await supabase.auth.getSession();
 
       // Clear timeout and countdown since we got a response
@@ -181,7 +188,7 @@ export default function AuthGuard({ children }: AuthGuardProps) {
         clearInterval(countdownIntervalId);
         countdownIntervalId = null;
       }
-      
+
       if (error) {
         console.error('Session error:', error);
         if (error.message?.includes('expired') || error.message?.includes('JWT')) {
@@ -192,21 +199,21 @@ export default function AuthGuard({ children }: AuthGuardProps) {
         setIsLoading(false);
         return;
       }
-      
+
       if (!session?.user?.email) {
         console.log('No session found');
         setIsLoading(false);
         return;
       }
-      
+
       // Reset all error states on successful authentication
       setConnectionIssue(false);
       setAuthTimeout(false);
       setSessionExpired(false);
       setRetryCount(0);
-      
+
       await loadUserData(session.user.email);
-      
+
     } catch (error) {
       // Clear timeout and countdown on error
       if (timeoutId) {
@@ -246,13 +253,13 @@ export default function AuthGuard({ children }: AuthGuardProps) {
 
   useEffect(() => {
     let mounted = true;
-    
+
     checkAuthentication();
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return;
-      
+
       if (event === 'SIGNED_IN' && session?.user) {
         await loadUserData(session.user.email!);
       } else if (event === 'SIGNED_OUT') {
@@ -260,9 +267,25 @@ export default function AuthGuard({ children }: AuthGuardProps) {
       }
     });
 
+    // Listen for storage changes (e.g., session expires in another tab)
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key?.includes('supabase.auth.token')) {
+        console.log('Session storage changed, rechecking authentication...');
+        // Session changed - recheck authentication
+        checkAuthentication();
+      }
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('storage', handleStorageChange);
+    }
+
     return () => {
       mounted = false;
       subscription.unsubscribe();
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('storage', handleStorageChange);
+      }
     };
   }, [checkAuthentication, loadUserData]);
 

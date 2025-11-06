@@ -204,11 +204,11 @@ export const supabase = createClient(
 );
 
 // Helper function to check and clean stale sessions
-export const cleanStaleSession = () => {
-  if (typeof window === 'undefined') return;
+export const cleanStaleSession = async (): Promise<boolean> => {
+  if (typeof window === 'undefined') return false;
 
   try {
-    // Check all localStorage keys for Supabase auth data
+    // First, check timestamp-based expiry in localStorage
     const keys = Object.keys(localStorage);
     const supabaseKeys = keys.filter(key => key.includes('supabase.auth.token'));
 
@@ -222,7 +222,7 @@ export const cleanStaleSession = () => {
           const expiresAt = new Date(parsed.expires_at * 1000);
           const now = new Date();
           if (now > expiresAt) {
-            console.warn('🔴 Removing stale session from cache');
+            console.warn('🔴 Removing expired session from cache (timestamp)');
             localStorage.removeItem(key);
           }
         }
@@ -230,8 +230,52 @@ export const cleanStaleSession = () => {
         // Ignore parse errors
       }
     });
+
+    // Now validate the session server-side
+    const { data: { session }, error } = await supabase.auth.getSession();
+
+    if (error) {
+      console.warn('🔴 Session validation error, clearing storage:', error.message);
+      localStorage.clear();
+      sessionStorage.clear();
+      updateSessionHealth(false, true);
+      return false;
+    }
+
+    if (session) {
+      // Try to refresh the session to ensure it's actually valid on the server
+      const { data: { session: refreshedSession }, error: refreshError } = await supabase.auth.refreshSession();
+
+      if (refreshError) {
+        console.warn('🔴 Session refresh failed, clearing stale session:', refreshError.message);
+        localStorage.clear();
+        sessionStorage.clear();
+        updateSessionHealth(false, true);
+        return false;
+      }
+
+      if (!refreshedSession) {
+        console.warn('🔴 No refreshed session returned, clearing storage');
+        localStorage.clear();
+        sessionStorage.clear();
+        updateSessionHealth(false, true);
+        return false;
+      }
+
+      // Session is valid
+      updateSessionHealth(true);
+      return true;
+    }
+
+    // No session found
+    return false;
   } catch (error) {
     console.error('Error cleaning stale session:', error);
+    // On any error, clear storage to be safe
+    localStorage.clear();
+    sessionStorage.clear();
+    updateSessionHealth(false, true);
+    return false;
   }
 };
 
