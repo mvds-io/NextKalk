@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import { supabase, getSessionDirectly } from './supabase';
 
 declare global {
   interface Window {
@@ -212,7 +212,7 @@ export async function exportCompletedLandingsplassToPDF(): Promise<PDFExportResu
     
     // Log the action if user is authenticated
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const { session } = getSessionDirectly();
       if (session?.user) {
         await supabase
           .from('user_action_logs')

@@ -352,7 +352,8 @@ export const clearSupabaseIndexedDB = async (): Promise<void> => {
 
 // Direct localStorage session check - bypasses Supabase getSession() completely
 // This is a workaround for Vercel production hanging on getSession()
-const getSessionDirectly = (): { session: any; error: any } => {
+// Export this so other components can use it instead of supabase.auth.getSession()
+export const getSessionDirectly = (): { session: any; error: any } => {
   if (typeof window === 'undefined') return { session: null, error: null };
 
   try {

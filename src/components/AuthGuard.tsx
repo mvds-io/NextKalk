@@ -16,7 +16,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { User } from '@/types';
-import { supabase, completeLogout, cleanStaleSession, getConnectionStatus, validateSession, getSessionStatus, updateSessionHealth } from '@/lib/supabase';
+import { supabase, completeLogout, cleanStaleSession, getConnectionStatus, validateSession, getSessionStatus, updateSessionHealth, getSessionDirectly } from '@/lib/supabase';
 
 interface AuthGuardProps {
   children: (user: User, onLogout: () => void) => React.ReactNode;
@@ -37,9 +37,9 @@ export default function AuthGuard({ children }: AuthGuardProps) {
 
   const loadUserData = useCallback(async (email: string) => {
     try {
-      
-      // Check current auth state
-      await supabase.auth.getSession();
+
+      // Check current auth state using direct localStorage read
+      getSessionDirectly();
       
       // First, let's see all users in the database to debug
       await supabase
@@ -196,7 +196,10 @@ export default function AuthGuard({ children }: AuthGuardProps) {
       }, 5000);
 
       // Get session - it's already been validated by cleanStaleSession
-      const { data: { session }, error } = await supabase.auth.getSession();
+      // Use getSessionDirectly to avoid hanging on Vercel production
+      console.log('🔵 Getting session directly from localStorage...');
+      const { session, error } = getSessionDirectly();
+      console.log('🔵 Got session:', { hasSession: !!session, hasError: !!error });
 
       // Clear timeout and countdown since we got a response
       if (timeoutId) {
@@ -300,8 +303,8 @@ export default function AuthGuard({ children }: AuthGuardProps) {
     const handleVisibilityChange = async () => {
       if (document.visibilityState === 'visible') {
         console.log('🔵 Tab became visible, checking session...');
-        // Just get the session without refreshing (to avoid rate limits)
-        const { data: { session }, error } = await supabase.auth.getSession();
+        // Use direct localStorage read to avoid hanging
+        const { session, error } = getSessionDirectly();
 
         if (error || !session) {
           console.warn('🔴 Session invalid after returning to tab');

@@ -1,10 +1,10 @@
-import { supabase, completeLogout } from './supabase';
+import { supabase, completeLogout, getSessionDirectly } from './supabase';
 
 /**
  * Get authenticated fetch headers for API calls
  */
 export async function getAuthHeaders(): Promise<Record<string, string>> {
-  const { data: { session }, error } = await supabase.auth.getSession();
+  const { session, error } = getSessionDirectly();
 
   if (error || !session?.access_token) {
     // Clear stale session and force re-login
@@ -52,7 +52,7 @@ export async function authenticatedFetch(url: string, options: RequestInit = {})
  */
 export async function isAuthenticated(): Promise<boolean> {
   try {
-    const { data: { session }, error } = await supabase.auth.getSession();
+    const { session, error } = getSessionDirectly();
 
     if (error || !session) {
       return false;
@@ -78,7 +78,7 @@ export async function isAuthenticated(): Promise<boolean> {
  * Get current user from database
  */
 export async function getCurrentUser() {
-  const { data: { session } } = await supabase.auth.getSession();
+  const { session } = getSessionDirectly();
   
   if (!session?.user?.email) {
     return null;
