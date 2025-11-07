@@ -37,21 +37,19 @@ export default function AuthGuard({ children }: AuthGuardProps) {
 
   const loadUserData = useCallback(async (email: string) => {
     try {
+      console.log('🔵 loadUserData: Starting for email:', email);
 
       // Check current auth state using direct localStorage read
       getSessionDirectly();
-      
-      // First, let's see all users in the database to debug
-      await supabase
-        .from('users')
-        .select('*');
-      
-      
+
+      console.log('🔵 loadUserData: Querying users table...');
       // Try direct query first to bypass retry logic
       const result = await supabase
         .from('users')
         .select('*')
         .eq('email', email);
+
+      console.log('🔵 loadUserData: Query completed');
 
 
       if (result.error) {
@@ -278,21 +276,23 @@ export default function AuthGuard({ children }: AuthGuardProps) {
 
     checkAuthentication();
 
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (!mounted) return;
+    // DISABLED: onAuthStateChange causes hanging on Vercel production
+    // The listener internally calls getSession() which hangs
+    // We handle auth state via storage change events instead
+    // const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    //   if (!mounted) return;
+    //   if (event === 'SIGNED_IN' && session?.user) {
+    //     await loadUserData(session.user.email!);
+    //   } else if (event === 'SIGNED_OUT') {
+    //     setUser(null);
+    //   }
+    // });
 
-      if (event === 'SIGNED_IN' && session?.user) {
-        await loadUserData(session.user.email!);
-      } else if (event === 'SIGNED_OUT') {
-        setUser(null);
-      }
-    });
-
-    // Listen for storage changes (e.g., session expires in another tab)
+    // Listen for storage changes (e.g., session expires in another tab or login/logout)
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.key?.includes('supabase.auth.token')) {
-        console.log('Session storage changed, rechecking authentication...');
+      // Check for Supabase auth token changes (using actual key pattern)
+      if (e.key?.startsWith('sb-') && e.key?.endsWith('-auth-token')) {
+        console.log('🔵 Session storage changed, rechecking authentication...');
         // Session changed - recheck authentication
         checkAuthentication();
       }
@@ -321,7 +321,7 @@ export default function AuthGuard({ children }: AuthGuardProps) {
 
     return () => {
       mounted = false;
-      subscription.unsubscribe();
+      // subscription.unsubscribe(); // Disabled since we're not using onAuthStateChange
       if (typeof window !== 'undefined') {
         window.removeEventListener('storage', handleStorageChange);
         document.removeEventListener('visibilitychange', handleVisibilityChange);
