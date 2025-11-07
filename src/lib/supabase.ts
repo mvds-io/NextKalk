@@ -330,51 +330,17 @@ export const cleanStaleSession = async (): Promise<boolean> => {
   try {
     const browserType = getBrowserType();
 
-    // AGGRESSIVE CACHE CLEARING: Edge and Chrome-on-Mac need cache cleared on every reload
-    // Chrome on Windows/Linux works fine with native cache management
-    if (needsAggressiveCacheClearing()) {
-      const keys = Object.keys(localStorage);
-      const supabaseKeys = keys.filter(key => key.includes('supabase'));
-
-      // Check if we have a valid recent session before clearing
-      const lastActivity = localStorage.getItem('supabase.last.activity');
-      const lastActivityTime = lastActivity ? parseInt(lastActivity) : 0;
-      const timeSinceActivity = Date.now() - lastActivityTime;
-
-      // Clear cache on reload (5+ seconds since last activity)
-      if (!lastActivity || timeSinceActivity > 5000) {
-        console.log(`🔵 ${browserType}: Clearing cache on page reload to prevent hang`);
-
-        // Clear localStorage Supabase keys
-        supabaseKeys.forEach(key => localStorage.removeItem(key));
-
-        // Selectively clear sessionStorage - preserve non-Supabase data
-        const sessionKeys = Object.keys(sessionStorage);
-        sessionKeys.filter(key => key.includes('supabase')).forEach(key => sessionStorage.removeItem(key));
-
-        // Clear IndexedDB - AWAIT for Chrome on Mac to ensure it completes before proceeding
-        if (browserType === 'chrome-mac') {
-          console.log(`🔵 ${browserType}: Clearing IndexedDB synchronously (waiting)`);
-          await clearSupabaseIndexedDB();
-        } else {
-          // For Edge, clear async (non-blocking)
-          console.log(`🔵 ${browserType}: Clearing IndexedDB asynchronously`);
-          clearSupabaseIndexedDB().catch(err =>
-            console.warn('Background IndexedDB clear failed:', err)
-          );
-        }
-      }
-
-      // Update last activity timestamp
-      localStorage.setItem('supabase.last.activity', Date.now().toString());
-    }
-
-    // Get session (don't validate/refresh on every call - causes rate limiting)
+    // CRITICAL FIX: Get session FIRST before clearing cache
+    // We need to check if session is valid before deciding to clear cache
     const { data: { session }, error } = await supabase.auth.getSession();
 
+    // Handle session errors - clear cache and return false
     if (error) {
       console.warn('🔴 Session validation error, clearing storage:', error.message);
-      localStorage.clear();
+
+      // Clear localStorage Supabase keys only
+      const keys = Object.keys(localStorage);
+      keys.filter(key => key.includes('supabase')).forEach(key => localStorage.removeItem(key));
 
       // Selectively clear sessionStorage
       const sessionKeys = Object.keys(sessionStorage);
@@ -391,38 +357,55 @@ export const cleanStaleSession = async (): Promise<boolean> => {
       return false;
     }
 
-    if (session) {
-      // Don't refresh on every call - causes rate limiting (429 errors)
-      // Session refresh is handled by Supabase autoRefreshToken
-      // Only clear storage if session is actually expired
-      const expiresAt = session.expires_at ? new Date(session.expires_at * 1000) : null;
-      const now = new Date();
+    // No session found - clear cache
+    if (!session) {
+      console.log('🔵 No session found, clearing stale cache');
 
-      if (expiresAt && now > expiresAt) {
-        console.warn('🔴 Session expired, clearing storage');
-        localStorage.clear();
+      const keys = Object.keys(localStorage);
+      keys.filter(key => key.includes('supabase')).forEach(key => localStorage.removeItem(key));
 
-        // Selectively clear sessionStorage
-        const sessionKeys = Object.keys(sessionStorage);
-        sessionKeys.filter(key => key.includes('supabase')).forEach(key => sessionStorage.removeItem(key));
+      const sessionKeys = Object.keys(sessionStorage);
+      sessionKeys.filter(key => key.includes('supabase')).forEach(key => sessionStorage.removeItem(key));
 
-        // Clear IndexedDB for Chromium browsers when session expired
-        if (isChromiumBrowser()) {
-          console.log(`🔵 ${browserType}: Clearing IndexedDB after session expiry`);
-          clearSupabaseIndexedDB().catch(err => console.warn('IndexedDB clear failed:', err));
-        }
-
-        updateSessionHealth(false, true);
-        return false;
+      if (isChromiumBrowser()) {
+        console.log(`🔵 ${browserType}: Clearing IndexedDB - no session`);
+        clearSupabaseIndexedDB().catch(err => console.warn('IndexedDB clear failed:', err));
       }
 
-      // Session exists and is not expired
-      updateSessionHealth(true);
-      return true;
+      return false;
     }
 
-    // No session found
-    return false;
+    // Check if session is expired
+    const expiresAt = session.expires_at ? new Date(session.expires_at * 1000) : null;
+    const now = new Date();
+
+    if (expiresAt && now > expiresAt) {
+      console.warn('🔴 Session expired, clearing storage');
+
+      const keys = Object.keys(localStorage);
+      keys.filter(key => key.includes('supabase')).forEach(key => localStorage.removeItem(key));
+
+      const sessionKeys = Object.keys(sessionStorage);
+      sessionKeys.filter(key => key.includes('supabase')).forEach(key => sessionStorage.removeItem(key));
+
+      if (isChromiumBrowser()) {
+        console.log(`🔵 ${browserType}: Clearing IndexedDB after session expiry`);
+        clearSupabaseIndexedDB().catch(err => console.warn('IndexedDB clear failed:', err));
+      }
+
+      updateSessionHealth(false, true);
+      return false;
+    }
+
+    // Session is valid! Update activity timestamp for Edge/Chrome-Mac
+    // This helps track user activity without clearing valid sessions
+    if (needsAggressiveCacheClearing()) {
+      localStorage.setItem('supabase.last.activity', Date.now().toString());
+    }
+
+    // Session exists and is not expired
+    updateSessionHealth(true);
+    return true;
   } catch (error) {
     console.error('Error cleaning stale session:', error);
     const browserType = getBrowserType();
