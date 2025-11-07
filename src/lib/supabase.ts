@@ -350,9 +350,13 @@ export const cleanStaleSession = async (): Promise<boolean> => {
   if (typeof window === 'undefined') return false;
 
   try {
+    console.log('🔵 cleanStaleSession: Starting session check...');
+
     // Since we're using localStorage-only storage for ALL browsers,
     // IndexedDB issues are completely avoided. Simple and reliable.
     const { data: { session }, error } = await supabase.auth.getSession();
+
+    console.log('🔵 cleanStaleSession: getSession completed', { hasSession: !!session, hasError: !!error });
 
     // Handle session errors - clear cache and return false
     if (error) {

@@ -129,8 +129,27 @@ export default function AuthGuard({ children }: AuthGuardProps) {
 
     try {
       // CRITICAL: Clean and validate any stale sessions from cache first
-      // This now validates server-side and clears stale sessions automatically
-      const sessionIsValid = await cleanStaleSession();
+      // Add timeout to prevent hanging on Vercel production
+      console.log('🔵 Starting cleanStaleSession with timeout...');
+
+      const sessionCheckPromise = cleanStaleSession();
+      const timeoutPromise = new Promise<boolean>((_, reject) => {
+        setTimeout(() => reject(new Error('cleanStaleSession timeout after 3s')), 3000);
+      });
+
+      let sessionIsValid: boolean;
+      try {
+        sessionIsValid = await Promise.race([sessionCheckPromise, timeoutPromise]);
+      } catch (error) {
+        console.error('🔴 cleanStaleSession timed out or failed:', error);
+        // If it times out, force logout by clearing storage
+        const keys = Object.keys(localStorage);
+        keys.filter(key => key.includes('supabase')).forEach(key => localStorage.removeItem(key));
+        setIsLoading(false);
+        return;
+      }
+
+      console.log('🔵 cleanStaleSession completed:', sessionIsValid);
 
       if (!sessionIsValid) {
         console.log('No valid session found after cleaning stale sessions');
