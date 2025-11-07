@@ -208,14 +208,19 @@ const createStorageAdapter = () => {
   return {
     getItem: (key: string) => {
       if (typeof window === 'undefined') return null;
-      return localStorage.getItem(key);
+      console.log('🔵 Storage adapter getItem called:', key);
+      const value = localStorage.getItem(key);
+      console.log('🔵 Storage adapter getItem result:', value ? 'found' : 'null');
+      return value;
     },
     setItem: (key: string, value: string) => {
       if (typeof window === 'undefined') return;
+      console.log('🔵 Storage adapter setItem called:', key);
       localStorage.setItem(key, value);
     },
     removeItem: (key: string) => {
       if (typeof window === 'undefined') return;
+      console.log('🔵 Storage adapter removeItem called:', key);
       localStorage.removeItem(key);
     },
   };
@@ -345,6 +350,41 @@ export const clearSupabaseIndexedDB = async (): Promise<void> => {
   }
 };
 
+// Direct localStorage session check - bypasses Supabase getSession() completely
+// This is a workaround for Vercel production hanging on getSession()
+const getSessionDirectly = (): { session: any; error: any } => {
+  if (typeof window === 'undefined') return { session: null, error: null };
+
+  try {
+    console.log('🔵 getSessionDirectly: Reading from localStorage...');
+
+    // Supabase stores session in localStorage with key pattern: sb-<project-ref>-auth-token
+    const keys = Object.keys(localStorage);
+    const authKey = keys.find(key => key.includes('supabase') && key.includes('auth-token'));
+
+    if (!authKey) {
+      console.log('🔵 getSessionDirectly: No auth key found in localStorage');
+      return { session: null, error: null };
+    }
+
+    console.log('🔵 getSessionDirectly: Found auth key:', authKey);
+    const authData = localStorage.getItem(authKey);
+
+    if (!authData) {
+      console.log('🔵 getSessionDirectly: Auth key exists but no data');
+      return { session: null, error: null };
+    }
+
+    const parsed = JSON.parse(authData);
+    console.log('🔵 getSessionDirectly: Parsed session data, has session:', !!parsed);
+
+    return { session: parsed, error: null };
+  } catch (error) {
+    console.error('🔴 getSessionDirectly error:', error);
+    return { session: null, error };
+  }
+};
+
 // Helper function to check and clean stale sessions
 export const cleanStaleSession = async (): Promise<boolean> => {
   if (typeof window === 'undefined') return false;
@@ -352,9 +392,9 @@ export const cleanStaleSession = async (): Promise<boolean> => {
   try {
     console.log('🔵 cleanStaleSession: Starting session check...');
 
-    // Since we're using localStorage-only storage for ALL browsers,
-    // IndexedDB issues are completely avoided. Simple and reliable.
-    const { data: { session }, error } = await supabase.auth.getSession();
+    // WORKAROUND: Use direct localStorage read instead of supabase.auth.getSession()
+    // This bypasses the hanging issue on Vercel production
+    const { session, error } = getSessionDirectly();
 
     console.log('🔵 cleanStaleSession: getSession completed', { hasSession: !!session, hasError: !!error });
 
