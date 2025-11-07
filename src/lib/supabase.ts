@@ -201,34 +201,24 @@ const manageConnectionPool = async (requestFn: () => Promise<Response>): Promise
   }
 };
 
-// Custom storage adapter that uses ONLY localStorage (no IndexedDB)
-// This prevents IndexedDB locking issues on Chrome-Mac and Edge
-const localStorageAdapter = {
-  getItem: (key: string) => {
-    if (typeof window === 'undefined') return null;
-    return localStorage.getItem(key);
-  },
-  setItem: (key: string, value: string) => {
-    if (typeof window === 'undefined') return;
-    localStorage.setItem(key, value);
-  },
-  removeItem: (key: string) => {
-    if (typeof window === 'undefined') return;
-    localStorage.removeItem(key);
-  },
-};
-
-// Detect if we need localStorage-only storage at module load time
-const getStorageAdapter = () => {
-  if (typeof window === 'undefined') return undefined;
-  const ua = navigator.userAgent.toLowerCase();
-  const isEdge = ua.includes('edg/') || ua.includes('edge/');
-  const isChromeMac = (ua.includes('chrome') || ua.includes('chromium')) &&
-                      !ua.includes('firefox') &&
-                      (ua.includes('mac os x') || ua.includes('macintosh'));
-
-  // Use localStorage-only for Edge and Chrome-Mac to avoid IndexedDB locking
-  return (isEdge || isChromeMac) ? localStorageAdapter : undefined;
+// Smart storage adapter that detects browser at runtime (not module load time)
+// Critical for SSR: module loads on server where window is undefined
+// Solution: Use localStorage for ALL browsers to avoid IndexedDB issues entirely
+const createStorageAdapter = () => {
+  return {
+    getItem: (key: string) => {
+      if (typeof window === 'undefined') return null;
+      return localStorage.getItem(key);
+    },
+    setItem: (key: string, value: string) => {
+      if (typeof window === 'undefined') return;
+      localStorage.setItem(key, value);
+    },
+    removeItem: (key: string) => {
+      if (typeof window === 'undefined') return;
+      localStorage.removeItem(key);
+    },
+  };
 };
 
 export const supabase = createClient(
@@ -239,8 +229,8 @@ export const supabase = createClient(
       persistSession: true,
       autoRefreshToken: true,
       detectSessionInUrl: true,
-      // Use custom storage adapter for Chrome-Mac and Edge to avoid IndexedDB issues
-      storage: getStorageAdapter()
+      // Use custom storage adapter that detects browser at runtime
+      storage: createStorageAdapter()
     },
     db: {
       schema: 'public'
@@ -360,30 +350,21 @@ export const cleanStaleSession = async (): Promise<boolean> => {
   if (typeof window === 'undefined') return false;
 
   try {
-    const browserType = getBrowserType();
-
-    // Since we're using localStorage-only storage for Chrome-Mac and Edge,
-    // IndexedDB issues are resolved. Use standard flow for all browsers.
+    // Since we're using localStorage-only storage for ALL browsers,
+    // IndexedDB issues are completely avoided. Simple and reliable.
     const { data: { session }, error } = await supabase.auth.getSession();
 
     // Handle session errors - clear cache and return false
     if (error) {
       console.warn('🔴 Session validation error, clearing storage:', error.message);
 
-      // Clear localStorage Supabase keys only
+      // Clear localStorage Supabase keys
       const keys = Object.keys(localStorage);
       keys.filter(key => key.includes('supabase')).forEach(key => localStorage.removeItem(key));
 
       // Selectively clear sessionStorage
       const sessionKeys = Object.keys(sessionStorage);
       sessionKeys.filter(key => key.includes('supabase')).forEach(key => sessionStorage.removeItem(key));
-
-      // Only clear IndexedDB for browsers that use it (Safari, Firefox, Chrome-Windows)
-      // Chrome-Mac and Edge use localStorage-only storage
-      if (!needsAggressiveCacheClearing() && isChromiumBrowser()) {
-        console.log(`🔵 ${browserType}: Clearing IndexedDB after auth error`);
-        clearSupabaseIndexedDB().catch(err => console.warn('IndexedDB clear failed:', err));
-      }
 
       updateSessionHealth(false, true);
       return false;
@@ -398,12 +379,6 @@ export const cleanStaleSession = async (): Promise<boolean> => {
 
       const sessionKeys = Object.keys(sessionStorage);
       sessionKeys.filter(key => key.includes('supabase')).forEach(key => sessionStorage.removeItem(key));
-
-      // Only clear IndexedDB for browsers that use it
-      if (!needsAggressiveCacheClearing() && isChromiumBrowser()) {
-        console.log(`🔵 ${browserType}: Clearing IndexedDB - no session`);
-        clearSupabaseIndexedDB().catch(err => console.warn('IndexedDB clear failed:', err));
-      }
 
       return false;
     }
@@ -421,12 +396,6 @@ export const cleanStaleSession = async (): Promise<boolean> => {
       const sessionKeys = Object.keys(sessionStorage);
       sessionKeys.filter(key => key.includes('supabase')).forEach(key => sessionStorage.removeItem(key));
 
-      // Only clear IndexedDB for browsers that use it
-      if (!needsAggressiveCacheClearing() && isChromiumBrowser()) {
-        console.log(`🔵 ${browserType}: Clearing IndexedDB after session expiry`);
-        clearSupabaseIndexedDB().catch(err => console.warn('IndexedDB clear failed:', err));
-      }
-
       updateSessionHealth(false, true);
       return false;
     }
@@ -436,20 +405,13 @@ export const cleanStaleSession = async (): Promise<boolean> => {
     return true;
   } catch (error) {
     console.error('Error cleaning stale session:', error);
-    const browserType = getBrowserType();
 
-    // On any error, clear Supabase storage only
+    // On any error, clear Supabase storage
     const keys = Object.keys(localStorage);
     keys.filter(key => key.includes('supabase')).forEach(key => localStorage.removeItem(key));
 
     const sessionKeys = Object.keys(sessionStorage);
     sessionKeys.filter(key => key.includes('supabase')).forEach(key => sessionStorage.removeItem(key));
-
-    // Only clear IndexedDB for browsers that use it
-    if (!needsAggressiveCacheClearing() && isChromiumBrowser()) {
-      console.log(`🔵 ${browserType}: Clearing IndexedDB after error`);
-      clearSupabaseIndexedDB().catch(err => console.warn('IndexedDB clear failed:', err));
-    }
 
     updateSessionHealth(false, true);
     return false;
