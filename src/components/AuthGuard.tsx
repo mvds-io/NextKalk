@@ -23,28 +23,6 @@ interface AuthGuardProps {
 }
 
 export default function AuthGuard({ children }: AuthGuardProps) {
-  // CRITICAL FIX: Clear Chromium cache on page reload to prevent hang
-  // This must happen BEFORE any state initialization or Supabase calls
-  if (typeof window !== 'undefined') {
-    const ua = navigator.userAgent.toLowerCase();
-    const isChromium = (ua.includes('chrome') || ua.includes('chromium') || ua.includes('edg')) && !ua.includes('firefox');
-
-    if (isChromium) {
-      // Check if this is a fresh page load (not hot reload)
-      const pageLoadTime = sessionStorage.getItem('page.load.time');
-      const now = Date.now();
-
-      // If no previous load time, or it's been more than 5 seconds (actual page reload, not HMR)
-      if (!pageLoadTime || (now - parseInt(pageLoadTime)) > 5000) {
-        console.log('🔵 Clearing Chromium cache on page reload');
-        const keys = Object.keys(localStorage);
-        keys.filter(key => key.includes('supabase.auth')).forEach(key => localStorage.removeItem(key));
-      }
-
-      sessionStorage.setItem('page.load.time', now.toString());
-    }
-  }
-
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [email, setEmail] = useState('');
