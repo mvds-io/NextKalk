@@ -360,7 +360,7 @@ const getSessionDirectly = (): { session: any; error: any } => {
 
     // Supabase stores session in localStorage with key pattern: sb-<project-ref>-auth-token
     const keys = Object.keys(localStorage);
-    const authKey = keys.find(key => key.includes('supabase') && key.includes('auth-token'));
+    const authKey = keys.find(key => key.startsWith('sb-') && key.endsWith('-auth-token'));
 
     if (!authKey) {
       console.log('🔵 getSessionDirectly: No auth key found in localStorage');
