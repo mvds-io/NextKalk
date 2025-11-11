@@ -63,7 +63,8 @@ export default function Counter({
           role: data.role || 'user',
           canEditPriority: ['admin', 'manager'].includes(data.role),
           canDeleteMarkers: ['admin', 'manager'].includes(data.role),
-          canViewLogs: ['admin', 'manager'].includes(data.role)
+          canViewLogs: data.can_edit_markers || false,
+          canEditMarkers: data.can_edit_markers || false
         };
         setUserPermissions(permissions);
         return permissions;
@@ -406,7 +407,7 @@ export default function Counter({
                     <i className="fas fa-history"></i>
                   </button>
                 )}
-                {userPermissions.role === 'admin' && (
+                {userPermissions.canEditMarkers && (
                   <Link href="/admin" className="btn btn-sm btn-outline-primary"
                     style={{ fontSize: '0.6rem', padding: '0.2rem 0.4rem', borderColor: '#007bff', color: '#007bff', textDecoration: 'none' }}
                     title="Admin Panel"
@@ -611,7 +612,7 @@ export default function Counter({
                   <i className="fas fa-history"></i>
                 </button>
               )}
-              {userPermissions.role === 'admin' && (
+              {userPermissions.canEditMarkers && (
                 <Link href="/admin" className="btn btn-sm btn-outline-primary"
                   style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem', borderColor: '#007bff', color: '#007bff', textDecoration: 'none' }}
                   title="Admin Panel"

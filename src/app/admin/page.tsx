@@ -96,8 +96,8 @@ export default function AdminPage() {
           .eq('email', session.user.email)
           .single();
 
-        if (error || !userData || userData.role !== 'admin') {
-          alert('Access denied. Admin privileges required.');
+        if (error || !userData || !userData.can_edit_markers) {
+          alert('Access denied. Marker editing privileges required.');
           router.push('/');
           return;
         }
