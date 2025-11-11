@@ -208,19 +208,15 @@ const createStorageAdapter = () => {
   return {
     getItem: (key: string) => {
       if (typeof window === 'undefined') return null;
-      console.log('🔵 Storage adapter getItem called:', key);
       const value = localStorage.getItem(key);
-      console.log('🔵 Storage adapter getItem result:', value ? 'found' : 'null');
       return value;
     },
     setItem: (key: string, value: string) => {
       if (typeof window === 'undefined') return;
-      console.log('🔵 Storage adapter setItem called:', key);
       localStorage.setItem(key, value);
     },
     removeItem: (key: string) => {
       if (typeof window === 'undefined') return;
-      console.log('🔵 Storage adapter removeItem called:', key);
       localStorage.removeItem(key);
     },
   };
@@ -311,16 +307,11 @@ export const clearSupabaseIndexedDB = async (): Promise<void> => {
 
       for (const db of databases) {
         if (db.name?.includes('supabase')) {
-          console.log('🔵 Deleting IndexedDB:', db.name);
           const deletePromise = new Promise<void>((resolve, reject) => {
             const request = indexedDB.deleteDatabase(db.name!);
-            request.onsuccess = () => {
-              console.log('✅ Deleted IndexedDB:', db.name);
-              resolve();
-            };
+            request.onsuccess = () => resolve();
             request.onerror = () => reject(request.error);
             request.onblocked = () => {
-              console.warn('⚠️ IndexedDB deletion blocked:', db.name);
               // Resolve anyway after a short delay
               setTimeout(() => resolve(), 100);
             };
@@ -357,31 +348,25 @@ export const getSessionDirectly = (): { session: any; error: any } => {
   if (typeof window === 'undefined') return { session: null, error: null };
 
   try {
-    console.log('🔵 getSessionDirectly: Reading from localStorage...');
-
     // Supabase stores session in localStorage with key pattern: sb-<project-ref>-auth-token
     const keys = Object.keys(localStorage);
     const authKey = keys.find(key => key.startsWith('sb-') && key.endsWith('-auth-token'));
 
     if (!authKey) {
-      console.log('🔵 getSessionDirectly: No auth key found in localStorage');
       return { session: null, error: null };
     }
 
-    console.log('🔵 getSessionDirectly: Found auth key:', authKey);
     const authData = localStorage.getItem(authKey);
 
     if (!authData) {
-      console.log('🔵 getSessionDirectly: Auth key exists but no data');
       return { session: null, error: null };
     }
 
     const parsed = JSON.parse(authData);
-    console.log('🔵 getSessionDirectly: Parsed session data, has session:', !!parsed);
 
     return { session: parsed, error: null };
   } catch (error) {
-    console.error('🔴 getSessionDirectly error:', error);
+    console.error('getSessionDirectly error:', error);
     return { session: null, error };
   }
 };
@@ -391,17 +376,13 @@ export const cleanStaleSession = async (): Promise<boolean> => {
   if (typeof window === 'undefined') return false;
 
   try {
-    console.log('🔵 cleanStaleSession: Starting session check...');
-
     // WORKAROUND: Use direct localStorage read instead of supabase.auth.getSession()
     // This bypasses the hanging issue on Vercel production
     const { session, error } = getSessionDirectly();
 
-    console.log('🔵 cleanStaleSession: getSession completed', { hasSession: !!session, hasError: !!error });
-
     // Handle session errors - clear cache and return false
     if (error) {
-      console.warn('🔴 Session validation error, clearing storage:', error.message);
+      console.warn('Session validation error, clearing storage:', error.message);
 
       // Clear localStorage Supabase keys
       const keys = Object.keys(localStorage);
@@ -417,8 +398,6 @@ export const cleanStaleSession = async (): Promise<boolean> => {
 
     // No session found - clear cache
     if (!session) {
-      console.log('🔵 No session found, clearing stale cache');
-
       const keys = Object.keys(localStorage);
       keys.filter(key => key.includes('supabase')).forEach(key => localStorage.removeItem(key));
 
@@ -433,7 +412,7 @@ export const cleanStaleSession = async (): Promise<boolean> => {
     const now = new Date();
 
     if (expiresAt && now > expiresAt) {
-      console.warn('🔴 Session expired, clearing storage');
+      console.warn('Session expired, clearing storage');
 
       const keys = Object.keys(localStorage);
       keys.filter(key => key.includes('supabase')).forEach(key => localStorage.removeItem(key));

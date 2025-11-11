@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import { CounterData, FilterState, User, Airport, Landingsplass } from '@/types';
 import { supabase, completeLogout } from '@/lib/supabase';
 import { exportCompletedLandingsplassToPDF } from '@/lib/pdfExport';
@@ -396,8 +397,8 @@ export default function Counter({
                   )}
                 </button>
                 {userPermissions.canViewLogs && (
-                  <button 
-                    className="btn btn-sm btn-outline-info" 
+                  <button
+                    className="btn btn-sm btn-outline-info"
                     style={{ fontSize: '0.6rem', padding: '0.2rem 0.4rem', borderColor: '#17a2b8', color: '#17a2b8' }}
                     title="Vis brukerlogger"
                     onClick={showUserLogs}
@@ -405,8 +406,16 @@ export default function Counter({
                     <i className="fas fa-history"></i>
                   </button>
                 )}
-                <button 
-                  className="btn btn-sm btn-outline-secondary" 
+                {userPermissions.role === 'admin' && (
+                  <Link href="/admin" className="btn btn-sm btn-outline-primary"
+                    style={{ fontSize: '0.6rem', padding: '0.2rem 0.4rem', borderColor: '#007bff', color: '#007bff', textDecoration: 'none' }}
+                    title="Admin Panel"
+                  >
+                    <i className="fas fa-cog"></i>
+                  </Link>
+                )}
+                <button
+                  className="btn btn-sm btn-outline-secondary"
                   style={{ fontSize: '0.6rem', padding: '0.2rem 0.4rem', borderColor: '#dee2e6', color: '#6c757d' }}
                   title="Logg ut"
                   onClick={handleLogout}
@@ -593,8 +602,8 @@ export default function Counter({
                 )}
               </button>
               {userPermissions.canViewLogs && (
-                <button 
-                  className="btn btn-sm btn-outline-info logs-btn" 
+                <button
+                  className="btn btn-sm btn-outline-info logs-btn"
                   style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem', borderColor: '#17a2b8', color: '#17a2b8' }}
                   title="Vis brukerlogger"
                   onClick={showUserLogs}
@@ -602,8 +611,16 @@ export default function Counter({
                   <i className="fas fa-history"></i>
                 </button>
               )}
-              <button 
-                className="btn btn-sm btn-outline-secondary logout-btn" 
+              {userPermissions.role === 'admin' && (
+                <Link href="/admin" className="btn btn-sm btn-outline-primary"
+                  style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem', borderColor: '#007bff', color: '#007bff', textDecoration: 'none' }}
+                  title="Admin Panel"
+                >
+                  <i className="fas fa-cog"></i>
+                </Link>
+              )}
+              <button
+                className="btn btn-sm btn-outline-secondary logout-btn"
                 style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem', borderColor: '#dee2e6', color: '#6c757d' }}
                 title="Logg ut"
                 onClick={handleLogout}

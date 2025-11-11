@@ -1380,7 +1380,9 @@ export default function MapContainer({
       if (leafletMapRef.current) {
         // Small delay to ensure CSS changes have been applied
         setTimeout(() => {
-          leafletMapRef.current.invalidateSize();
+          if (leafletMapRef.current) {
+            leafletMapRef.current.invalidateSize();
+          }
         }, 100);
       }
     };
