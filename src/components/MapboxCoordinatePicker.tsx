@@ -32,6 +32,14 @@ export function MapboxCoordinatePicker({
   const [lng, setLng] = useState<number>(initialLng || 8.0);
   const [mapStyle, setMapStyle] = useState<'outdoors' | 'satellite'>('outdoors');
 
+  // Update lat/lng when initialLat/initialLng change (e.g., when editing different markers)
+  useEffect(() => {
+    if (open) {
+      setLat(initialLat || 58.5);
+      setLng(initialLng || 8.0);
+    }
+  }, [open, initialLat, initialLng]);
+
   useEffect(() => {
     if (!open) {
       // Clean up when dialog closes
