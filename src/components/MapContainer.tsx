@@ -45,6 +45,32 @@ export default function MapContainer({
   // Powerlines state
   const [powerlinesVisible, setPowerlinesVisible] = useState(false);
 
+  // Helper function: Calculate distance between two points using Haversine formula
+  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+    const R = 6371; // Earth's radius in kilometers
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  };
+
+  // Helper function: Add distance label to a polyline
+  const addDistanceLabel = (line: any, distance: number) => {
+    const L = (window as any).L;
+    const tooltip = L.tooltip({
+      permanent: true,
+      direction: 'center',
+      className: 'connection-distance-label',
+      offset: [0, 0]
+    }).setContent(`${distance.toFixed(1)} km`);
+
+    line.bindTooltip(tooltip);
+  };
+
   // GPS Tracking state
   const [gpsTrackingActive, setGpsTrackingActive] = useState(false);
   const [helicopterPosition, setHelicopterPosition] = useState<{ lat: number; lng: number; accuracy: number; altitude: number | null; speed: number | null; heading: number | null } | null>(null);
@@ -250,6 +276,14 @@ export default function MapContainer({
             const landingsplassPos = [landingsplass.latitude, landingsplass.longitude];
             const airportPos = [airport.latitude, airport.longitude];
 
+            // Calculate distance between the two points
+            const distance = calculateDistance(
+              landingsplass.latitude,
+              landingsplass.longitude,
+              airport.latitude,
+              airport.longitude
+            );
+
                          const L = (window as any).L;
              const line = L.polyline([landingsplassPos, airportPos], {
               color: '#007bff',
@@ -258,6 +292,9 @@ export default function MapContainer({
               dashArray: '4,4',
               className: 'all-connection-line'
             }).addTo(leafletMapRef.current);
+
+            // Add distance label to the line
+            addDistanceLabel(line, distance);
 
             allConnectionLinesRef.current.push(line);
           });
@@ -357,6 +394,14 @@ export default function MapContainer({
         const landingsplassPos = [landingsplass.latitude, landingsplass.longitude];
         const airportPos = [airport.latitude, airport.longitude];
 
+        // Calculate distance between the two points
+        const distance = calculateDistance(
+          landingsplass.latitude,
+          landingsplass.longitude,
+          airport.latitude,
+          airport.longitude
+        );
+
         const L = (window as any).L;
         const line = L.polyline([landingsplassPos, airportPos], {
           color: '#ff0000', // Red for individual connections
@@ -364,6 +409,9 @@ export default function MapContainer({
           opacity: 0.8,
           className: 'individual-connection-line'
         }).addTo(leafletMapRef.current);
+
+        // Add distance label to the line
+        addDistanceLabel(line, distance);
 
         individualConnectionLinesRef.current.push(line);
       });
@@ -459,7 +507,7 @@ export default function MapContainer({
   // GPS Tracking & Proximity Warning Functions
 
   // Calculate distance between two coordinates using Haversine formula (returns meters)
-  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+  const calculateDistanceInMeters = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
     const R = 6371000; // Earth's radius in meters
     const φ1 = lat1 * Math.PI / 180;
     const φ2 = lat2 * Math.PI / 180;
@@ -500,7 +548,7 @@ export default function MapContainer({
       yy = y1 + param * D;
     }
 
-    return calculateDistance(px, py, xx, yy);
+    return calculateDistanceInMeters(px, py, xx, yy);
   };
 
   // Check proximity to powerlines from PMTiles
