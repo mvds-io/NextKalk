@@ -37,19 +37,14 @@ export default function AuthGuard({ children }: AuthGuardProps) {
 
   const loadUserData = useCallback(async (email: string) => {
     try {
-      console.log('🔵 loadUserData: Starting for email:', email);
-
       // Check current auth state using direct localStorage read
       getSessionDirectly();
 
-      console.log('🔵 loadUserData: Querying users table...');
       // Try direct query first to bypass retry logic
       const result = await supabase
         .from('users')
         .select('*')
         .eq('email', email);
-
-      console.log('🔵 loadUserData: Query completed');
 
 
       if (result.error) {
@@ -128,8 +123,6 @@ export default function AuthGuard({ children }: AuthGuardProps) {
     try {
       // CRITICAL: Clean and validate any stale sessions from cache first
       // Add timeout to prevent hanging on Vercel production
-      console.log('🔵 Starting cleanStaleSession with timeout...');
-
       const sessionCheckPromise = cleanStaleSession();
       const timeoutPromise = new Promise<boolean>((_, reject) => {
         setTimeout(() => reject(new Error('cleanStaleSession timeout after 3s')), 3000);
@@ -146,8 +139,6 @@ export default function AuthGuard({ children }: AuthGuardProps) {
         setIsLoading(false);
         return;
       }
-
-      console.log('🔵 cleanStaleSession completed:', sessionIsValid);
 
       if (!sessionIsValid) {
         console.log('No valid session found after cleaning stale sessions');
@@ -195,9 +186,7 @@ export default function AuthGuard({ children }: AuthGuardProps) {
 
       // Get session - it's already been validated by cleanStaleSession
       // Use getSessionDirectly to avoid hanging on Vercel production
-      console.log('🔵 Getting session directly from localStorage...');
       const { session, error } = getSessionDirectly();
-      console.log('🔵 Got session:', { hasSession: !!session, hasError: !!error });
 
       // Clear timeout and countdown since we got a response
       if (timeoutId) {
@@ -274,7 +263,13 @@ export default function AuthGuard({ children }: AuthGuardProps) {
   useEffect(() => {
     let mounted = true;
 
-    checkAuthentication();
+    // Only check authentication if user is not already loaded
+    if (!user) {
+      checkAuthentication();
+    } else {
+      // User already authenticated, just verify session is still valid
+      setIsLoading(false);
+    }
 
     // DISABLED: onAuthStateChange causes hanging on Vercel production
     // The listener internally calls getSession() which hangs
@@ -292,7 +287,6 @@ export default function AuthGuard({ children }: AuthGuardProps) {
     const handleStorageChange = (e: StorageEvent) => {
       // Check for Supabase auth token changes (using actual key pattern)
       if (e.key?.startsWith('sb-') && e.key?.endsWith('-auth-token')) {
-        console.log('🔵 Session storage changed, rechecking authentication...');
         // Session changed - recheck authentication
         checkAuthentication();
       }
@@ -302,12 +296,10 @@ export default function AuthGuard({ children }: AuthGuardProps) {
     // Check if session might be expired without calling validateSession
     const handleVisibilityChange = async () => {
       if (document.visibilityState === 'visible') {
-        console.log('🔵 Tab became visible, checking session...');
         // Use direct localStorage read to avoid hanging
         const { session, error } = getSessionDirectly();
 
         if (error || !session) {
-          console.warn('🔴 Session invalid after returning to tab');
           setSessionExpired(true);
           setIsLoading(false);
         }

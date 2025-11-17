@@ -371,49 +371,54 @@ export const getSessionDirectly = (): { session: any; error: any } => {
   }
 };
 
+// Check session and refresh if expired or expiring soon
+export const checkAndRefreshSession = async (): Promise<Date | null> => {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    const { session, error } = getSessionDirectly();
+
+    // No session or error reading session
+    if (error || !session) {
+      return null;
+    }
+
+    const expiresAt = session.expires_at ? new Date(session.expires_at * 1000) : null;
+    const now = new Date();
+
+    // If session is expired or expiring within 10 minutes, try to refresh
+    const REFRESH_THRESHOLD = 10 * 60 * 1000; // 10 minutes
+    if (expiresAt && (now > expiresAt || (expiresAt.getTime() - now.getTime()) < REFRESH_THRESHOLD)) {
+      // Try to refresh the session using Supabase's refresh token
+      const { data, error: refreshError } = await supabase.auth.refreshSession();
+
+      if (refreshError || !data.session) {
+        console.error('Failed to refresh session:', refreshError);
+        return null;
+      }
+
+      return new Date(data.session.expires_at! * 1000);
+    }
+
+    // Session is still valid
+    return expiresAt;
+  } catch (error) {
+    console.error('Error checking/refreshing session:', error);
+    return null;
+  }
+};
+
 // Helper function to check and clean stale sessions
 export const cleanStaleSession = async (): Promise<boolean> => {
   if (typeof window === 'undefined') return false;
 
   try {
-    // WORKAROUND: Use direct localStorage read instead of supabase.auth.getSession()
-    // This bypasses the hanging issue on Vercel production
-    const { session, error } = getSessionDirectly();
+    // Check if session is expired and try to refresh it
+    const expiresAt = await checkAndRefreshSession();
 
-    // Handle session errors - clear cache and return false
-    if (error) {
-      console.warn('Session validation error, clearing storage:', error.message);
-
-      // Clear localStorage Supabase keys
-      const keys = Object.keys(localStorage);
-      keys.filter(key => key.includes('supabase')).forEach(key => localStorage.removeItem(key));
-
-      // Selectively clear sessionStorage
-      const sessionKeys = Object.keys(sessionStorage);
-      sessionKeys.filter(key => key.includes('supabase')).forEach(key => sessionStorage.removeItem(key));
-
-      updateSessionHealth(false, true);
-      return false;
-    }
-
-    // No session found - clear cache
-    if (!session) {
-      const keys = Object.keys(localStorage);
-      keys.filter(key => key.includes('supabase')).forEach(key => localStorage.removeItem(key));
-
-      const sessionKeys = Object.keys(sessionStorage);
-      sessionKeys.filter(key => key.includes('supabase')).forEach(key => sessionStorage.removeItem(key));
-
-      return false;
-    }
-
-    // Check if session is expired
-    const expiresAt = session.expires_at ? new Date(session.expires_at * 1000) : null;
-    const now = new Date();
-
-    if (expiresAt && now > expiresAt) {
-      console.warn('Session expired, clearing storage');
-
+    if (!expiresAt) {
+      // No valid session, clear storage
+      console.warn('No valid session found, clearing storage');
       const keys = Object.keys(localStorage);
       keys.filter(key => key.includes('supabase')).forEach(key => localStorage.removeItem(key));
 
@@ -424,7 +429,7 @@ export const cleanStaleSession = async (): Promise<boolean> => {
       return false;
     }
 
-    // Session is valid - no cache clearing needed
+    // Session is valid (either was valid or successfully refreshed)
     updateSessionHealth(true);
     return true;
   } catch (error) {

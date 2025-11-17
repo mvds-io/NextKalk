@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useTableNames } from '@/contexts/TableNamesContext';
 
 interface UserLog {
   id: number;
@@ -22,6 +23,7 @@ interface UserLogsModalProps {
 }
 
 export default function UserLogsModal({ isOpen, onClose }: UserLogsModalProps) {
+  const { tableNames } = useTableNames();
   const [logs, setLogs] = useState<UserLog[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [currentOffset, setCurrentOffset] = useState(0);
@@ -35,6 +37,7 @@ export default function UserLogsModal({ isOpen, onClose }: UserLogsModalProps) {
   const filtersRef = useRef(filters);
 
   const fetchUserLogs = useCallback(async (limit = 50, offset = 0, filterParams = filters) => {
+    if (!tableNames) return [];
     let query = supabase
       .from('user_action_logs')
       .select('*')
@@ -70,22 +73,22 @@ export default function UserLogsModal({ isOpen, onClose }: UserLogsModalProps) {
           try {
             // First try vass_lasteplass table
             const { data: vassData } = await supabase
-              .from('vass_lasteplass')
+              .from(tableNames.vass_lasteplass)
               .select('lp, kode')
               .eq('id', log.target_id)
               .single();
-            
+
             if (vassData) {
               return { ...log, lasteplass_code: vassData.kode, lasteplass_name: vassData.lp };
             }
-            
-            // If not found, try landingsplass table
+
+            // If not found, try landingsplass table (fallback for old data)
             const { data: landingData } = await supabase
               .from('landingsplass')
               .select('lp')
               .eq('id', log.target_id)
               .single();
-              
+
             if (landingData) {
               return { ...log, lasteplass_name: landingData.lp };
             }
@@ -98,7 +101,7 @@ export default function UserLogsModal({ isOpen, onClose }: UserLogsModalProps) {
     );
 
     return enhancedLogs;
-  }, []);
+  }, [tableNames]);
 
   const loadUserLogs = useCallback(async (reset = true, filterParams = filters) => {
     setIsLoading(true);

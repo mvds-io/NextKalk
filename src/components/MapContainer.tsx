@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { Airport, Landingsplass, KalkInfo, User, FilterState } from '@/types';
 import { supabase, getConnectionStatus } from '@/lib/supabase';
+import { useTableNames } from '@/contexts/TableNamesContext';
 
 interface MapContainerProps {
   airports: Airport[];
@@ -25,6 +26,7 @@ export default function MapContainer({
   onMarkerSelect,
   onMapReady
 }: MapContainerProps) {
+  const { tableNames } = useTableNames();
   const mapRef = useRef<HTMLDivElement>(null);
   const leafletMapRef = useRef<any>(null);
   const markersLayerRef = useRef<any>(null);
@@ -222,8 +224,9 @@ export default function MapContainer({
 
   // Connection functions
   const showAllConnections = async () => {
+    if (!tableNames) return;
     if (!leafletMapRef.current || !markersLayerRef.current) return;
-    
+
     // Update button state
     const connectionsButton = document.getElementById('toggle-all-connections');
     if (connectionsButton) {
@@ -255,10 +258,10 @@ export default function MapContainer({
         try {
           // Fetch associated airports
           const { data: associations, error } = await supabase
-            .from('vass_associations')
+            .from(tableNames.vass_associations)
             .select(`
               airport_id,
-              vass_vann:airport_id (
+              ${tableNames.vass_vann}:airport_id (
                 id, name, latitude, longitude
               )
             `)
@@ -270,7 +273,7 @@ export default function MapContainer({
 
           // Create connection lines
           associations.forEach((assoc: any) => {
-            const airport = assoc.vass_vann;
+            const airport = assoc[tableNames.vass_vann];
             if (!airport) return;
 
             const landingsplassPos = [landingsplass.latitude, landingsplass.longitude];
@@ -354,8 +357,9 @@ export default function MapContainer({
 
   // Individual landingsplass connection functions
   const showIndividualConnections = async (landingsplassId: number) => {
+    if (!tableNames) return;
     if (!leafletMapRef.current) return;
-    
+
     // Don't show individual connections if all connections are already visible
     if (allConnectionsVisible) {
       return;
@@ -371,10 +375,10 @@ export default function MapContainer({
 
       // Fetch associated airports
       const { data: associations, error } = await supabase
-        .from('vass_associations')
+        .from(tableNames.vass_associations)
         .select(`
           airport_id,
-          vass_vann:airport_id (
+          ${tableNames.vass_vann}:airport_id (
             id, name, latitude, longitude
           )
         `)
@@ -388,7 +392,7 @@ export default function MapContainer({
 
       // Create connection lines
       associations.forEach((assoc: any) => {
-        const airport = assoc.vass_vann;
+        const airport = assoc[tableNames.vass_vann];
         if (!airport) return;
 
         const landingsplassPos = [landingsplass.latitude, landingsplass.longitude];
@@ -1474,9 +1478,10 @@ export default function MapContainer({
 
     // Toggle done status
     (window as any).handleToggleDone = async (id: number, type: string) => {
+      if (!tableNames) return;
       try {
-        const tableName = type === 'airport' ? 'vass_vann' : 'vass_lasteplass';
-        
+        const tableName = type === 'airport' ? tableNames.vass_vann : tableNames.vass_lasteplass;
+
         // Get current status directly from database to ensure we have the latest state
         const { data: currentData, error: fetchError } = await supabase
           .from(tableName)
@@ -1514,11 +1519,11 @@ export default function MapContainer({
         // If this is a landingsplass, cascade the status change to all associated airports
         if (type === 'landingsplass') {
           const action = newDoneStatus ? 'done' : 'undone';
-          
+
           try {
             // Get all associated airports for this landingsplass
             const { data: associations, error: assocError } = await supabase
-              .from('vass_associations')
+              .from(tableNames.vass_associations)
               .select('airport_id')
               .eq('landingsplass_id', id);
 
@@ -1526,10 +1531,10 @@ export default function MapContainer({
               console.warn('Could not fetch associations:', assocError);
             } else if (associations && associations.length > 0) {
               const airportIds = associations.map(assoc => assoc.airport_id);
-              
+
               // Update all associated airports to match the landingsplass status
               const { error: updateError } = await supabase
-                .from('vass_vann')
+                .from(tableNames.vass_vann)
                 .update({ is_done: newDoneStatus })
                 .in('id', airportIds);
 
@@ -1632,8 +1637,9 @@ export default function MapContainer({
 
     // Handle GPX export
     (window as any).handleGPXExport = async (id: number, type: string) => {
+      if (!tableNames) return;
       try {
-        const item = type === 'airport' 
+        const item = type === 'airport'
           ? airports.find(a => a.id === id)
           : landingsplasser.find(l => l.id === id);
 
@@ -1649,9 +1655,9 @@ export default function MapContainer({
           try {
             // Fetch associated waters for this landingsplass
             const { data: associations, error } = await supabase
-              .from('vass_associations')
+              .from(tableNames.vass_associations)
               .select(`
-                vass_vann:airport_id (
+                ${tableNames.vass_vann}:airport_id (
                   id, name, latitude, longitude, tonn
                 )
               `)
@@ -1684,14 +1690,15 @@ export default function MapContainer({
             // Add associated waters
             if (associations && associations.length > 0) {
               associations.forEach((assoc: any) => {
-                if (assoc.vass_vann && assoc.vass_vann.latitude && assoc.vass_vann.longitude) {
-                  const waterName = assoc.vass_vann.name || 'Unknown Water';
-                  const tonnage = assoc.vass_vann.tonn;
+                const water = assoc[tableNames.vass_vann];
+                if (water && water.latitude && water.longitude) {
+                  const waterName = water.name || 'Unknown Water';
+                  const tonnage = water.tonn;
                   const formattedName = tonnage ? `(${tonnage}) ${waterName}` : waterName;
-                  
+
                   waypoints.push({
-                    lat: assoc.vass_vann.latitude,
-                    lng: assoc.vass_vann.longitude,
+                    lat: water.latitude,
+                    lng: water.longitude,
                     name: formattedName,
                     desc: 'Associated Water - Exported from Kalk Planner 2025'
                   });
@@ -1756,6 +1763,7 @@ export default function MapContainer({
 
     // Handle color change
     (window as any).handleColorChange = async (id: number, color: string) => {
+      if (!tableNames) return;
       // Check if user has permission to edit markers
       if (!user?.can_edit_markers) {
         alert('Du har ikke tillatelse til å endre markørfarger.');
@@ -1764,7 +1772,7 @@ export default function MapContainer({
 
       try {
         const { error } = await supabase
-          .from('vass_vann')
+          .from(tableNames.vass_vann)
           .update({ marker_color: color })
           .eq('id', id);
 
@@ -1811,6 +1819,7 @@ export default function MapContainer({
     };
 
     (window as any).saveComment = async (id: number, type: string) => {
+      if (!tableNames) return;
       // Check if user has permission to edit markers (which includes comments)
       if (!user?.can_edit_markers) {
         alert('Du har ikke tillatelse til å endre kommentarer.');
@@ -1822,8 +1831,8 @@ export default function MapContainer({
         if (!textarea) return;
 
         const comment = textarea.value.trim();
-        const tableName = type === 'airport' ? 'vass_vann' : 'vass_lasteplass';
-        
+        const tableName = type === 'airport' ? tableNames.vass_vann : tableNames.vass_lasteplass;
+
         const { error } = await supabase
           .from(tableName)
           .update({ 
@@ -1899,8 +1908,9 @@ export default function MapContainer({
 
         // Handle image upload
     (window as any).handleImageUpload = async (id: number, type: string, file: File) => {
+      if (!tableNames) return;
       try {
-        const tableName = type === 'airport' ? 'vass_vann' : 'vass_lasteplass';
+        const tableName = type === 'airport' ? tableNames.vass_vann : tableNames.vass_lasteplass;
         const folderName = type === 'airport' ? 'airport_images' : 'landingsplass_images';
         
         // Upload to Supabase Storage
@@ -1920,7 +1930,7 @@ export default function MapContainer({
           .getPublicUrl(filePath);
 
         // Save reference to database - use correct table based on type
-        const imageTable = type === 'airport' ? 'vass_vann_images' : 'vass_lasteplass_images';
+        const imageTable = type === 'airport' ? tableNames.vass_vann_images : tableNames.vass_lasteplass_images;
         const insertData = {
           marker_id: id,
           image_url: publicUrl,
@@ -2139,13 +2149,14 @@ export default function MapContainer({
 
     // Delete image function
     (window as any).deleteImage = async (imageId: number, type: string, markerId: number) => {
+      if (!tableNames) return;
       if (!confirm('Er du sikker på at du vil slette dette bildet?')) {
         return;
       }
 
       try {
-        const imageTable = type === 'airport' ? 'vass_vann_images' : 'vass_lasteplass_images';
-        
+        const imageTable = type === 'airport' ? tableNames.vass_vann_images : tableNames.vass_lasteplass_images;
+
         // Get image info first for storage deletion
         const { data: imgData, error: fetchError } = await supabase
           .from(imageTable)
@@ -2218,11 +2229,11 @@ export default function MapContainer({
     };
 
     document.addEventListener('click', handleClickOutside);
-    
+
     return () => {
       document.removeEventListener('click', handleClickOutside);
     };
-  }, []);
+  }, [tableNames]);
 
   // Re-setup global functions when data changes
   useEffect(() => {
@@ -2232,7 +2243,7 @@ export default function MapContainer({
         setupGlobalFunctions(L, leafletMapRef.current, user, airports, landingsplasser, onDataUpdate);
       }
     }
-  }, [isMapReady, user, airports, landingsplasser, onDataUpdate]);
+  }, [isMapReady, user, airports, landingsplasser, onDataUpdate, setupGlobalFunctions, tableNames]);
 
   // Export to GPX function (single waypoint)
   const exportToGPX = (lat: number, lng: number, name: string) => {
@@ -2377,8 +2388,9 @@ ${waypointElements}
 
   // Load and display images
   const loadAndDisplayImages = async (id: number, type: string) => {
+    if (!tableNames) return;
     const loadingId = `images-${type}-${id}`;
-    
+
     try {
       // Check if this is still the current loading operation
       if (currentLoadingIdRef.current !== `${type}-${id}`) {
@@ -2392,8 +2404,8 @@ ${waypointElements}
       const abortController = createAbortController(loadingId);
 
       // Use the correct table based on marker type
-      const imageTable = type === 'airport' ? 'vass_vann_images' : 'vass_lasteplass_images';
-      
+      const imageTable = type === 'airport' ? tableNames.vass_vann_images : tableNames.vass_lasteplass_images;
+
       const { data: images, error } = await supabase
         .from(imageTable)
         .select('*')
@@ -2567,8 +2579,9 @@ ${waypointElements}
 
   // Load associations
   const loadCurrentAssociations = async (airportId: number) => {
+    if (!tableNames) return;
     const loadingId = `associations-airport-${airportId}`;
-    
+
     try {
       // Check if this is still the current loading operation
       if (currentLoadingIdRef.current !== `airport-${airportId}`) {
@@ -2579,10 +2592,10 @@ ${waypointElements}
       const abortController = createAbortController(loadingId);
 
       const { data: associations, error } = await supabase
-        .from('vass_associations')
+        .from(tableNames.vass_associations)
         .select(`
           id,
-          landingsplass:vass_lasteplass(id, lp, latitude, longitude)
+          landingsplass:${tableNames.vass_lasteplass}(id, lp, latitude, longitude)
         `)
         .eq('airport_id', airportId)
         .abortSignal(abortController.signal);
@@ -2631,8 +2644,9 @@ ${waypointElements}
 
   // Load related waters for landingsplasser
   const loadRelatedWaters = async (landingsplassId: number) => {
+    if (!tableNames) return;
     const loadingId = `waters-landingsplass-${landingsplassId}`;
-    
+
     try {
       // Check if this is still the current loading operation
       if (currentLoadingIdRef.current !== `landingsplass-${landingsplassId}`) {
@@ -2643,10 +2657,10 @@ ${waypointElements}
       const abortController = createAbortController(loadingId);
 
       const { data: associations, error } = await supabase
-        .from('vass_associations')
+        .from(tableNames.vass_associations)
         .select(`
           airport_id,
-          vass_vann:airport_id (
+          ${tableNames.vass_vann}:airport_id (
             id, name, tonn
           )
         `)
@@ -2669,11 +2683,11 @@ ${waypointElements}
       }
 
       const watersHTML = associations.map((assoc: any) => {
-        const water = assoc.vass_vann;
+        const water = assoc[tableNames.vass_vann];
         if (!water) return '';
-        
+
         const truncatedName = water.name.length > 25 ? water.name.substring(0, 25) + '...' : water.name;
-        
+
         return `
           <div class="water-item d-flex justify-content-between align-items-center py-1" style="font-size: 0.7rem; border-bottom: 1px solid #e9ecef;">
             <span class="water-name" style="color: #495057;">
@@ -2714,8 +2728,9 @@ ${waypointElements}
 
   // Load contact persons for landingsplasser
   const loadContactPersons = async (landingsplassId: number) => {
+    if (!tableNames) return;
     const loadingId = `contacts-landingsplass-${landingsplassId}`;
-    
+
     try {
       // Check if this is still the current loading operation
       if (currentLoadingIdRef.current !== `landingsplass-${landingsplassId}`) {
@@ -2726,10 +2741,10 @@ ${waypointElements}
       const abortController = createAbortController(loadingId);
 
       const { data: associations, error } = await supabase
-        .from('vass_associations')
+        .from(tableNames.vass_associations)
         .select(`
           airport_id,
-          vass_vann:airport_id (
+          ${tableNames.vass_vann}:airport_id (
             forening, kontaktperson, phone, tonn
           )
         `)
@@ -2754,9 +2769,9 @@ ${waypointElements}
       // Extract and deduplicate contact persons, summing tonnage
       const contactPersonsMap = new Map();
       associations.forEach((assoc: any) => {
-        const water = assoc.vass_vann;
+        const water = assoc[tableNames.vass_vann];
         if (!water) return;
-        
+
         const { forening, kontaktperson, phone, tonn } = water;
         if (kontaktperson || forening || phone) {
           const phoneStr = phone ? String(phone) : '';

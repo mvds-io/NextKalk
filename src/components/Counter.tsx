@@ -9,6 +9,8 @@ import UserLogsModal from './UserLogsModal';
 import { SkeletonCounter } from './SkeletonLoader';
 import SearchModal from './SearchModal';
 import SearchResultModal from './SearchResultModal';
+import { useTableNames } from '@/contexts/TableNamesContext';
+import { getAppConfig } from '@/lib/tableNames';
 
 interface CounterProps {
   counterData: CounterData;
@@ -46,6 +48,7 @@ export default function Counter({
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [showResultModal, setShowResultModal] = useState(false);
   const [selectedSearchResult, setSelectedSearchResult] = useState<Airport | Landingsplass | null>(null);
+  const [activeDatabase, setActiveDatabase] = useState<{ year: string; prefix: string } | null>(null);
 
   const getUserPermissions = useCallback(async () => {
     if (!user) return {};
@@ -82,6 +85,26 @@ export default function Counter({
       getUserPermissions();
     }
   }, [user, getUserPermissions]);
+
+  // Load active database configuration
+  useEffect(() => {
+    const loadActiveDatabase = async () => {
+      const config = await getAppConfig();
+      if (config) {
+        setActiveDatabase({
+          year: config.active_year,
+          prefix: config.active_prefix
+        });
+      } else {
+        // Default to 'current' if no config found
+        setActiveDatabase({
+          year: 'current',
+          prefix: ''
+        });
+      }
+    };
+    loadActiveDatabase();
+  }, []);
 
   const handleCountyChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const county = e.target.value;
@@ -368,6 +391,20 @@ export default function Counter({
             {/* User authentication UI - mobile */}
             {user ? (
               <div className="user-info-mobile d-flex align-items-center gap-1">
+                {activeDatabase && (
+                  <span
+                    className="badge bg-secondary"
+                    style={{
+                      fontSize: '0.55rem',
+                      padding: '0.25rem 0.4rem',
+                      opacity: 0.7
+                    }}
+                    title={`Active database: ${activeDatabase.year === 'current' ? 'Current (no archive)' : activeDatabase.year}${activeDatabase.prefix ? ` - ${activeDatabase.prefix}` : ''}`}
+                  >
+                    <i className="fas fa-database me-1" style={{ fontSize: '0.5rem' }}></i>
+                    {activeDatabase.year === 'current' ? 'Current' : `${activeDatabase.year}${activeDatabase.prefix ? `-${activeDatabase.prefix}` : ''}`}
+                  </span>
+                )}
                 <div className="user-details d-flex align-items-center gap-1 px-2 py-1 rounded" style={{ background: 'rgba(255,255,255,0.1)', color: '#6c757d', fontSize: '0.65rem' }}>
                   <i className="fas fa-user-circle" style={{ fontSize: '12px' }}></i>
                   <span>{userPermissions.userRecord?.display_name || user.email?.split('@')[0]}</span>
@@ -564,15 +601,25 @@ export default function Counter({
                 </button>
               )}
             </div>
-            <div className="legend-item" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem', color: '#6c757d' }}>
-              <i className="fas fa-info-circle" style={{ fontSize: '0.65rem' }}></i>
-              <span>Høyreklikk for å legge til markør</span>
-            </div>
           </div>
 
           {/* User authentication UI - desktop */}
           {user ? (
             <div className="user-info-top d-flex align-items-center gap-2" style={{ flexShrink: 0 }}>
+              {activeDatabase && (
+                <span
+                  className="badge bg-secondary"
+                  style={{
+                    fontSize: '0.65rem',
+                    padding: '0.3rem 0.5rem',
+                    opacity: 0.7
+                  }}
+                  title={`Active database: ${activeDatabase.year === 'current' ? 'Current (no archive)' : activeDatabase.year}${activeDatabase.prefix ? ` - ${activeDatabase.prefix}` : ''}`}
+                >
+                  <i className="fas fa-database me-1" style={{ fontSize: '0.6rem' }}></i>
+                  {activeDatabase.year === 'current' ? 'Current' : `${activeDatabase.year}${activeDatabase.prefix ? `-${activeDatabase.prefix}` : ''}`}
+                </span>
+              )}
               <div className="user-details d-flex align-items-center gap-2 px-2 py-1 rounded-2" style={{ background: 'rgba(255,255,255,0.1)', color: '#6c757d', fontSize: '0.75rem' }}>
                 <i className="fas fa-user-circle" style={{ fontSize: '16px' }}></i>
                 <span>{userPermissions.userRecord?.display_name || user.email?.split('@')[0]}</span>

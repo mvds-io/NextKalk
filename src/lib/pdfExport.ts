@@ -1,4 +1,5 @@
 import { supabase, getSessionDirectly } from './supabase';
+import { getActiveTableNames } from './tableNames';
 
 declare global {
   interface Window {
@@ -38,9 +39,12 @@ export async function exportCompletedLandingsplassToPDF(): Promise<PDFExportResu
       await loadJsPDF();
     }
 
+    // Get dynamic table names
+    const tableNames = await getActiveTableNames();
+
     // Get all completed landingsplass from database
     const { data: completedLandingsplass, error } = await supabase
-      .from('vass_lasteplass')
+      .from(tableNames.vass_lasteplass)
       .select('*')
       .eq('is_done', true)
       .order('completed_at', { ascending: false });

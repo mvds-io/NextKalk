@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Reorder, motion } from 'framer-motion';
 import { Landingsplass, User } from '@/types';
 import { supabase } from '@/lib/supabase';
+import { useTableNames } from '@/contexts/TableNamesContext';
 
 interface ProgressPlanProps {
   landingsplasser: Landingsplass[];
@@ -45,7 +46,8 @@ export default function ProgressPlan({
   isMinimized = false,
   onToggleMinimized
 }: ProgressPlanProps) {
-  
+  const { tableNames } = useTableNames();
+
   const [associations, setAssociations] = useState<Record<number, Association[]>>({});
   const [expandedComments, setExpandedComments] = useState<Set<number>>(new Set());
   const [associationsAvailable, setAssociationsAvailable] = useState<boolean | null>(null);
@@ -71,7 +73,7 @@ export default function ProgressPlan({
 
   // Handle reorder with Framer Motion
   const handleReorder = async (newOrder: Landingsplass[]) => {
-    if (!user?.can_edit_priority) return;
+    if (!user?.can_edit_priority || !tableNames) return;
 
     // Update local state immediately for smooth UX
     setReorderedLandingsplasser(newOrder);
@@ -89,7 +91,7 @@ export default function ProgressPlan({
       // Update database with new priorities
       for (const update of updatedPriorities) {
         const { error } = await supabase
-          .from('vass_lasteplass')
+          .from(tableNames.vass_lasteplass)
           .update({ priority: update.priority })
           .eq('id', update.id);
 
@@ -148,18 +150,18 @@ export default function ProgressPlan({
   // Load associations for all landingsplasser
   useEffect(() => {
     const loadAssociations = async () => {
-      if (sortedLandingsplasser.length === 0) {
+      if (!tableNames || sortedLandingsplasser.length === 0) {
         setAssociations({});
         setAssociationsAvailable(true);
         return;
       }
 
       const landingsplassIds = sortedLandingsplasser.map(lp => lp.id);
-      
+
       try {
         // First try a simple query without joins to test basic access
         const { error: testError } = await supabase
-          .from('vass_associations')
+          .from(tableNames.vass_associations)
           .select('landingsplass_id, airport_id')
           .limit(1);
 
@@ -176,11 +178,11 @@ export default function ProgressPlan({
 
         // Use the same foreign key join approach as the map popup
         const { data: associations, error: associationsError } = await supabase
-          .from('vass_associations')
+          .from(tableNames.vass_associations)
           .select(`
             landingsplass_id,
             airport_id,
-            vass_vann:airport_id (
+            ${tableNames.vass_vann}:airport_id (
               id, name, tonn
             )
           `)
@@ -195,9 +197,9 @@ export default function ProgressPlan({
 
         // Process the data with foreign key relationship
         const associationsMap: Record<number, Association[]> = {};
-        
+
         (associations || []).forEach((assoc: any) => {
-          const water = assoc.vass_vann;
+          const water = assoc[tableNames.vass_vann];
           if (water) {
             if (!associationsMap[assoc.landingsplass_id]) {
               associationsMap[assoc.landingsplass_id] = [];
@@ -230,7 +232,7 @@ export default function ProgressPlan({
     if (sortedLandingsplasser.length > 0) {
       loadAssociations();
     }
-  }, [sortedLandingsplasser.length]); // Only depend on the length, not the entire array
+  }, [sortedLandingsplasser.length, tableNames]); // Only depend on the length, not the entire array
 
   // Load completion users from action logs
   // Use ref to prevent infinite loop
@@ -301,14 +303,16 @@ export default function ProgressPlan({
 
   // Load contact persons for a specific landingsplass
   const loadContactPersonsForLandingsplass = useCallback(async (landingsplassId: number) => {
+    if (!tableNames) return;
+
     setIsContactPersonsLoading(prev => ({ ...prev, [landingsplassId]: true }));
-    
+
     try {
       const { data: associations, error } = await supabase
-        .from('vass_associations')
+        .from(tableNames.vass_associations)
         .select(`
           airport_id,
-          vass_vann:airport_id (
+          ${tableNames.vass_vann}:airport_id (
             forening, kontaktperson, phone, tonn
           )
         `)
@@ -319,7 +323,7 @@ export default function ProgressPlan({
       // Extract and deduplicate contact persons, summing tonnage
       const contactPersonsMap = new Map();
       (associations || []).forEach((assoc: any) => {
-        const water = assoc.vass_vann;
+        const water = assoc[tableNames.vass_vann];
         if (!water) return;
         
         const { forening, kontaktperson, phone, tonn } = water;
@@ -356,7 +360,7 @@ export default function ProgressPlan({
     } finally {
       setIsContactPersonsLoading(prev => ({ ...prev, [landingsplassId]: false }));
     }
-  }, []);
+  }, [tableNames]);
 
   // Load contact persons for all visible landingsplasser
   // Load completion users when data changes

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabase, queryWithRetry } from '@/lib/supabase';
 import { createClient } from '@supabase/supabase-js';
 import { appConfig } from '@/lib/config';
+import { getActiveTableNames } from '@/lib/tableNames';
 
 export async function GET(request: NextRequest) {
   // Check authentication
@@ -50,24 +51,27 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    // Get dynamic table names
+    const tableNames = await getActiveTableNames();
+
     const searchTerm = `%${query.trim()}%`;
-    
+
     console.log('Searching for:', query, 'with term:', searchTerm);
-    
+
     let vannResults: unknown[] = [];
     let lpResults: unknown[] = [];
-    
+
     // Try to search in vass_vann table - use simple search first
     try {
       console.log('Searching vass_vann for:', query);
-      
+
       // Search by name using authenticated client
       const nameQuery = await authenticatedClient
-        .from('vass_vann')
+        .from(tableNames.vass_vann)
         .select('*')
         .ilike('name', searchTerm)
         .limit(10);
-      
+
       console.log('vass_vann name query result:', JSON.stringify(nameQuery, null, 2));
       vannResults = nameQuery.data || [];
       console.log('vass_vann results:', vannResults.length);
@@ -78,7 +82,7 @@ export async function GET(request: NextRequest) {
       try {
         const { data: altData } = await queryWithRetry(
           () => supabase
-            .from('vass_vann')
+            .from(tableNames.vass_vann)
             .select('*')
             .limit(5),
           'vass_vann fallback search'
@@ -92,38 +96,38 @@ export async function GET(request: NextRequest) {
     // Try to search in vass_lasteplass table - use multiple queries for better compatibility
     try {
       console.log('Searching vass_lasteplass for:', query);
-      
-      // Search by kode (most likely to match codes like "AK-01") 
+
+      // Search by kode (most likely to match codes like "AK-01")
       console.log('Searching kode with term:', searchTerm);
-      
+
       // Search by kode using authenticated client for RLS
       console.log('Searching with authenticated client...');
       const kodeQuery = await authenticatedClient
-        .from('vass_lasteplass')
+        .from(tableNames.vass_lasteplass)
         .select('*')
         .ilike('kode', searchTerm)
         .limit(5);
-      
+
       console.log('Authenticated client - Kode query result:', JSON.stringify(kodeQuery, null, 2));
       const kodeResults = kodeQuery.data;
-      
+
       // Search by lp (landingsplass name)
       console.log('Searching lp with term:', searchTerm);
       const lpQuery = await authenticatedClient
-        .from('vass_lasteplass')
+        .from(tableNames.vass_lasteplass)
         .select('*')
         .ilike('lp', searchTerm)
         .limit(5);
-      
+
       console.log('LP query result:', lpQuery);
       const lpNameResults = lpQuery.data;
-      
+
       // Combine and deduplicate results
       const allLpResults = [...(kodeResults || []), ...(lpNameResults || [])];
-      const uniqueLpResults = allLpResults.filter((item, index, self) => 
+      const uniqueLpResults = allLpResults.filter((item, index, self) =>
         index === self.findIndex(t => t.id === item.id)
       );
-      
+
       lpResults = uniqueLpResults;
       console.log('vass_lasteplass results:', lpResults.length);
       console.log('First result:', lpResults[0]);
@@ -133,7 +137,7 @@ export async function GET(request: NextRequest) {
       try {
         const { data: altData } = await queryWithRetry(
           () => supabase
-            .from('vass_lasteplass')
+            .from(tableNames.vass_lasteplass)
             .select('*')
             .limit(5),
           'vass_lasteplass fallback search'

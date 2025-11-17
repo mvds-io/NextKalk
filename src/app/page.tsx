@@ -12,6 +12,7 @@ import SkeletonTopBar from '@/components/SkeletonTopBar';
 import SkeletonSidePanel from '@/components/SkeletonSidePanel';
 import { supabase, queryWithRetry } from '@/lib/supabase';
 import { Airport, Landingsplass, KalkInfo, User, CounterData, FilterState } from '@/types';
+import { useTableNames } from '@/contexts/TableNamesContext';
 
 // Utility function to parse European decimal numbers (handles both "1.0" and "1,0" formats)
 function parseEuropeanDecimal(value: string | number): number {
@@ -35,6 +36,9 @@ interface AuthenticatedAppProps {
 }
 
 function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
+  // Get dynamic table names from context
+  const { tableNames, isLoading: isLoadingTableNames } = useTableNames();
+
   const [isLoading, setIsLoading] = useState(true);
   const [airports, setAirports] = useState<Airport[]>([]);
   const [landingsplasser, setLandingsplasser] = useState<Landingsplass[]>([]);
@@ -43,6 +47,7 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
   const [filterState, setFilterState] = useState<FilterState>({ county: '', showConnections: false });
   const [counties, setCounties] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [appConfig, setAppConfig] = useState<{ active_year: string; active_prefix: string } | null>(null);
   const [loadingStates, setLoadingStates] = useState({
     airports: true,
     landingsplasser: true,
@@ -141,6 +146,8 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
   }, [landingsplasser]);
 
   const initializeApp = useCallback(async () => {
+    if (!tableNames) return; // Guard: wait for table names to load
+
     try {
       setError(null);
       setLoadingProgress(0);
@@ -183,17 +190,20 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
       const errorMessage = error instanceof Error ? error.message : '';
       if (errorMessage.includes('expired') || errorMessage.includes('log in again')) {
         setError('Session expired. Please refresh the page to log in again.');
+      } else if (errorMessage.includes('relation') && errorMessage.includes('does not exist')) {
+        setError('Database tables not found. Please go to Admin panel to configure the correct database tables.');
       } else {
-        setError('Failed to initialize application. Please check your connection.');
+        setError('Failed to initialize application. Please check your connection or database configuration.');
       }
 
       setLoadingStates(prev => ({ ...prev, initialLoad: false }));
       setIsLoading(false);
     }
-  }, []);
+  }, [tableNames]);
 
   useEffect(() => {
     initializeApp();
+    loadAppConfig();
 
     // DISABLED: Periodic session validation was causing performance issues
     // Supabase autoRefreshToken handles session refresh automatically
@@ -204,14 +214,32 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
     };
   }, [initializeApp]);
 
+  const loadAppConfig = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('app_config')
+        .select('active_year, active_prefix')
+        .limit(1)
+        .single();
+
+      if (!error && data) {
+        setAppConfig(data);
+      }
+    } catch (error) {
+      console.error('Error loading app config:', error);
+    }
+  };
+
   const loadAirports = async () => {
+    if (!tableNames) return; // Guard: wait for table names to load
+
     try {
       setLoadingStates(prev => ({ ...prev, airports: true }));
-      
+
       // Get the total count with retry logic
       const countResult = await queryWithRetry(
         () => supabase
-          .from('vass_vann')
+          .from(tableNames.vass_vann)
           .select('*', { count: 'exact', head: true }),
         'get airports count'
       );
@@ -222,31 +250,31 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
       const pageSize = 1000; // Supabase's limit
       let currentOffset = 0;
       let hasMore = true;
-      
+
       while (hasMore) {
         const { data: pageData } = await queryWithRetry(
           () => supabase
-            .from('vass_vann')
+            .from(tableNames.vass_vann)
             .select('*')
             .order('id', { ascending: true })
             .range(currentOffset, currentOffset + pageSize - 1),
           `load airports page ${Math.floor(currentOffset / pageSize) + 1}`
         );
-        
+
         if (!pageData || pageData.length === 0) {
           hasMore = false;
           break;
         }
-        
+
         allAirports.push(...pageData);
-        
+
         // Check if we got fewer records than requested (end of data)
         if (pageData.length < pageSize) {
           hasMore = false;
         } else {
           currentOffset += pageSize;
         }
-        
+
         // Safety check to prevent infinite loops
         if (allAirports.length >= (count || 0) + 100) {
           console.warn('⚠️ Safety break: fetched more records than expected');
@@ -279,13 +307,15 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
   };
 
   const loadLandingsplasser = async () => {
+    if (!tableNames) return; // Guard: wait for table names to load
+
     try {
       setLoadingStates(prev => ({ ...prev, landingsplasser: true }));
-      
+
       // First get all landingsplasser with retry logic
       const { data: landingsplassData } = await queryWithRetry(
         () => supabase
-          .from('vass_lasteplass')
+          .from(tableNames.vass_lasteplass)
           .select('*')
           .order('lp', { ascending: true }),
         'load landingsplasser'
@@ -303,7 +333,7 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
       // Batch load all associations in one query (eliminates N+1 problem)
       const { data: allAssociations } = await queryWithRetry(
         () => supabase
-          .from('vass_associations')
+          .from(tableNames.vass_associations)
           .select('landingsplass_id, airport_id')
           .in('landingsplass_id', landingsplassIds),
         'load associations'
@@ -315,7 +345,7 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
       // Batch load all tonnage data in one query (eliminates second N query)
       const { data: watersData } = await queryWithRetry(
         () => supabase
-          .from('vass_vann')
+          .from(tableNames.vass_vann)
           .select('id, tonn')
           .in('id', airportIds),
         'load waters tonnage'
@@ -373,11 +403,13 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
   };
 
   const loadKalkMarkers = async () => {
+    if (!tableNames) return; // Guard: wait for table names to load
+
     try {
       setLoadingStates(prev => ({ ...prev, kalkMarkers: true }));
       const { data } = await queryWithRetry(
         () => supabase
-          .from('vass_info')
+          .from(tableNames.vass_info)
           .select('*'),
         'load kalk markers'
       );
@@ -401,12 +433,14 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
   };
 
   const loadCounties = async () => {
+    if (!tableNames) return; // Guard: wait for table names to load
+
     try {
       // Fetch unique fylke values from both tables with retry logic
       const [airportsResponse, landingsplassResponse] = await Promise.all([
         queryWithRetry(
           () => supabase
-            .from('vass_vann')
+            .from(tableNames.vass_vann)
             .select('fylke')
             .not('fylke', 'is', null)
             .not('fylke', 'eq', ''),
@@ -414,7 +448,7 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
         ),
         queryWithRetry(
           () => supabase
-            .from('vass_lasteplass')
+            .from(tableNames.vass_lasteplass)
             .select('fylke')
             .not('fylke', 'is', null)
             .not('fylke', 'eq', ''),
@@ -569,12 +603,90 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
     );
   }
 
+  // Show error message with link to admin if data failed to load
+  if (error && !isLoading) {
+    return (
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        height: '100vh',
+        padding: '20px',
+        textAlign: 'center',
+        backgroundColor: '#f8f9fa'
+      }}>
+        <div style={{
+          maxWidth: '600px',
+          backgroundColor: 'white',
+          padding: '40px',
+          borderRadius: '8px',
+          boxShadow: '0 2px 10px rgba(0,0,0,0.1)'
+        }}>
+          <i className="fas fa-exclamation-triangle" style={{ fontSize: '48px', color: '#dc3545', marginBottom: '20px' }}></i>
+          <h2 style={{ color: '#dc3545', marginBottom: '20px' }}>Database Configuration Error</h2>
+          <p style={{ marginBottom: '20px', color: '#6c757d' }}>{error}</p>
+          <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap' }}>
+            <button
+              onClick={() => window.location.href = '/admin'}
+              style={{
+                padding: '12px 24px',
+                backgroundColor: '#007bff',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '16px',
+                fontWeight: '500'
+              }}
+            >
+              <i className="fas fa-cog" style={{ marginRight: '8px' }}></i>
+              Go to Admin Panel
+            </button>
+            <button
+              onClick={() => window.location.reload()}
+              style={{
+                padding: '12px 24px',
+                backgroundColor: '#6c757d',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '16px',
+                fontWeight: '500'
+              }}
+            >
+              <i className="fas fa-redo" style={{ marginRight: '8px' }}></i>
+              Retry
+            </button>
+            <button
+              onClick={onLogout}
+              style={{
+                padding: '12px 24px',
+                backgroundColor: '#dc3545',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '16px',
+                fontWeight: '500'
+              }}
+            >
+              <i className="fas fa-sign-out-alt" style={{ marginRight: '8px' }}></i>
+              Logout
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
       {/* Show counter unless hidden on mobile or in fullscreen */}
       {(!isMobile || !isMobileTopBarHidden) && !isFullScreen && (
         <div className={`${isMobile && isMobileTopBarHidden ? 'mobile-hidden' : ''}`}>
-          <Counter 
+          <Counter
             counterData={counterData}
             counties={counties}
             filterState={filterState}
@@ -587,8 +699,7 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
           />
         </div>
       )}
-      
-      
+
       <div className={`main-split-container ${isMobile && isMobileUIMinimized ? 'panel-minimized' : ''} ${!isMobile && isProgressPlanMinimized ? 'progress-plan-minimized' : ''} ${isFullScreen ? 'fullscreen' : ''}`} style={{ 
         display: 'flex', 
         flexDirection: isMobile ? 'column' : 'row', 

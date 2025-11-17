@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { TableNamesProvider } from "@/contexts/TableNamesContext";
 
 const geist = Geist({
   variable: "--font-geist-sans",
@@ -50,7 +51,9 @@ export default function RootLayout({
         <link href="https://api.mapbox.com/mapbox-gl-js/v3.16.0/mapbox-gl.css" rel="stylesheet" />
       </head>
       <body className={`${geist.variable} ${geistMono.variable} antialiased`}>
-        {children}
+        <TableNamesProvider>
+          {children}
+        </TableNamesProvider>
         {/* Bootstrap JS */}
         <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" async></script>
       </body>

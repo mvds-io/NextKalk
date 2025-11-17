@@ -32,14 +32,36 @@ export function MapboxCoordinatePicker({
   const [lng, setLng] = useState<number>(initialLng || 8.0);
   const [mapStyle, setMapStyle] = useState<'outdoors' | 'satellite'>('outdoors');
 
-  // Update lat/lng when initialLat/initialLng change (e.g., when editing different markers)
+  // Update lat/lng when dialog opens with new initial coordinates
   useEffect(() => {
     if (open) {
       setLat(initialLat || 58.5);
       setLng(initialLng || 8.0);
+
+      // Update marker position if map already exists
+      if (map.current && (initialLat !== undefined && initialLng !== undefined)) {
+        if (marker.current) {
+          marker.current.setLngLat([initialLng, initialLat]);
+        } else {
+          marker.current = new mapboxgl.Marker({
+            draggable: true,
+            color: '#3b82f6',
+          })
+            .setLngLat([initialLng, initialLat])
+            .addTo(map.current);
+
+          marker.current.on('dragend', () => {
+            const lngLat = marker.current!.getLngLat();
+            setLat(Number(lngLat.lat.toFixed(6)));
+            setLng(Number(lngLat.lng.toFixed(6)));
+          });
+        }
+        map.current.flyTo({ center: [initialLng, initialLat], zoom: 12 });
+      }
     }
   }, [open, initialLat, initialLng]);
 
+  // Separate effect for map initialization - only runs when dialog opens/closes
   useEffect(() => {
     if (!open) {
       // Clean up when dialog closes
@@ -79,7 +101,7 @@ export function MapboxCoordinatePicker({
         return;
       }
 
-      // Initialize map only if not already initialized
+      // Only initialize if not already initialized
       if (!map.current) {
         try {
           const initialZoom = initialLat && initialLng ? 12 : 7; // Wider view for southern Norway, closer for specific location
@@ -154,7 +176,7 @@ export function MapboxCoordinatePicker({
     return () => {
       clearTimeout(timer);
     };
-  }, [open, initialLat, initialLng]);
+  }, [open]);
 
   const handleConfirm = () => {
     onCoordinatesSelect(lat, lng);

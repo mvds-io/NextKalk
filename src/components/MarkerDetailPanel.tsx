@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Airport, Landingsplass, User } from '@/types';
 import { supabase } from '@/lib/supabase';
+import { useTableNames } from '@/contexts/TableNamesContext';
 
 interface MarkerDetailPanelProps {
   markerType: 'airport' | 'landingsplass';
@@ -56,6 +57,7 @@ export default function MarkerDetailPanel({
   onDataUpdate,
   completionUsers = {}
 }: MarkerDetailPanelProps) {
+  const { tableNames } = useTableNames();
   const [associations, setAssociations] = useState<Association[]>([]);
   const [contactPersons, setContactPersons] = useState<ContactPerson[]>([]);
   const [images, setImages] = useState<ImageData[]>([]);
@@ -81,17 +83,17 @@ export default function MarkerDetailPanel({
   // Load associations
   useEffect(() => {
     const loadAssociations = async () => {
-      if (!markerData) return;
+      if (!markerData || !tableNames) return;
 
       setIsLoadingAssociations(true);
       try {
         if (markerType === 'airport') {
           // For airports, get associated landingsplasser
           const { data, error } = await supabase
-            .from('vass_associations')
+            .from(tableNames.vass_associations)
             .select(`
               landingsplass_id,
-              vass_lasteplass:landingsplass_id (
+              ${tableNames.vass_lasteplass}:landingsplass_id (
                 id, lp, kode, latitude, longitude, tonn_lp
               )
             `)
@@ -100,23 +102,23 @@ export default function MarkerDetailPanel({
           if (error) throw error;
 
           const associationList: Association[] = (data || [])
-            .filter((assoc: any) => assoc.vass_lasteplass)
+            .filter((assoc: any) => assoc[tableNames.vass_lasteplass])
             .map((assoc: any) => ({
-              id: assoc.vass_lasteplass.id,
-              name: `LP ${assoc.vass_lasteplass.lp}${assoc.vass_lasteplass.kode ? ` - ${assoc.vass_lasteplass.kode}` : ''}`,
-              tonn: assoc.vass_lasteplass.tonn_lp || 0,
-              latitude: assoc.vass_lasteplass.latitude,
-              longitude: assoc.vass_lasteplass.longitude
+              id: assoc[tableNames.vass_lasteplass].id,
+              name: `LP ${assoc[tableNames.vass_lasteplass].lp}${assoc[tableNames.vass_lasteplass].kode ? ` - ${assoc[tableNames.vass_lasteplass].kode}` : ''}`,
+              tonn: assoc[tableNames.vass_lasteplass].tonn_lp || 0,
+              latitude: assoc[tableNames.vass_lasteplass].latitude,
+              longitude: assoc[tableNames.vass_lasteplass].longitude
             }));
 
           setAssociations(associationList);
         } else {
           // For landingsplasser, get associated airports/waters
           const { data, error } = await supabase
-            .from('vass_associations')
+            .from(tableNames.vass_associations)
             .select(`
               airport_id,
-              vass_vann:airport_id (
+              ${tableNames.vass_vann}:airport_id (
                 id, name, tonn, latitude, longitude
               )
             `)
@@ -125,13 +127,13 @@ export default function MarkerDetailPanel({
           if (error) throw error;
 
           const associationList: Association[] = (data || [])
-            .filter((assoc: any) => assoc.vass_vann)
+            .filter((assoc: any) => assoc[tableNames.vass_vann])
             .map((assoc: any) => ({
-              id: assoc.vass_vann.id,
-              name: assoc.vass_vann.name || 'Ukjent',
-              tonn: assoc.vass_vann.tonn || 0,
-              latitude: assoc.vass_vann.latitude,
-              longitude: assoc.vass_vann.longitude
+              id: assoc[tableNames.vass_vann].id,
+              name: assoc[tableNames.vass_vann].name || 'Ukjent',
+              tonn: assoc[tableNames.vass_vann].tonn || 0,
+              latitude: assoc[tableNames.vass_vann].latitude,
+              longitude: assoc[tableNames.vass_vann].longitude
             }));
 
           setAssociations(associationList);
@@ -145,20 +147,20 @@ export default function MarkerDetailPanel({
     };
 
     loadAssociations();
-  }, [markerType, markerId, markerData]);
+  }, [markerType, markerId, markerData, tableNames]);
 
   // Load contact persons (for landingsplasser only)
   useEffect(() => {
     const loadContactPersons = async () => {
-      if (markerType !== 'landingsplass' || !markerData) return;
+      if (markerType !== 'landingsplass' || !markerData || !tableNames) return;
 
       setIsLoadingContactPersons(true);
       try {
         const { data: associations, error } = await supabase
-          .from('vass_associations')
+          .from(tableNames.vass_associations)
           .select(`
             airport_id,
-            vass_vann:airport_id (
+            ${tableNames.vass_vann}:airport_id (
               id, forening, kontaktperson, phone, tonn
             )
           `)
@@ -169,7 +171,7 @@ export default function MarkerDetailPanel({
         // Extract and deduplicate contact persons, keeping track of the first wassId for each
         const contactPersonsMap = new Map();
         (associations || []).forEach((assoc: any) => {
-          const water = assoc.vass_vann;
+          const water = assoc[tableNames.vass_vann];
           if (!water) return;
 
           const { id, forening, kontaktperson, phone, tonn } = water;
@@ -208,16 +210,16 @@ export default function MarkerDetailPanel({
     };
 
     loadContactPersons();
-  }, [markerType, markerId, markerData]);
+  }, [markerType, markerId, markerData, tableNames]);
 
   // Load images
   useEffect(() => {
     const loadImages = async () => {
-      if (!markerData) return;
+      if (!markerData || !tableNames) return;
 
       setIsLoadingImages(true);
       try {
-        const tableName = markerType === 'airport' ? 'vass_vann_images' : 'vass_lasteplass_images';
+        const tableName = markerType === 'airport' ? tableNames.vass_vann_images : tableNames.vass_lasteplass_images;
 
         const { data, error } = await supabase
           .from(tableName)
@@ -244,16 +246,16 @@ export default function MarkerDetailPanel({
     };
 
     loadImages();
-  }, [markerType, markerId, markerData]);
+  }, [markerType, markerId, markerData, tableNames]);
 
   // Load documents
   useEffect(() => {
     const loadDocuments = async () => {
-      if (!markerData) return;
+      if (!markerData || !tableNames) return;
 
       setIsLoadingDocuments(true);
       try {
-        const tableName = markerType === 'airport' ? 'vass_vann_documents' : 'vass_lasteplass_documents';
+        const tableName = markerType === 'airport' ? tableNames.vass_vann_documents : tableNames.vass_lasteplass_documents;
 
         const { data, error } = await supabase
           .from(tableName)
@@ -281,7 +283,7 @@ export default function MarkerDetailPanel({
     };
 
     loadDocuments();
-  }, [markerType, markerId, markerData]);
+  }, [markerType, markerId, markerData, tableNames]);
 
   // Initialize comment text
   useEffect(() => {
@@ -291,11 +293,11 @@ export default function MarkerDetailPanel({
   }, [markerData]);
 
   const handleToggleDone = async () => {
-    if (!user?.can_edit_markers || !markerData) return;
+    if (!user?.can_edit_markers || !markerData || !tableNames) return;
 
     try {
       const newDoneStatus = !isDone;
-      const tableName = markerType === 'airport' ? 'vass_vann' : 'vass_lasteplass';
+      const tableName = markerType === 'airport' ? tableNames.vass_vann : tableNames.vass_lasteplass;
 
       const updates: any = { is_done: newDoneStatus };
       if (newDoneStatus) {
@@ -342,11 +344,11 @@ export default function MarkerDetailPanel({
   };
 
   const handleColorChange = async (color: string) => {
-    if (!user?.can_edit_markers || markerType !== 'airport' || !markerData) return;
+    if (!user?.can_edit_markers || markerType !== 'airport' || !markerData || !tableNames) return;
 
     try {
       const { error } = await supabase
-        .from('vass_vann')
+        .from(tableNames.vass_vann)
         .update({ marker_color: color })
         .eq('id', markerId);
 
@@ -374,10 +376,10 @@ export default function MarkerDetailPanel({
   };
 
   const handleSaveComment = async () => {
-    if (!user?.can_edit_markers || !markerData) return;
+    if (!user?.can_edit_markers || !markerData || !tableNames) return;
 
     try {
-      const tableName = markerType === 'airport' ? 'vass_vann' : 'vass_lasteplass';
+      const tableName = markerType === 'airport' ? tableNames.vass_vann : tableNames.vass_lasteplass;
 
       const { error } = await supabase
         .from(tableName)
@@ -412,7 +414,7 @@ export default function MarkerDetailPanel({
   };
 
   const handleSaveContact = async () => {
-    if (!user?.can_edit_markers || !editingContactData || editingContactId === null) return;
+    if (!user?.can_edit_markers || !editingContactData || editingContactId === null || !tableNames) return;
 
     try {
       // Validate phone number length (max integer value is 2,147,483,647)
@@ -424,7 +426,7 @@ export default function MarkerDetailPanel({
 
       // First, get the original contact info to find all matching records
       const { data: originalContact } = await supabase
-        .from('vass_vann')
+        .from(tableNames.vass_vann)
         .select('kontaktperson, phone')
         .eq('id', editingContactId)
         .single();
@@ -436,7 +438,7 @@ export default function MarkerDetailPanel({
 
       // Update ALL vass_vann records that have the same kontaktperson and phone
       const { error } = await supabase
-        .from('vass_vann')
+        .from(tableNames.vass_vann)
         .update({
           forening: editingContactData.forening.trim(),
           kontaktperson: editingContactData.kontaktperson.trim(),
@@ -478,7 +480,7 @@ export default function MarkerDetailPanel({
   };
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (!event.target.files || event.target.files.length === 0 || !markerData) return;
+    if (!event.target.files || event.target.files.length === 0 || !markerData || !tableNames) return;
 
     const file = event.target.files[0];
     setIsUploading(true);
@@ -502,7 +504,7 @@ export default function MarkerDetailPanel({
         .getPublicUrl(filePath);
 
       // Save reference in database
-      const tableName = markerType === 'airport' ? 'vass_vann_images' : 'vass_lasteplass_images';
+      const tableName = markerType === 'airport' ? tableNames.vass_vann_images : tableNames.vass_lasteplass_images;
 
       const { error: dbError } = await supabase
         .from(tableName)
@@ -551,10 +553,10 @@ export default function MarkerDetailPanel({
   };
 
   const handleDeleteImage = async (imageId: number) => {
-    if (!user?.can_edit_markers || !confirm('Er du sikker på at du vil slette dette bildet?')) return;
+    if (!user?.can_edit_markers || !confirm('Er du sikker på at du vil slette dette bildet?') || !tableNames) return;
 
     try {
-      const tableName = markerType === 'airport' ? 'vass_vann_images' : 'vass_lasteplass_images';
+      const tableName = markerType === 'airport' ? tableNames.vass_vann_images : tableNames.vass_lasteplass_images;
 
       const { error } = await supabase
         .from(tableName)
@@ -571,7 +573,7 @@ export default function MarkerDetailPanel({
   };
 
   const handleDocumentUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (!event.target.files || event.target.files.length === 0 || !markerData) return;
+    if (!event.target.files || event.target.files.length === 0 || !markerData || !tableNames) return;
 
     const file = event.target.files[0];
     setIsUploadingDocument(true);
@@ -595,7 +597,7 @@ export default function MarkerDetailPanel({
         .getPublicUrl(filePath);
 
       // Save reference in database
-      const tableName = markerType === 'airport' ? 'vass_vann_documents' : 'vass_lasteplass_documents';
+      const tableName = markerType === 'airport' ? tableNames.vass_vann_documents : tableNames.vass_lasteplass_documents;
 
       const { error: dbError } = await supabase
         .from(tableName)
@@ -648,10 +650,10 @@ export default function MarkerDetailPanel({
   };
 
   const handleDeleteDocument = async (documentId: number) => {
-    if (!user?.can_edit_markers || !confirm('Er du sikker på at du vil slette dette dokumentet?')) return;
+    if (!user?.can_edit_markers || !confirm('Er du sikker på at du vil slette dette dokumentet?') || !tableNames) return;
 
     try {
-      const tableName = markerType === 'airport' ? 'vass_vann_documents' : 'vass_lasteplass_documents';
+      const tableName = markerType === 'airport' ? tableNames.vass_vann_documents : tableNames.vass_lasteplass_documents;
 
       const { error } = await supabase
         .from(tableName)
