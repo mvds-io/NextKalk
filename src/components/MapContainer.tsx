@@ -290,7 +290,7 @@ export default function MapContainer({
                          const L = (window as any).L;
              const line = L.polyline([landingsplassPos, airportPos], {
               color: '#007bff',
-              weight: 2,
+              weight: 1,
               opacity: 0.6,
               dashArray: '4,4',
               className: 'all-connection-line'
@@ -409,7 +409,7 @@ export default function MapContainer({
         const L = (window as any).L;
         const line = L.polyline([landingsplassPos, airportPos], {
           color: '#ff0000', // Red for individual connections
-          weight: 3,
+          weight: 1.5,
           opacity: 0.8,
           className: 'individual-connection-line'
         }).addTo(leafletMapRef.current);
@@ -2968,22 +2968,26 @@ ${waypointElements}
     filteredAirports.forEach(airport => {
       if (!airport.latitude || !airport.longitude) return;
 
-      const markerColor = airport.marker_color || 'red';
-      const iconColor = airport.is_done ? 'green' : markerColor;
-      const iconName = airport.is_done ? 'check' : 'water';
-      
+      // Determine color based on done status
+      const isDone = airport.is_done || airport.done;
+      const fillColor = isDone ? '#10b981' : '#3b82f6'; // Green if done, blue if not
+      const borderColor = isDone ? '#059669' : '#2563eb';
+
+      // Create small circle marker similar to admin map
       try {
-        const marker = L.marker([airport.latitude, airport.longitude], {
-          icon: L.AwesomeMarkers.icon({
-            icon: iconName,
-            markerColor: iconColor,
-            prefix: 'fa'
-          })
+        const marker = L.circleMarker([airport.latitude, airport.longitude], {
+          radius: 4,
+          fillColor: fillColor,
+          color: borderColor,
+          weight: 1,
+          opacity: 0.8,
+          fillOpacity: 0.6
         });
 
         const popupContent = createAirportPopupContent(airport);
-        marker.bindPopup(popupContent, { 
-          maxWidth: isMobileOrTablet() ? 350 : 400,
+        marker.bindPopup(popupContent, {
+          maxWidth: 150,
+          minWidth: 0,
           closeOnEscapeKey: false,
           autoClose: false,
           closeOnClick: false,
@@ -3002,10 +3006,17 @@ ${waypointElements}
           direction: 'top',
           offset: [0, -20]
         });
-        
+
+        // Auto-open side panel on marker click (skip popup interaction)
+        marker.on('click', () => {
+          if (onMarkerSelect) {
+            onMarkerSelect({ type: 'airport', id: airport.id });
+          }
+        });
+
         // Load associations and images when popup opens
         marker.on('popupopen', () => handleMarkerPopupOpen(airport.id, 'airport'));
-        
+
         // Clean up loading state when popup closes
         marker.on('popupclose', () => {
           currentLoadingIdRef.current = null;
@@ -3025,21 +3036,30 @@ ${waypointElements}
     filteredLandingsplasser.forEach(landingsplass => {
       if (!landingsplass.latitude || !landingsplass.longitude) return;
 
-      const iconColor = 'blue'; // Always blue for landingsplass
-      
+      // Determine color based on done status
+      const isDone = landingsplass.is_done || landingsplass.done;
+      const markerClass = isDone ? 'custom-landingsplass-marker marker-done' : 'custom-landingsplass-marker marker-not-done';
+      const iconHtml = isDone ? '<i class="fa fa-check" aria-hidden="true"></i>' : '<i class="fa fa-helicopter" aria-hidden="true"></i>';
+
+      // Create circular divIcon similar to admin map
+      const divIcon = L.divIcon({
+        html: iconHtml,
+        className: markerClass,
+        iconSize: [24, 24],
+        iconAnchor: [12, 12],
+        popupAnchor: [0, -12]
+      });
+
       try {
         const marker = L.marker([landingsplass.latitude, landingsplass.longitude], {
-          icon: L.AwesomeMarkers.icon({
-            icon: 'helicopter-symbol',
-            markerColor: iconColor,
-            prefix: 'fa'
-          })
+          icon: divIcon
         });
 
         const completionUser = completionUsers[landingsplass.id];
         const popupContent = createLandingsplassPopupContent(landingsplass, completionUser);
-        marker.bindPopup(popupContent, { 
-          maxWidth: isMobileOrTablet() ? 350 : 400,
+        marker.bindPopup(popupContent, {
+          maxWidth: 150,
+          minWidth: 0,
           closeOnEscapeKey: false,
           autoClose: false,
           closeOnClick: false,
@@ -3057,10 +3077,17 @@ ${waypointElements}
         marker.bindTooltip(landingsplassKode, {
           permanent: true,
           direction: 'bottom',
-          offset: [0, 0],
+          offset: [0, 10],
           className: 'landingsplass-label'
         });
-        
+
+        // Auto-open side panel on marker click (skip popup interaction)
+        marker.on('click', () => {
+          if (onMarkerSelect) {
+            onMarkerSelect({ type: 'landingsplass', id: landingsplass.id });
+          }
+        });
+
         // Load associations, images and documents when popup opens
         marker.on('popupopen', () => handleMarkerPopupOpen(landingsplass.id, 'landingsplass'));
 
@@ -3132,15 +3159,12 @@ ${waypointElements}
     const isDone = airport.is_done || airport.done;
 
     return `
-      <div class="marker-card-simple" style="min-width: 200px; max-width: 250px; font-size: 0.9rem; padding: 1rem; text-align: center; cursor: pointer;" onclick="window.handleMarkerClick && window.handleMarkerClick(${airport.id}, 'airport')">
-        <div style="font-size: 1.5rem; color: ${isDone ? '#28a745' : '#CB2B3E'}; margin-bottom: 0.5rem;">
+      <div class="marker-card-sleek" style="max-width: 120px; font-size: 0.8rem; padding: 0.5rem; text-align: center; cursor: pointer;" onclick="window.handleMarkerClick && window.handleMarkerClick(${airport.id}, 'airport')">
+        <div style="font-size: 1.1rem; color: ${isDone ? '#28a745' : '#CB2B3E'}; margin-bottom: 0.25rem;">
           <i class="fas fa-water"></i>
         </div>
-        <h6 class="mb-2" style="font-weight: 600; color: #333; word-break: break-word;">${airport.name || airport.navn || 'Ukjent navn'}</h6>
-        ${isDone ? '<span class="badge bg-success mb-2" style="font-size: 0.75rem;">UTFØRT</span><br>' : ''}
-        <small class="text-muted" style="font-size: 0.85rem;">
-          <i class="fas fa-hand-pointer me-1"></i>Klikk for mer informasjon
-        </small>
+        <div style="font-size: 0.75rem; font-weight: 600; color: #333; margin-bottom: 0.25rem; word-break: break-word;">${airport.name || airport.navn || 'Ukjent navn'}</div>
+        ${isDone ? '<span class="badge bg-success" style="font-size: 0.6rem; padding: 1px 4px;">UTFØRT</span>' : ''}
       </div>
     `;
   };
@@ -3149,17 +3173,14 @@ ${waypointElements}
     const isDone = landingsplass.is_done || landingsplass.done;
 
     return `
-      <div class="marker-card-simple" style="min-width: 200px; max-width: 250px; font-size: 0.9rem; padding: 1rem; text-align: center; cursor: pointer;" onclick="window.handleMarkerClick && window.handleMarkerClick(${landingsplass.id}, 'landingsplass')">
-        <div style="font-size: 1.5rem; color: ${isDone ? '#28a745' : '#667eea'}; margin-bottom: 0.5rem;">
+      <div class="marker-card-sleek" style="max-width: 120px; font-size: 0.8rem; padding: 0.5rem; text-align: center; cursor: pointer;" onclick="window.handleMarkerClick && window.handleMarkerClick(${landingsplass.id}, 'landingsplass')">
+        <div style="font-size: 1.1rem; color: ${isDone ? '#28a745' : '#667eea'}; margin-bottom: 0.25rem;">
           <i class="fas fa-helicopter-symbol"></i>
         </div>
-        <h6 class="mb-2" style="font-weight: 600; color: #333; word-break: break-word;">
+        <div style="font-size: 0.75rem; font-weight: 600; color: #333; margin-bottom: 0.25rem;">
           ${(landingsplass as any).kode ? `${(landingsplass as any).kode} - ` : ''}LP ${(landingsplass as any).lp || 'N/A'}
-        </h6>
-        ${isDone ? '<span class="badge bg-success mb-2" style="font-size: 0.75rem;">UTFØRT</span><br>' : ''}
-        <small class="text-muted" style="font-size: 0.85rem;">
-          <i class="fas fa-hand-pointer me-1"></i>Klikk for mer informasjon
-        </small>
+        </div>
+        ${isDone ? '<span class="badge bg-success" style="font-size: 0.6rem; padding: 1px 4px;">UTFØRT</span>' : ''}
       </div>
     `;
   };
