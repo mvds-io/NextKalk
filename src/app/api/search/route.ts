@@ -65,10 +65,11 @@ export async function GET(request: NextRequest) {
     try {
       console.log('Searching vass_vann for:', query);
 
-      // Search by name using authenticated client
+      // Search by name using authenticated client - only active vann markers
       const nameQuery = await authenticatedClient
         .from(tableNames.vass_vann)
         .select('*')
+        .eq('is_active', true)
         .ilike('name', searchTerm)
         .limit(10);
 
@@ -97,7 +98,7 @@ export async function GET(request: NextRequest) {
     try {
       console.log('Searching vass_lasteplass for:', query);
 
-      // Search by kode (most likely to match codes like "AK-01")
+      // Search by kode (most likely to match codes like "AK-01") - only active landingsplasser
       console.log('Searching kode with term:', searchTerm);
 
       // Search by kode using authenticated client for RLS
@@ -105,17 +106,19 @@ export async function GET(request: NextRequest) {
       const kodeQuery = await authenticatedClient
         .from(tableNames.vass_lasteplass)
         .select('*')
+        .eq('is_active', true)
         .ilike('kode', searchTerm)
         .limit(5);
 
       console.log('Authenticated client - Kode query result:', JSON.stringify(kodeQuery, null, 2));
       const kodeResults = kodeQuery.data;
 
-      // Search by lp (landingsplass name)
+      // Search by lp (landingsplass name) - only active landingsplasser
       console.log('Searching lp with term:', searchTerm);
       const lpQuery = await authenticatedClient
         .from(tableNames.vass_lasteplass)
         .select('*')
+        .eq('is_active', true)
         .ilike('lp', searchTerm)
         .limit(5);
 

@@ -42,11 +42,12 @@ export async function exportCompletedLandingsplassToPDF(): Promise<PDFExportResu
     // Get dynamic table names
     const tableNames = await getActiveTableNames();
 
-    // Get all completed landingsplass from database
+    // Get all completed and active landingsplass from database
     const { data: completedLandingsplass, error } = await supabase
       .from(tableNames.vass_lasteplass)
       .select('*')
       .eq('is_done', true)
+      .eq('is_active', true)
       .order('completed_at', { ascending: false });
 
     if (error) {

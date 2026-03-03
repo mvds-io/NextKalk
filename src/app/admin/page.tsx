@@ -15,8 +15,14 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
+import { Badge } from '@/components/ui/badge';
 import { MapboxCoordinatePicker } from '@/components/MapboxCoordinatePicker';
 import { useTableNames } from '@/contexts/TableNamesContext';
+import { PlanningTab } from '@/components/admin/PlanningTab';
+import { YearComparisonTab } from '@/components/admin/YearComparisonTab';
+import { ArrowLeft, Plus, MapPin, Trash2, Edit, CheckCircle, XCircle, Database, RefreshCw, AlertTriangle } from 'lucide-react';
 
 interface Landingsplass {
   id: number;
@@ -30,6 +36,7 @@ interface Landingsplass {
   tonn_lp: number | null;
   priority: number | null;
   is_done: boolean;
+  is_active: boolean;
   comment: string | null;
 }
 
@@ -49,6 +56,7 @@ interface VassVann {
   email: string | null;
   address: string | null;
   is_done: boolean | null;
+  is_active: boolean;
   comment: string | null;
 }
 
@@ -66,6 +74,7 @@ export default function AdminPage() {
   const [lpToDelete, setLpToDelete] = useState<number | null>(null);
   const [lpSortField, setLpSortField] = useState<keyof Landingsplass>('id');
   const [lpSortDirection, setLpSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [associatedVannMarkers, setAssociatedVannMarkers] = useState<VassVann[]>([]);
 
   // Vann state
   const [vannMarkers, setVannMarkers] = useState<VassVann[]>([]);
@@ -85,7 +94,7 @@ export default function AdminPage() {
   const [archiveYear, setArchiveYear] = useState('');
   const [archivePrefix, setArchivePrefix] = useState('');
   const [archiveLoading, setArchiveLoading] = useState(false);
-  const [currentConfig, setCurrentConfig] = useState<{ active_year: string; active_prefix: string } | null>(null);
+  const [currentConfig, setCurrentConfig] = useState<{ active_year: string; active_prefix: string; updated_at?: string } | null>(null);
   const [availableArchives, setAvailableArchives] = useState<Array<{ year: string; prefix: string }>>([]);
   const [switchingArchive, setSwitchingArchive] = useState(false);
 
@@ -140,7 +149,7 @@ export default function AdminPage() {
     try {
       const { data, error } = await supabase
         .from('app_config')
-        .select('active_year, active_prefix')
+        .select('active_year, active_prefix, updated_at')
         .limit(1)
         .single();
 
@@ -209,13 +218,36 @@ export default function AdminPage() {
       tonn_lp: null,
       priority: 10,
       is_done: false,
+      is_active: true,
       comment: '',
     });
     setLpDialogOpen(true);
   };
 
-  const handleLpEdit = (lp: Landingsplass) => {
+  const handleLpEdit = async (lp: Landingsplass) => {
+    if (!tableNames) return;
+
     setCurrentLp(lp);
+
+    // Load associated vann markers for this landingsplass
+    const { data: associations } = await supabase
+      .from(tableNames.vass_associations)
+      .select('airport_id')
+      .eq('landingsplass_id', lp.id);
+
+    if (associations && associations.length > 0) {
+      const airportIds = associations.map(a => a.airport_id);
+
+      const { data: vannData } = await supabase
+        .from(tableNames.vass_vann)
+        .select('*')
+        .in('id', airportIds);
+
+      setAssociatedVannMarkers(vannData || []);
+    } else {
+      setAssociatedVannMarkers([]);
+    }
+
     setLpDialogOpen(true);
   };
 
@@ -238,6 +270,7 @@ export default function AdminPage() {
             tonn_lp: currentLp.tonn_lp,
             priority: currentLp.priority,
             is_done: currentLp.is_done,
+            is_active: currentLp.is_active,
             comment: currentLp.comment,
           })
           .eq('id', currentLp.id);
@@ -259,6 +292,7 @@ export default function AdminPage() {
             tonn_lp: currentLp.tonn_lp,
             priority: currentLp.priority || 10,
             is_done: currentLp.is_done || false,
+            is_active: currentLp.is_active !== undefined ? currentLp.is_active : true,
             comment: currentLp.comment,
           });
 
@@ -296,6 +330,37 @@ export default function AdminPage() {
     }
   };
 
+  const handleLpToggleActive = async (lp: Landingsplass) => {
+    if (!tableNames) return;
+
+    const newActiveState = !lp.is_active;
+    const action = newActiveState ? 'activate' : 'deactivate';
+
+    const confirm = window.confirm(
+      `Are you sure you want to ${action} ${lp.lp}?\n\n` +
+      (newActiveState
+        ? 'This will make it visible on the map and include it in calculations.'
+        : 'This will remove it from the map and exclude it from calculations. You can reactivate it later.')
+    );
+
+    if (!confirm) return;
+
+    try {
+      const { error } = await supabase
+        .from(tableNames.vass_lasteplass)
+        .update({ is_active: newActiveState })
+        .eq('id', lp.id);
+
+      if (error) throw error;
+
+      // alert(`Landingsplass ${action}d successfully!`);
+      loadLandingsplasser();
+    } catch (error) {
+      console.error(`Error ${action}ing landingsplass:`, error);
+      alert(`Error ${action}ing landingsplass`);
+    }
+  };
+
   // Vann CRUD operations
   const handleVannAdd = () => {
     setCurrentVann({
@@ -313,6 +378,7 @@ export default function AdminPage() {
       email: '',
       address: '',
       is_done: false,
+      is_active: true,
       comment: '',
     });
     setSelectedAssociation(null);
@@ -374,6 +440,7 @@ export default function AdminPage() {
             email: currentVann.email,
             address: currentVann.address,
             is_done: currentVann.is_done,
+            is_active: currentVann.is_active,
             comment: currentVann.comment,
           })
           .eq('id', currentVann.id);
@@ -442,6 +509,7 @@ export default function AdminPage() {
             email: currentVann.email,
             address: currentVann.address,
             is_done: currentVann.is_done || false,
+            is_active: currentVann.is_active !== undefined ? currentVann.is_active : true,
             comment: currentVann.comment,
           })
           .select()
@@ -511,6 +579,75 @@ export default function AdminPage() {
     } catch (error) {
       console.error('Error deleting vann marker:', error);
       alert('Error deleting vann marker');
+    }
+  };
+
+  const handleVannToggleActive = async (vann: VassVann) => {
+    if (!tableNames) return;
+
+    const newActiveState = !vann.is_active;
+    const action = newActiveState ? 'activate' : 'deactivate';
+
+    const confirm = window.confirm(
+      `Are you sure you want to ${action} ${vann.name || vann.vannavn || 'this vann marker'}?\n\n` +
+      (newActiveState
+        ? 'This will make it visible on the map and include it in calculations.'
+        : 'This will remove it from the map and exclude it from calculations. You can reactivate it later.')
+    );
+
+    if (!confirm) return;
+
+    try {
+      const { error } = await supabase
+        .from(tableNames.vass_vann)
+        .update({ is_active: newActiveState })
+        .eq('id', vann.id);
+
+      if (error) throw error;
+
+      // alert(`Vann marker ${action}d successfully!`);
+      loadVannMarkers();
+    } catch (error) {
+      console.error(`Error ${action}ing vann marker:`, error);
+      alert(`Error ${action}ing vann marker`);
+    }
+  };
+
+  const handleVannToggleActiveFromLpModal = async (vann: VassVann) => {
+    if (!tableNames || !currentLp) return;
+
+    const newActiveState = !vann.is_active;
+    const action = newActiveState ? 'activate' : 'deactivate';
+
+    const confirm = window.confirm(
+      `Are you sure you want to ${action} ${vann.name || vann.vannavn || 'this vann marker'}?\n\n` +
+      (newActiveState
+        ? 'This will make it visible on the map and include it in calculations.'
+        : 'This will remove it from the map and exclude it from calculations. You can reactivate it later.')
+    );
+
+    if (!confirm) return;
+
+    try {
+      const { error } = await supabase
+        .from(tableNames.vass_vann)
+        .update({ is_active: newActiveState })
+        .eq('id', vann.id);
+
+      if (error) throw error;
+
+      // Update the local state
+      setAssociatedVannMarkers(prev =>
+        prev.map(v => v.id === vann.id ? { ...v, is_active: newActiveState } : v)
+      );
+
+      // alert(`Vann marker ${action}d successfully!`);
+
+      // Also reload all vann markers
+      loadVannMarkers();
+    } catch (error) {
+      console.error(`Error ${action}ing vann marker:`, error);
+      alert(`Error ${action}ing vann marker`);
     }
   };
 
@@ -752,19 +889,12 @@ export default function AdminPage() {
     ));
   }, [landingsplasser]);
 
-  // Memoize handlers to prevent re-creating functions on every render
-  const handleVannFieldChange = useCallback((field: string, value: any) => {
-    setCurrentVann(prev => ({ ...prev, [field]: value }));
-  }, []);
-
   if (loading || tableNamesLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="spinner-border text-primary" role="status">
-            <span className="sr-only">Loading...</span>
-          </div>
-          <p className="mt-2">Loading admin panel...</p>
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+        <div className="text-center p-8 bg-white rounded-xl shadow-lg">
+          <RefreshCw className="w-10 h-10 animate-spin text-primary mx-auto mb-4" />
+          <p className="text-lg font-medium text-gray-700">Loading admin panel...</p>
         </div>
       </div>
     );
@@ -775,295 +905,398 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50" style={{ minHeight: '100vh', backgroundColor: '#f9fafb', padding: '2rem 1rem' }}>
-      <div className="container mx-auto py-8 px-4 max-w-7xl" style={{ maxWidth: '1280px', margin: '0 auto' }}>
-        <div className="mb-6" style={{ marginBottom: '1.5rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
-            <Link href="/" style={{ textDecoration: 'none' }}>
-              <Button
-                variant="outline"
-                style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
-              >
-                <i className="fas fa-arrow-left"></i>
-                Back to Map
-              </Button>
-            </Link>
-          </div>
-          <h1 className="text-3xl font-bold" style={{ fontSize: '1.875rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>Admin Panel</h1>
-          <p className="text-muted-foreground" style={{ color: '#6b7280' }}>Manage landingsplasser and vann markers</p>
+    <div className="container mx-auto py-8 px-4 max-w-7xl">
+      <div className="mb-8">
+        <div className="flex items-center gap-4 mb-4">
+          <Link href="/" passHref>
+            <Button variant="outline" size="sm" className="gap-2">
+              <ArrowLeft className="w-4 h-4" />
+              Back to Map
+            </Button>
+          </Link>
         </div>
+        <div className="flex flex-col gap-2">
+          <h1 className="text-4xl font-bold tracking-tight text-gray-900">Admin Panel</h1>
+          <p className="text-muted-foreground text-lg">Manage landingsplasser, vann markers, and configurations.</p>
+        </div>
+      </div>
+
+      {/* Active Database Indicator */}
+      {currentConfig && (
+        <Card className={`mb-8 border-2 shadow-sm ${currentConfig.active_year === 'current' ? 'border-blue-200 bg-blue-50/50' : 'border-yellow-200 bg-yellow-50/50'}`}>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between p-6 gap-4">
+            <div className="flex items-start gap-4">
+              <div className={`mt-1 w-3 h-3 rounded-full ${currentConfig.active_year === 'current' ? 'bg-blue-500' : 'bg-yellow-500'} animate-pulse`} />
+              <div>
+                <h3 className="font-semibold text-lg text-gray-900 flex items-center gap-2">
+                  <Database className="w-5 h-5" />
+                  {currentConfig.active_year === 'current'
+                    ? '2025 (Current Database)'
+                    : `${currentConfig.active_year} Database${currentConfig.active_prefix ? ` (${currentConfig.active_prefix})` : ''}`
+                  }
+                </h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  All edits will be saved to this database
+                  {currentConfig.updated_at && (
+                    <> • Last updated {new Date(currentConfig.updated_at).toLocaleString()}</>
+                  )}
+                </p>
+              </div>
+            </div>
+            <div className="text-sm text-muted-foreground font-medium flex items-center gap-1 bg-white/50 px-3 py-1 rounded-full border border-black/5">
+              <AlertTriangle className="w-4 h-4" />
+              Change database in Archive tab
+            </div>
+          </div>
+        </Card>
+      )}
 
       <Tabs defaultValue="landingsplass" className="w-full">
-        <TabsList className="grid w-full grid-cols-3 max-w-2xl">
-          <TabsTrigger value="landingsplass">Landingsplasser</TabsTrigger>
-          <TabsTrigger value="vann">Vann Markers</TabsTrigger>
-          <TabsTrigger value="archive">Archive / Year Management</TabsTrigger>
+        <TabsList className="w-full grid grid-cols-2 lg:grid-cols-5 mb-8 bg-gray-100/80 p-1">
+          <TabsTrigger value="landingsplass" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">Landingsplasser</TabsTrigger>
+          <TabsTrigger value="vann" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">Vann Markers</TabsTrigger>
+          <TabsTrigger value="planning" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">Planning & Optimization</TabsTrigger>
+          <TabsTrigger value="comparison" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">Year Comparison</TabsTrigger>
+          <TabsTrigger value="archive" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">Archive</TabsTrigger>
         </TabsList>
 
         {/* Landingsplass Tab */}
-        <TabsContent value="landingsplass" className="space-y-4">
+        <TabsContent value="landingsplass" className="space-y-6">
           <div className="flex justify-between items-center">
-            <h2 className="text-2xl font-semibold">Landingsplasser ({landingsplasser.length})</h2>
-            <Button onClick={handleLpAdd}>Add New Landingsplass</Button>
+            <h2 className="text-2xl font-semibold text-gray-800">Landingsplasser ({landingsplasser.length})</h2>
+            <Button onClick={handleLpAdd} className="gap-2 shadow-sm">
+              <Plus className="w-4 h-4" /> Add New Landingsplass
+            </Button>
           </div>
 
-          <div className="border rounded-lg overflow-hidden" style={{ border: '1px solid #e5e7eb', borderRadius: '0.5rem', overflow: 'hidden', backgroundColor: 'white' }}>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead onClick={() => handleLpSort('id')} style={{ cursor: 'pointer', userSelect: 'none' }}>
-                    ID {lpSortField === 'id' && (lpSortDirection === 'asc' ? '↑' : '↓')}
-                  </TableHead>
-                  <TableHead onClick={() => handleLpSort('lp')} style={{ cursor: 'pointer', userSelect: 'none' }}>
-                    LP Code {lpSortField === 'lp' && (lpSortDirection === 'asc' ? '↑' : '↓')}
-                  </TableHead>
-                  <TableHead onClick={() => handleLpSort('kode')} style={{ cursor: 'pointer', userSelect: 'none' }}>
-                    Kode {lpSortField === 'kode' && (lpSortDirection === 'asc' ? '↑' : '↓')}
-                  </TableHead>
-                  <TableHead onClick={() => handleLpSort('fylke')} style={{ cursor: 'pointer', userSelect: 'none' }}>
-                    Fylke {lpSortField === 'fylke' && (lpSortDirection === 'asc' ? '↑' : '↓')}
-                  </TableHead>
-                  <TableHead>Coordinates</TableHead>
-                  <TableHead onClick={() => handleLpSort('tonn_lp')} style={{ cursor: 'pointer', userSelect: 'none' }}>
-                    Tonn {lpSortField === 'tonn_lp' && (lpSortDirection === 'asc' ? '↑' : '↓')}
-                  </TableHead>
-                  <TableHead onClick={() => handleLpSort('priority')} style={{ cursor: 'pointer', userSelect: 'none' }}>
-                    Priority {lpSortField === 'priority' && (lpSortDirection === 'asc' ? '↑' : '↓')}
-                  </TableHead>
-                  <TableHead onClick={() => handleLpSort('is_done')} style={{ cursor: 'pointer', userSelect: 'none' }}>
-                    Status {lpSortField === 'is_done' && (lpSortDirection === 'asc' ? '↑' : '↓')}
-                  </TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {sortedLandingsplasser.map((lp) => (
-                  <TableRow key={lp.id}>
-                    <TableCell>{lp.id}</TableCell>
-                    <TableCell>{lp.lp}</TableCell>
-                    <TableCell>{lp.kode || '-'}</TableCell>
-                    <TableCell>{lp.fylke || '-'}</TableCell>
-                    <TableCell className="text-xs">
-                      {lp.latitude && lp.longitude ? `${lp.latitude.toFixed(4)}, ${lp.longitude.toFixed(4)}` : '-'}
-                    </TableCell>
-                    <TableCell>{lp.tonn_lp || '-'}</TableCell>
-                    <TableCell>{lp.priority || '-'}</TableCell>
-                    <TableCell>
-                      <span className={`px-2 py-1 rounded text-xs ${lp.is_done ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
-                        {lp.is_done ? 'Done' : 'Pending'}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-2">
-                        <Button size="sm" onClick={() => handleLpEdit(lp)}>Edit</Button>
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => {
-                            setLpToDelete(lp.id);
-                            setLpDeleteDialogOpen(true);
-                          }}
-                        >
-                          Delete
-                        </Button>
-                      </div>
-                    </TableCell>
+          <Card className="overflow-hidden border-gray-200 shadow-sm">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-gray-50/50 hover:bg-gray-50/50">
+                    <TableHead onClick={() => handleLpSort('id')} className="cursor-pointer w-[80px] font-semibold">
+                      ID {lpSortField === 'id' && (lpSortDirection === 'asc' ? '↑' : '↓')}
+                    </TableHead>
+                    <TableHead onClick={() => handleLpSort('lp')} className="cursor-pointer font-semibold">
+                      LP Code {lpSortField === 'lp' && (lpSortDirection === 'asc' ? '↑' : '↓')}
+                    </TableHead>
+                    <TableHead onClick={() => handleLpSort('kode')} className="cursor-pointer font-semibold">
+                      Kode {lpSortField === 'kode' && (lpSortDirection === 'asc' ? '↑' : '↓')}
+                    </TableHead>
+                    <TableHead onClick={() => handleLpSort('fylke')} className="cursor-pointer font-semibold">
+                      Fylke {lpSortField === 'fylke' && (lpSortDirection === 'asc' ? '↑' : '↓')}
+                    </TableHead>
+                    <TableHead className="font-semibold">Coordinates</TableHead>
+                    <TableHead onClick={() => handleLpSort('tonn_lp')} className="cursor-pointer font-semibold">
+                      Tonn {lpSortField === 'tonn_lp' && (lpSortDirection === 'asc' ? '↑' : '↓')}
+                    </TableHead>
+                    <TableHead onClick={() => handleLpSort('priority')} className="cursor-pointer font-semibold">
+                      Priority {lpSortField === 'priority' && (lpSortDirection === 'asc' ? '↑' : '↓')}
+                    </TableHead>
+                    <TableHead onClick={() => handleLpSort('is_done')} className="cursor-pointer font-semibold">
+                      Status {lpSortField === 'is_done' && (lpSortDirection === 'asc' ? '↑' : '↓')}
+                    </TableHead>
+                    <TableHead onClick={() => handleLpSort('is_active')} className="cursor-pointer font-semibold">
+                      Active {lpSortField === 'is_active' && (lpSortDirection === 'asc' ? '↑' : '↓')}
+                    </TableHead>
+                    <TableHead className="text-right font-semibold">Actions</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+                </TableHeader>
+                <TableBody>
+                  {sortedLandingsplasser.map((lp) => (
+                    <TableRow key={lp.id} className={!lp.is_active ? 'opacity-60 bg-gray-50' : ''}>
+                      <TableCell className="font-medium text-gray-500">{lp.id}</TableCell>
+                      <TableCell className="font-medium">{lp.lp}</TableCell>
+                      <TableCell>{lp.kode || '-'}</TableCell>
+                      <TableCell>{lp.fylke || '-'}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground font-mono">
+                        {lp.latitude && lp.longitude ? `${lp.latitude.toFixed(4)}, ${lp.longitude.toFixed(4)}` : '-'}
+                      </TableCell>
+                      <TableCell>{lp.tonn_lp || '-'}</TableCell>
+                      <TableCell>{lp.priority || '-'}</TableCell>
+                      <TableCell>
+                        <Badge variant={lp.is_done ? 'default' : 'secondary'} className={lp.is_done ? 'bg-green-100 text-green-800 hover:bg-green-100' : 'bg-gray-100 text-gray-800 hover:bg-gray-100'}>
+                          {lp.is_done ? 'Done' : 'Pending'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={lp.is_active ? 'default' : 'outline'} className={lp.is_active ? 'bg-blue-100 text-blue-800 hover:bg-blue-100' : 'text-gray-500 border-gray-300'}>
+                          {lp.is_active ? 'Active' : 'Deactivated'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button size="sm" variant="ghost" onClick={() => handleLpEdit(lp)}>
+                            <Edit className="w-4 h-4 text-gray-600" />
+                            <span className="sr-only">Edit</span>
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleLpToggleActive(lp)}
+                            title={lp.is_active ? 'Deactivate' : 'Activate'}
+                          >
+                            {lp.is_active ? (
+                              <XCircle className="w-4 h-4 text-orange-500" />
+                            ) : (
+                              <CheckCircle className="w-4 h-4 text-green-500" />
+                            )}
+                            <span className="sr-only">{lp.is_active ? 'Deactivate' : 'Activate'}</span>
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-red-500 hover:text-red-600 hover:bg-red-50"
+                            onClick={() => {
+                              setLpToDelete(lp.id);
+                              setLpDeleteDialogOpen(true);
+                            }}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            <span className="sr-only">Delete</span>
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </Card>
         </TabsContent>
 
         {/* Vann Tab */}
-        <TabsContent value="vann" className="space-y-4">
+        <TabsContent value="vann" className="space-y-6">
           <div className="flex justify-between items-center">
-            <h2 className="text-2xl font-semibold">Vann Markers ({vannMarkers.length})</h2>
-            <Button onClick={handleVannAdd}>Add New Vann Marker</Button>
+            <h2 className="text-2xl font-semibold text-gray-800">Vann Markers ({vannMarkers.length})</h2>
+            <Button onClick={handleVannAdd} className="gap-2 shadow-sm">
+              <Plus className="w-4 h-4" /> Add New Vann Marker
+            </Button>
           </div>
 
-          <div className="border rounded-lg overflow-hidden" style={{ border: '1px solid #e5e7eb', borderRadius: '0.5rem', overflow: 'hidden', backgroundColor: 'white' }}>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead onClick={() => handleVannSort('id')} style={{ cursor: 'pointer', userSelect: 'none' }}>
-                    ID {vannSortField === 'id' && (vannSortDirection === 'asc' ? '↑' : '↓')}
-                  </TableHead>
-                  <TableHead onClick={() => handleVannSort('name')} style={{ cursor: 'pointer', userSelect: 'none' }}>
-                    Name {vannSortField === 'name' && (vannSortDirection === 'asc' ? '↑' : '↓')}
-                  </TableHead>
-                  <TableHead onClick={() => handleVannSort('vannavn')} style={{ cursor: 'pointer', userSelect: 'none' }}>
-                    Vannavn {vannSortField === 'vannavn' && (vannSortDirection === 'asc' ? '↑' : '↓')}
-                  </TableHead>
-                  <TableHead onClick={() => handleVannSort('fylke')} style={{ cursor: 'pointer', userSelect: 'none' }}>
-                    Fylke {vannSortField === 'fylke' && (vannSortDirection === 'asc' ? '↑' : '↓')}
-                  </TableHead>
-                  <TableHead>Coordinates</TableHead>
-                  <TableHead onClick={() => handleVannSort('tonn')} style={{ cursor: 'pointer', userSelect: 'none' }}>
-                    Tonn {vannSortField === 'tonn' && (vannSortDirection === 'asc' ? '↑' : '↓')}
-                  </TableHead>
-                  <TableHead onClick={() => handleVannSort('marker_color')} style={{ cursor: 'pointer', userSelect: 'none' }}>
-                    Color {vannSortField === 'marker_color' && (vannSortDirection === 'asc' ? '↑' : '↓')}
-                  </TableHead>
-                  <TableHead onClick={() => handleVannSort('is_done')} style={{ cursor: 'pointer', userSelect: 'none' }}>
-                    Status {vannSortField === 'is_done' && (vannSortDirection === 'asc' ? '↑' : '↓')}
-                  </TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {sortedVannMarkers.map((vann) => (
-                  <TableRow key={vann.id}>
-                    <TableCell>{vann.id}</TableCell>
-                    <TableCell>{vann.name || '-'}</TableCell>
-                    <TableCell>{vann.vannavn || '-'}</TableCell>
-                    <TableCell>{vann.fylke || '-'}</TableCell>
-                    <TableCell className="text-xs">
-                      {vann.latitude && vann.longitude ? `${vann.latitude.toFixed(4)}, ${vann.longitude.toFixed(4)}` : '-'}
-                    </TableCell>
-                    <TableCell>{vann.tonn || '-'}</TableCell>
-                    <TableCell>
-                      <span className={`px-2 py-1 rounded text-xs text-white`} style={{ backgroundColor: vann.marker_color || 'red' }}>
-                        {vann.marker_color || 'red'}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <span className={`px-2 py-1 rounded text-xs ${vann.is_done ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
-                        {vann.is_done ? 'Done' : 'Pending'}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-2">
-                        <Button size="sm" onClick={() => handleVannEdit(vann)}>Edit</Button>
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => {
-                            setVannToDelete(vann.id);
-                            setVannDeleteDialogOpen(true);
-                          }}
-                        >
-                          Delete
-                        </Button>
-                      </div>
-                    </TableCell>
+          <Card className="overflow-hidden border-gray-200 shadow-sm">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-gray-50/50 hover:bg-gray-50/50">
+                    <TableHead onClick={() => handleVannSort('id')} className="cursor-pointer w-[80px] font-semibold">
+                      ID {vannSortField === 'id' && (vannSortDirection === 'asc' ? '↑' : '↓')}
+                    </TableHead>
+                    <TableHead onClick={() => handleVannSort('name')} className="cursor-pointer font-semibold">
+                      Name {vannSortField === 'name' && (vannSortDirection === 'asc' ? '↑' : '↓')}
+                    </TableHead>
+                    <TableHead onClick={() => handleVannSort('vannavn')} className="cursor-pointer font-semibold">
+                      Vannavn {vannSortField === 'vannavn' && (vannSortDirection === 'asc' ? '↑' : '↓')}
+                    </TableHead>
+                    <TableHead onClick={() => handleVannSort('fylke')} className="cursor-pointer font-semibold">
+                      Fylke {vannSortField === 'fylke' && (vannSortDirection === 'asc' ? '↑' : '↓')}
+                    </TableHead>
+                    <TableHead className="font-semibold">Coordinates</TableHead>
+                    <TableHead onClick={() => handleVannSort('tonn')} className="cursor-pointer font-semibold">
+                      Tonn {vannSortField === 'tonn' && (vannSortDirection === 'asc' ? '↑' : '↓')}
+                    </TableHead>
+                    <TableHead onClick={() => handleVannSort('marker_color')} className="cursor-pointer font-semibold">
+                      Color {vannSortField === 'marker_color' && (vannSortDirection === 'asc' ? '↑' : '↓')}
+                    </TableHead>
+                    <TableHead onClick={() => handleVannSort('is_done')} className="cursor-pointer font-semibold">
+                      Status {vannSortField === 'is_done' && (vannSortDirection === 'asc' ? '↑' : '↓')}
+                    </TableHead>
+                    <TableHead onClick={() => handleVannSort('is_active')} className="cursor-pointer font-semibold">
+                      Active {vannSortField === 'is_active' && (vannSortDirection === 'asc' ? '↑' : '↓')}
+                    </TableHead>
+                    <TableHead className="text-right font-semibold">Actions</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+                </TableHeader>
+                <TableBody>
+                  {sortedVannMarkers.map((vann) => (
+                    <TableRow key={vann.id} className={!vann.is_active ? 'opacity-60 bg-gray-50' : ''}>
+                      <TableCell className="font-medium text-gray-500">{vann.id}</TableCell>
+                      <TableCell className="font-medium">{vann.name || '-'}</TableCell>
+                      <TableCell>{vann.vannavn || '-'}</TableCell>
+                      <TableCell>{vann.fylke || '-'}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground font-mono">
+                        {vann.latitude && vann.longitude ? `${vann.latitude.toFixed(4)}, ${vann.longitude.toFixed(4)}` : '-'}
+                      </TableCell>
+                      <TableCell>{vann.tonn || '-'}</TableCell>
+                      <TableCell>
+                        <div
+                          className="w-4 h-4 rounded-full border border-gray-200 shadow-sm"
+                          style={{ backgroundColor: vann.marker_color || 'red' }}
+                          title={vann.marker_color || 'red'}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={vann.is_done ? 'default' : 'secondary'} className={vann.is_done ? 'bg-green-100 text-green-800 hover:bg-green-100' : 'bg-gray-100 text-gray-800 hover:bg-gray-100'}>
+                          {vann.is_done ? 'Done' : 'Pending'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={vann.is_active ? 'default' : 'outline'} className={vann.is_active ? 'bg-blue-100 text-blue-800 hover:bg-blue-100' : 'text-gray-500 border-gray-300'}>
+                          {vann.is_active ? 'Active' : 'Deactivated'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button size="sm" variant="ghost" onClick={() => handleVannEdit(vann)}>
+                            <Edit className="w-4 h-4 text-gray-600" />
+                            <span className="sr-only">Edit</span>
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleVannToggleActive(vann)}
+                            title={vann.is_active ? 'Deactivate' : 'Activate'}
+                          >
+                            {vann.is_active ? (
+                              <XCircle className="w-4 h-4 text-orange-500" />
+                            ) : (
+                              <CheckCircle className="w-4 h-4 text-green-500" />
+                            )}
+                            <span className="sr-only">{vann.is_active ? 'Deactivate' : 'Activate'}</span>
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-red-500 hover:text-red-600 hover:bg-red-50"
+                            onClick={() => {
+                              setVannToDelete(vann.id);
+                              setVannDeleteDialogOpen(true);
+                            }}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            <span className="sr-only">Delete</span>
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </Card>
         </TabsContent>
 
         {/* Archive Tab */}
         <TabsContent value="archive" className="space-y-6">
           {/* Current Configuration Section */}
-          <div className="border rounded-lg p-6" style={{ border: '1px solid #e5e7eb', borderRadius: '0.5rem', padding: '1.5rem', backgroundColor: 'white' }}>
-            <h2 className="text-2xl font-semibold mb-4">Current Active Year</h2>
-            {currentConfig ? (
-              <div className="space-y-2">
+          <Card>
+            <CardHeader>
+              <CardTitle>Current Active Year</CardTitle>
+              <CardDescription>The database configuration currently in use by the application.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {currentConfig ? (
                 <div className="flex items-center gap-4">
-                  <div className="text-lg">
-                    <span className="font-semibold">Year:</span>{' '}
-                    <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded">
+                  <div className="flex flex-col">
+                    <span className="text-sm font-medium text-gray-500">Year</span>
+                    <Badge variant="outline" className="text-base py-1 px-3 border-blue-200 bg-blue-50 text-blue-800">
                       {currentConfig.active_year === 'current' ? 'Current (No Archive)' : currentConfig.active_year}
-                    </span>
+                    </Badge>
                   </div>
                   {currentConfig.active_prefix && (
-                    <div className="text-lg">
-                      <span className="font-semibold">Prefix:</span>{' '}
-                      <span className="px-3 py-1 bg-green-100 text-green-800 rounded">
-                        {currentConfig.active_prefix}
-                      </span>
-                    </div>
+                    <>
+                      <div className="h-8 w-px bg-gray-200" />
+                      <div className="flex flex-col">
+                        <span className="text-sm font-medium text-gray-500">Prefix</span>
+                        <Badge variant="outline" className="text-base py-1 px-3 border-green-200 bg-green-50 text-green-800">
+                          {currentConfig.active_prefix}
+                        </Badge>
+                      </div>
+                    </>
                   )}
                 </div>
-                <p className="text-sm text-gray-600 mt-2">
-                  The app is currently using tables with the above configuration. All data is being stored in{' '}
-                  {currentConfig.active_year === 'current'
-                    ? 'the default tables (no year prefix)'
-                    : `year ${currentConfig.active_year} tables${currentConfig.active_prefix ? ` with prefix "${currentConfig.active_prefix}"` : ''}`
-                  }.
-                </p>
-              </div>
-            ) : (
-              <p className="text-gray-600">Loading configuration...</p>
-            )}
-          </div>
+              ) : (
+                <p className="text-gray-600">Loading configuration...</p>
+              )}
+            </CardContent>
+          </Card>
 
           {/* Switch Archive Section */}
-          <div className="border rounded-lg p-6" style={{ border: '1px solid #e5e7eb', borderRadius: '0.5rem', padding: '1.5rem', backgroundColor: 'white' }}>
-            <h2 className="text-2xl font-semibold mb-4">Switch Between Archives</h2>
-            <p className="text-gray-600 mb-4">
-              Select a different archive/year to work with. This changes which database tables the app uses.
-            </p>
+          <Card>
+            <CardHeader>
+              <CardTitle>Switch Between Archives</CardTitle>
+              <CardDescription>Select a different archive/year to work with. This changes which database tables the app uses.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {availableArchives.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {availableArchives.map((archive) => {
+                    const isActive =
+                      currentConfig?.active_year === archive.year &&
+                      (currentConfig?.active_prefix || '') === archive.prefix;
 
-            {availableArchives.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {availableArchives.map((archive) => {
-                  const isActive =
-                    currentConfig?.active_year === archive.year &&
-                    (currentConfig?.active_prefix || '') === archive.prefix;
+                    const displayName = archive.year === 'current'
+                      ? 'Current (No Archive)'
+                      : `${archive.year}${archive.prefix ? ` - ${archive.prefix}` : ''}`;
 
-                  const displayName = archive.year === 'current'
-                    ? 'Current (No Archive)'
-                    : `${archive.year}${archive.prefix ? ` - ${archive.prefix}` : ''}`;
-
-                  return (
-                    <button
-                      key={`${archive.year}-${archive.prefix}`}
-                      onClick={() => handleSwitchArchive(archive.year, archive.prefix)}
-                      disabled={isActive || switchingArchive}
-                      className={`p-4 rounded-lg border-2 text-left transition-all ${
-                        isActive
-                          ? 'border-green-500 bg-green-50'
-                          : 'border-gray-200 hover:border-blue-300 hover:bg-gray-50'
-                      } ${switchingArchive ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-                      style={isActive ? {
-                        borderColor: '#10b981',
-                        backgroundColor: '#f0fdf4',
-                        borderWidth: '2px'
-                      } : undefined}
-                    >
-                      <div className="flex items-center gap-2">
-                        {isActive ? (
-                          <i className="fas fa-check-circle text-green-600"></i>
-                        ) : (
-                          <i className="fas fa-circle text-gray-300"></i>
-                        )}
-                        <span className={`font-semibold ${isActive ? 'text-green-900' : 'text-gray-900'}`}>
-                          {displayName}
-                        </span>
-                      </div>
-                      {isActive && (
-                        <div className="mt-2 text-xs text-green-600">
-                          Currently Active
+                    return (
+                      <button
+                        key={`${archive.year}-${archive.prefix}`}
+                        onClick={() => handleSwitchArchive(archive.year, archive.prefix)}
+                        disabled={isActive || switchingArchive}
+                        className={`
+                          relative flex items-center p-4 rounded-xl border-2 transition-all duration-200
+                          ${isActive
+                            ? 'border-green-500 bg-green-50/50 ring-1 ring-green-500/20'
+                            : 'border-gray-200 hover:border-blue-300 hover:bg-blue-50/30 hover:shadow-sm'
+                          }
+                          ${switchingArchive ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
+                        `}
+                      >
+                        <div className="flex-1 text-left">
+                          <div className="flex items-center gap-3">
+                            {isActive ? (
+                              <div className="flex items-center justify-center w-6 h-6 rounded-full bg-green-100 text-green-600">
+                                <CheckCircle className="w-4 h-4" />
+                              </div>
+                            ) : (
+                              <div className="w-6 h-6 rounded-full border-2 border-gray-200" />
+                            )}
+                            <span className={`font-semibold ${isActive ? 'text-green-900' : 'text-gray-900'}`}>
+                              {displayName}
+                            </span>
+                          </div>
+                          {isActive && (
+                            <div className="mt-2 ml-9 text-xs font-medium text-green-600">
+                              Currently Active
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            ) : (
-              <p className="text-gray-500 italic">Loading available archives...</p>
-            )}
-          </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="flex items-center justify-center p-8 text-muted-foreground">
+                  <RefreshCw className="w-5 h-5 animate-spin mr-2" />
+                  Loading available archives...
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
           {/* Create New Year Archive Section */}
-          <div className="border rounded-lg p-6" style={{ border: '1px solid #e5e7eb', borderRadius: '0.5rem', padding: '1.5rem', backgroundColor: 'white' }}>
-            <h2 className="text-2xl font-semibold mb-4">Create New Year Archive</h2>
-            <p className="text-gray-600 mb-6">
-              Create a new year-based archive to preserve current data and start fresh. This will:
-            </p>
-            <ul className="list-disc list-inside text-gray-600 mb-6 space-y-2">
-              <li>Create new empty tables for the specified year</li>
-              <li>Make current tables READ-ONLY (archived)</li>
-              <li>Switch the app to use the new year tables</li>
-              <li>Generate a migration SQL that you need to run</li>
-            </ul>
+          <Card>
+            <CardHeader>
+              <CardTitle>Create New Year Archive</CardTitle>
+              <CardDescription>Create a new year-based archive to preserve current data and start fresh.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="bg-yellow-50 border border-yellow-100 rounded-lg p-4 text-sm text-yellow-800">
+                <h4 className="font-semibold mb-2 flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4" />
+                  This action will:
+                </h4>
+                <ul className="list-disc list-inside space-y-1 ml-1">
+                  <li>Create new empty tables for the specified year</li>
+                  <li>Make current tables READ-ONLY (archived)</li>
+                  <li>Switch the app to use the new year tables</li>
+                  <li>Generate a migration SQL that you need to run</li>
+                </ul>
+              </div>
 
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
                   <Label htmlFor="archive-year">Year * (e.g., 2025)</Label>
                   <Input
                     id="archive-year"
@@ -1074,7 +1307,7 @@ export default function AdminPage() {
                     disabled={archiveLoading}
                   />
                 </div>
-                <div>
+                <div className="space-y-2">
                   <Label htmlFor="archive-prefix">Prefix (optional, e.g., project_name)</Label>
                   <Input
                     id="archive-prefix"
@@ -1087,94 +1320,103 @@ export default function AdminPage() {
                 </div>
               </div>
 
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                <h3 className="font-semibold text-yellow-900 mb-2">Preview:</h3>
-                <p className="text-sm text-yellow-800 mb-2">
+              <div className="bg-gray-50 rounded-lg p-4 border border-gray-100">
+                <h3 className="text-sm font-medium text-gray-900 mb-2">Table Name Preview:</h3>
+                <code className="text-sm bg-white px-2 py-1 rounded border border-gray-200 block w-fit text-blue-600 font-mono">
                   {archiveYear && archiveYear.trim() !== '' ? (
-                    <>
-                      Tables will be named:{' '}
-                      <code className="bg-yellow-100 px-2 py-1 rounded">
-                        {archiveYear}{archivePrefix ? `_${archivePrefix}` : ''}_vass_vann
-                      </code>
-                      , etc.
-                    </>
+                    `${archiveYear}${archivePrefix ? `_${archivePrefix}` : ''}_vass_vann`
                   ) : (
-                    'Enter a year to see table naming preview'
+                    'Enter a year to see preview'
                   )}
-                </p>
-                <p className="text-sm text-yellow-800">
-                  Affected tables: vass_associations, vass_info, vass_info_documents, vass_info_images,
-                  vass_lasteplass, vass_lasteplass_documents, vass_lasteplass_images, vass_vann,
-                  vass_vann_documents, vass_vann_images
-                </p>
+                </code>
               </div>
 
-              <div className="flex justify-between items-center pt-4">
-                <p className="text-sm text-gray-600">
-                  Note: This will generate SQL that you need to run as a migration
-                </p>
+              <div className="flex justify-end">
                 <Button
                   onClick={handleArchiveSubmit}
                   disabled={archiveLoading || !archiveYear || archiveYear.trim() === ''}
-                  className="bg-blue-600 hover:bg-blue-700"
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
                 >
-                  {archiveLoading ? 'Generating...' : 'Generate Archive Migration'}
+                  {archiveLoading ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin mr-2" />
+                      Generating...
+                    </>
+                  ) : (
+                    'Generate Archive Migration'
+                  )}
                 </Button>
               </div>
-            </div>
-          </div>
+            </CardContent>
+          </Card>
 
           {/* Tables List Section */}
-          <div className="border rounded-lg p-6" style={{ border: '1px solid #e5e7eb', borderRadius: '0.5rem', padding: '1.5rem', backgroundColor: 'white' }}>
-            <h2 className="text-2xl font-semibold mb-4">Tables Managed by Archive System</h2>
-            <div className="grid grid-cols-2 gap-3">
-              {[
-                'vass_associations',
-                'vass_info',
-                'vass_info_documents',
-                'vass_info_images',
-                'vass_lasteplass',
-                'vass_lasteplass_documents',
-                'vass_lasteplass_images',
-                'vass_vann',
-                'vass_vann_documents',
-                'vass_vann_images',
-              ].map((tableName) => (
-                <div key={tableName} className="flex items-center gap-2 p-2 bg-gray-50 rounded">
-                  <i className="fas fa-table text-gray-600"></i>
-                  <span className="font-mono text-sm">{tableName}</span>
-                </div>
-              ))}
-            </div>
-          </div>
+          <Card>
+            <CardHeader>
+              <CardTitle>Tables Managed by Archive System</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {[
+                  'vass_associations',
+                  'vass_info',
+                  'vass_info_documents',
+                  'vass_info_images',
+                  'vass_lasteplass',
+                  'vass_lasteplass_documents',
+                  'vass_lasteplass_images',
+                  'vass_vann',
+                  'vass_vann_documents',
+                  'vass_vann_images',
+                ].map((tableName) => (
+                  <div key={tableName} className="flex items-center gap-2 p-2.5 bg-gray-50 rounded-md border border-gray-100">
+                    <Database className="w-4 h-4 text-gray-400" />
+                    <span className="font-mono text-sm text-gray-600">{tableName}</span>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Planning Tab */}
+        <TabsContent value="planning" className="space-y-6">
+          {tableNames && user?.email && (
+            <PlanningTab tableNames={tableNames} userEmail={user.email} />
+          )}
+        </TabsContent>
+
+        {/* Year Comparison Tab */}
+        <TabsContent value="comparison" className="space-y-6">
+          {availableArchives && currentConfig && (
+            <YearComparisonTab
+              availableYears={availableArchives.map(a => ({
+                year: a.year,
+                prefix: a.prefix,
+                label: a.year === 'current'
+                  ? '2025 (Original Data)'
+                  : `${a.year}${a.prefix ? ` (${a.prefix})` : ''}`,
+              }))}
+              currentYear={currentConfig?.active_year || 'current'}
+            />
+          )}
         </TabsContent>
       </Tabs>
 
       {/* Landingsplass Dialog */}
       <Dialog open={lpDialogOpen} onOpenChange={setLpDialogOpen}>
-        <DialogContent
-          className="max-w-2xl max-h-[90vh] overflow-y-auto"
-          style={{
-            maxWidth: '42rem',
-            maxHeight: '90vh',
-            overflowY: 'auto',
-            padding: '1.5rem',
-            backgroundColor: 'white',
-            borderRadius: '0.5rem',
-            boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)'
-          }}
-        >
-          <DialogHeader style={{ marginBottom: '1.5rem' }}>
-            <DialogTitle style={{ fontSize: '1.5rem', fontWeight: '600', marginBottom: '0.5rem' }}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
               {currentLp?.id ? 'Edit Landingsplass' : 'Add New Landingsplass'}
             </DialogTitle>
-            <DialogDescription className="sr-only">
-              Form to {currentLp?.id ? 'edit' : 'add'} landingsplass marker details
+            <DialogDescription>
+              {currentLp?.id ? 'Update the details of the landingsplass.' : 'Enter the details for the new landingsplass.'}
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid grid-cols-2 gap-4" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-            <div>
+          <div className="grid grid-cols-2 gap-4 py-4">
+            <div className="space-y-2">
               <Label htmlFor="lp">LP Code *</Label>
               <Input
                 id="lp"
@@ -1183,7 +1425,7 @@ export default function AdminPage() {
               />
             </div>
 
-            <div>
+            <div className="space-y-2">
               <Label htmlFor="kode">Kode</Label>
               <Input
                 id="kode"
@@ -1192,7 +1434,7 @@ export default function AdminPage() {
               />
             </div>
 
-            <div>
+            <div className="space-y-2">
               <Label htmlFor="kontaktperson">Kontaktperson</Label>
               <Input
                 id="kontaktperson"
@@ -1201,7 +1443,7 @@ export default function AdminPage() {
               />
             </div>
 
-            <div>
+            <div className="space-y-2">
               <Label htmlFor="forening">Forening</Label>
               <Input
                 id="forening"
@@ -1210,7 +1452,7 @@ export default function AdminPage() {
               />
             </div>
 
-            <div>
+            <div className="space-y-2">
               <Label htmlFor="fylke">Fylke</Label>
               <Input
                 id="fylke"
@@ -1219,7 +1461,7 @@ export default function AdminPage() {
               />
             </div>
 
-            <div>
+            <div className="space-y-2">
               <Label htmlFor="tonn_lp">Tonn</Label>
               <Input
                 id="tonn_lp"
@@ -1229,7 +1471,7 @@ export default function AdminPage() {
               />
             </div>
 
-            <div>
+            <div className="space-y-2">
               <Label htmlFor="priority">Priority</Label>
               <Input
                 id="priority"
@@ -1239,16 +1481,18 @@ export default function AdminPage() {
               />
             </div>
 
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="is_done_lp"
-                checked={currentLp?.is_done || false}
-                onCheckedChange={(checked) => setCurrentLp({ ...currentLp, is_done: checked as boolean })}
-              />
-              <Label htmlFor="is_done_lp">Is Done</Label>
+            <div className="flex items-end pb-2">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="is_done_lp"
+                  checked={currentLp?.is_done || false}
+                  onCheckedChange={(checked) => setCurrentLp({ ...currentLp, is_done: checked as boolean })}
+                />
+                <Label htmlFor="is_done_lp" className="cursor-pointer">Is Done</Label>
+              </div>
             </div>
 
-            <div className="col-span-2">
+            <div className="col-span-2 space-y-2">
               <Label>Coordinates</Label>
               <div className="flex gap-2">
                 <Input
@@ -1266,13 +1510,13 @@ export default function AdminPage() {
                   onChange={(e) => setCurrentLp({ ...currentLp, longitude: parseFloat(e.target.value) || null })}
                 />
                 <Button variant="outline" onClick={() => handleOpenMapPicker('lp')}>
-                  <i className="fas fa-map-marker-alt mr-2"></i>
+                  <MapPin className="w-4 h-4 mr-2" />
                   Select on Map
                 </Button>
               </div>
             </div>
 
-            <div className="col-span-2">
+            <div className="col-span-2 space-y-2">
               <Label htmlFor="comment_lp">Comment</Label>
               <Textarea
                 id="comment_lp"
@@ -1281,40 +1525,82 @@ export default function AdminPage() {
                 rows={3}
               />
             </div>
+
+            {/* Associated Vann Markers Section */}
+            {currentLp?.id && (
+              <div className="col-span-2 mt-4 border-t pt-4">
+                <Label className="text-base font-semibold mb-3 block">
+                  Associated Vann Markers ({associatedVannMarkers.length})
+                </Label>
+
+                {associatedVannMarkers.length > 0 ? (
+                  <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
+                    {associatedVannMarkers.map((vann) => (
+                      <div
+                        key={vann.id}
+                        className={`flex items-center justify-between p-3 rounded-lg border ${vann.is_active ? 'bg-gray-50 border-gray-200' : 'bg-gray-100 border-gray-200 opacity-70'}`}
+                      >
+                        <div className="flex-1">
+                          <div className="font-medium text-sm">
+                            {vann.name || vann.vannavn || 'Unnamed'}
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-0.5">
+                            ID: {vann.id} • Fylke: {vann.fylke || 'N/A'}
+                            {vann.tonn && ` • Tonn: ${vann.tonn}`}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <Badge variant={vann.is_active ? 'default' : 'outline'} className={vann.is_active ? 'bg-blue-100 text-blue-800 hover:bg-blue-100' : 'text-gray-500 border-gray-300'}>
+                            {vann.is_active ? 'Active' : 'Deactivated'}
+                          </Badge>
+
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleVannToggleActiveFromLpModal(vann)}
+                            title={vann.is_active ? 'Deactivate' : 'Activate'}
+                          >
+                            {vann.is_active ? (
+                              <XCircle className="w-4 h-4 text-orange-500" />
+                            ) : (
+                              <CheckCircle className="w-4 h-4 text-green-500" />
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground italic">
+                    No vann markers associated with this landingsplass
+                  </p>
+                )}
+              </div>
+            )}
           </div>
 
-          <DialogFooter style={{ marginTop: '1.5rem', display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+          <DialogFooter>
             <Button variant="outline" onClick={() => setLpDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleLpSave}>Save</Button>
+            <Button onClick={handleLpSave}>Save Changes</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Vann Dialog */}
       <Dialog open={vannDialogOpen} onOpenChange={setVannDialogOpen}>
-        <DialogContent
-          className="max-w-2xl max-h-[90vh] overflow-y-auto"
-          style={{
-            maxWidth: '42rem',
-            maxHeight: '90vh',
-            overflowY: 'auto',
-            padding: '1.5rem',
-            backgroundColor: 'white',
-            borderRadius: '0.5rem',
-            boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)'
-          }}
-        >
-          <DialogHeader style={{ marginBottom: '1.5rem' }}>
-            <DialogTitle style={{ fontSize: '1.5rem', fontWeight: '600', marginBottom: '0.5rem' }}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
               {currentVann?.id ? 'Edit Vann Marker' : 'Add New Vann Marker'}
             </DialogTitle>
-            <DialogDescription className="sr-only">
-              Form to {currentVann?.id ? 'edit' : 'add'} vann marker details and associations
+            <DialogDescription>
+              {currentVann?.id ? 'Update the details of the vann marker.' : 'Enter the details for the new vann marker.'}
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid grid-cols-2 gap-4" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-            <div>
+          <div className="grid grid-cols-2 gap-4 py-4">
+            <div className="space-y-2">
               <Label htmlFor="name">Name *</Label>
               <Input
                 id="name"
@@ -1323,7 +1609,7 @@ export default function AdminPage() {
               />
             </div>
 
-            <div>
+            <div className="space-y-2">
               <Label htmlFor="vannavn">Vannavn</Label>
               <Input
                 id="vannavn"
@@ -1332,7 +1618,7 @@ export default function AdminPage() {
               />
             </div>
 
-            <div>
+            <div className="space-y-2">
               <Label htmlFor="pnr">PNR</Label>
               <Input
                 id="pnr"
@@ -1342,7 +1628,7 @@ export default function AdminPage() {
               />
             </div>
 
-            <div>
+            <div className="space-y-2">
               <Label htmlFor="fylke_vann">Fylke</Label>
               <Input
                 id="fylke_vann"
@@ -1351,7 +1637,7 @@ export default function AdminPage() {
               />
             </div>
 
-            <div>
+            <div className="space-y-2">
               <Label htmlFor="tonn">Tonn</Label>
               <Input
                 id="tonn"
@@ -1360,7 +1646,7 @@ export default function AdminPage() {
               />
             </div>
 
-            <div>
+            <div className="space-y-2">
               <Label htmlFor="marker_color">Marker Color</Label>
               <Select
                 value={currentVann?.marker_color || 'red'}
@@ -1378,7 +1664,7 @@ export default function AdminPage() {
               </Select>
             </div>
 
-            <div>
+            <div className="space-y-2">
               <Label htmlFor="kontaktperson_vann">Kontaktperson</Label>
               <Input
                 id="kontaktperson_vann"
@@ -1387,7 +1673,7 @@ export default function AdminPage() {
               />
             </div>
 
-            <div>
+            <div className="space-y-2">
               <Label htmlFor="forening_vann">Forening</Label>
               <Input
                 id="forening_vann"
@@ -1396,7 +1682,7 @@ export default function AdminPage() {
               />
             </div>
 
-            <div>
+            <div className="space-y-2">
               <Label htmlFor="phone">Phone</Label>
               <Input
                 id="phone"
@@ -1406,7 +1692,7 @@ export default function AdminPage() {
               />
             </div>
 
-            <div>
+            <div className="space-y-2">
               <Label htmlFor="email_vann">Email</Label>
               <Input
                 id="email_vann"
@@ -1416,7 +1702,7 @@ export default function AdminPage() {
               />
             </div>
 
-            <div className="col-span-2">
+            <div className="col-span-2 space-y-2">
               <Label htmlFor="address">Address</Label>
               <Input
                 id="address"
@@ -1425,7 +1711,7 @@ export default function AdminPage() {
               />
             </div>
 
-            <div className="col-span-2">
+            <div className="col-span-2 space-y-2">
               <Label>Coordinates</Label>
               <div className="flex gap-2">
                 <Input
@@ -1443,13 +1729,13 @@ export default function AdminPage() {
                   onChange={(e) => setCurrentVann({ ...currentVann, longitude: parseFloat(e.target.value) || null })}
                 />
                 <Button variant="outline" onClick={() => handleOpenMapPicker('vann')}>
-                  <i className="fas fa-map-marker-alt mr-2"></i>
+                  <MapPin className="w-4 h-4 mr-2" />
                   Select on Map
                 </Button>
               </div>
             </div>
 
-            <div className="col-span-2">
+            <div className="col-span-2 space-y-2">
               <Label htmlFor="association">Associated Landingsplass</Label>
               <Select
                 value={selectedAssociation?.toString() || 'none'}
@@ -1471,10 +1757,10 @@ export default function AdminPage() {
                 checked={currentVann?.is_done || false}
                 onCheckedChange={(checked) => setCurrentVann({ ...currentVann, is_done: checked as boolean })}
               />
-              <Label htmlFor="is_done_vann">Is Done</Label>
+              <Label htmlFor="is_done_vann" className="cursor-pointer">Is Done</Label>
             </div>
 
-            <div className="col-span-2">
+            <div className="col-span-2 space-y-2">
               <Label htmlFor="comment_vann">Comment</Label>
               <Textarea
                 id="comment_vann"
@@ -1485,61 +1771,45 @@ export default function AdminPage() {
             </div>
           </div>
 
-          <DialogFooter style={{ marginTop: '1.5rem', display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+          <DialogFooter>
             <Button variant="outline" onClick={() => setVannDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleVannSave}>Save</Button>
+            <Button onClick={handleVannSave}>Save Changes</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Delete Landingsplass Dialog */}
       <AlertDialog open={lpDeleteDialogOpen} onOpenChange={setLpDeleteDialogOpen}>
-        <AlertDialogContent
-          style={{
-            maxWidth: '32rem',
-            padding: '1.5rem',
-            backgroundColor: 'white',
-            borderRadius: '0.5rem',
-            boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)'
-          }}
-        >
-          <AlertDialogHeader style={{ marginBottom: '1rem' }}>
-            <AlertDialogTitle style={{ fontSize: '1.25rem', fontWeight: '600', marginBottom: '0.5rem' }}>
-              Are you sure?
-            </AlertDialogTitle>
-            <AlertDialogDescription style={{ fontSize: '0.875rem', color: '#6b7280' }}>
-              This action cannot be undone. This will permanently delete the landingsplass and remove all associated data.
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the landingsplass and remove all associated data from our servers.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter style={{ marginTop: '1.5rem', display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+          <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleLpDelete}>Delete</AlertDialogAction>
+            <AlertDialogAction onClick={handleLpDelete} className="bg-red-600 hover:bg-red-700">
+              Delete Landingsplass
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
       {/* Delete Vann Dialog */}
       <AlertDialog open={vannDeleteDialogOpen} onOpenChange={setVannDeleteDialogOpen}>
-        <AlertDialogContent
-          style={{
-            maxWidth: '32rem',
-            padding: '1.5rem',
-            backgroundColor: 'white',
-            borderRadius: '0.5rem',
-            boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)'
-          }}
-        >
-          <AlertDialogHeader style={{ marginBottom: '1rem' }}>
-            <AlertDialogTitle style={{ fontSize: '1.25rem', fontWeight: '600', marginBottom: '0.5rem' }}>
-              Are you sure?
-            </AlertDialogTitle>
-            <AlertDialogDescription style={{ fontSize: '0.875rem', color: '#6b7280' }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogDescription>
               This action cannot be undone. This will permanently delete the vann marker and remove all associations with landingsplasser.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter style={{ marginTop: '1.5rem', display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+          <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleVannDelete}>Delete</AlertDialogAction>
+            <AlertDialogAction onClick={handleVannDelete} className="bg-red-600 hover:bg-red-700">
+              Delete Vann Marker
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -1552,7 +1822,6 @@ export default function AdminPage() {
         initialLat={mapPickerType === 'lp' ? currentLp?.latitude || undefined : currentVann?.latitude || undefined}
         initialLng={mapPickerType === 'lp' ? currentLp?.longitude || undefined : currentVann?.longitude || undefined}
       />
-      </div>
     </div>
   );
 }

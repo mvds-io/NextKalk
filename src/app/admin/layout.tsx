@@ -4,12 +4,7 @@ export default function AdminLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div style={{
-      minHeight: '100vh',
-      overflowY: 'auto',
-      display: 'block',
-      height: 'auto'
-    }}>
+    <div className="min-h-screen overflow-y-auto block h-auto bg-gray-50/50">
       {children}
     </div>
   );

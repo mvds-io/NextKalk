@@ -256,6 +256,7 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
           () => supabase
             .from(tableNames.vass_vann)
             .select('*')
+            .eq('is_active', true)
             .order('id', { ascending: true })
             .range(currentOffset, currentOffset + pageSize - 1),
           `load airports page ${Math.floor(currentOffset / pageSize) + 1}`
@@ -312,11 +313,12 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
     try {
       setLoadingStates(prev => ({ ...prev, landingsplasser: true }));
 
-      // First get all landingsplasser with retry logic
+      // First get all active landingsplasser with retry logic (filter out deactivated ones)
       const { data: landingsplassData } = await queryWithRetry(
         () => supabase
           .from(tableNames.vass_lasteplass)
           .select('*')
+          .eq('is_active', true)
           .order('lp', { ascending: true }),
         'load landingsplasser'
       );
