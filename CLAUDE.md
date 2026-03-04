@@ -21,7 +21,7 @@ Note: `npm install` automatically runs `scripts/download-powerlines.js` which do
 
 ## Architecture
 
-**Stack:** Next.js 15 (App Router) / React 19 / TypeScript / Supabase (PostgreSQL + Auth) / Leaflet / Bootstrap 5 + Tailwind v4 (shadcn/ui)
+**Stack:** Next.js 15 (App Router) / React 19 / TypeScript / Supabase (PostgreSQL + Auth) / Leaflet / Bootstrap 5 + Tailwind v3 (shadcn/ui)
 
 **Two routes:**
 - `/` — Main app: map + side panels, protected by `AuthGuard`
@@ -63,7 +63,8 @@ Custom connection pool in `supabase.ts` limits concurrent Supabase requests to 1
 ## Key Conventions
 
 - **Path alias:** `@/*` maps to `./src/*`
-- **CSS:** Hybrid approach — Bootstrap 5 (CDN), extensive custom CSS in `globals.css` (~70KB), Tailwind v4 CSS variables for shadcn/ui components
+- **CSS:** Hybrid approach — Bootstrap 5 (CDN), extensive custom CSS in `globals.css` (~70KB), Tailwind v3 CSS variables for shadcn/ui components
+- **Tailwind:** v3 with standard PostCSS config (`tailwindcss` + `autoprefixer`). Do NOT upgrade to Tailwind v4 / `@tailwindcss/postcss` — it causes infinite compilation hangs with this project's large component files
 - **shadcn/ui:** `new-york` style, configured in `components.json`, components in `src/components/ui/`
 - **Legacy naming:** Code uses "airports" for vann (water bodies) in many places — this is historical, not actual airports
 - **State management:** React hooks only (useState/useEffect/useCallback/useRef), no external state library
