@@ -76,6 +76,8 @@ export default function AdminPage() {
   const [lpSortField, setLpSortField] = useState<keyof Landingsplass>('id');
   const [lpSortDirection, setLpSortDirection] = useState<'asc' | 'desc'>('asc');
   const [associatedVannMarkers, setAssociatedVannMarkers] = useState<VassVann[]>([]);
+  const [lpTonnMap, setLpTonnMap] = useState<Record<number, number>>({});
+  const [lpVannCountMap, setLpVannCountMap] = useState<Record<number, number>>({});
 
   // Vann state
   const [vannMarkers, setVannMarkers] = useState<VassVann[]>([]);
@@ -140,6 +142,7 @@ export default function AdminPage() {
     if (user && tableNames && !tableNamesLoading) {
       loadLandingsplasser();
       loadVannMarkers();
+      loadLpTonnMap();
       loadCurrentConfig();
       loadAvailableArchives();
     }
@@ -204,6 +207,48 @@ export default function AdminPage() {
     } else {
       setVannMarkers(data || []);
     }
+  };
+
+  const loadLpTonnMap = async () => {
+    if (!tableNames) return;
+
+    const { data: associations, error: assocError } = await supabase
+      .from(tableNames.vass_associations)
+      .select('landingsplass_id, airport_id');
+
+    if (assocError || !associations) return;
+
+    const airportIds = [...new Set(associations.map(a => a.airport_id))];
+    if (airportIds.length === 0) {
+      setLpTonnMap({});
+      setLpVannCountMap({});
+      return;
+    }
+
+    // Fetch tonn for all associated vann markers
+    const { data: vannData, error: vannError } = await supabase
+      .from(tableNames.vass_vann)
+      .select('id, tonn')
+      .in('id', airportIds);
+
+    if (vannError || !vannData) return;
+
+    const vannTonnById: Record<number, number> = {};
+    vannData.forEach(v => {
+      const parsed = v.tonn ? parseFloat(v.tonn) : 0;
+      if (!isNaN(parsed)) vannTonnById[v.id] = parsed;
+    });
+
+    const tonnMap: Record<number, number> = {};
+    const countMap: Record<number, number> = {};
+    associations.forEach(a => {
+      const tonn = vannTonnById[a.airport_id] || 0;
+      tonnMap[a.landingsplass_id] = (tonnMap[a.landingsplass_id] || 0) + tonn;
+      countMap[a.landingsplass_id] = (countMap[a.landingsplass_id] || 0) + 1;
+    });
+
+    setLpTonnMap(tonnMap);
+    setLpVannCountMap(countMap);
   };
 
   // Landingsplass CRUD operations
@@ -283,6 +328,7 @@ export default function AdminPage() {
 
       // Remove from displayed list since it's no longer associated with this LP
       setAssociatedVannMarkers(prev => prev.filter(v => v.id !== vannId));
+      loadLpTonnMap();
     } catch (err) {
       console.error('Failed to reassociate vann:', err);
       alert('Failed to change association. Please try again.');
@@ -592,6 +638,7 @@ export default function AdminPage() {
       setCurrentVann(null);
       setSelectedAssociation(null);
       loadVannMarkers();
+      loadLpTonnMap();
     } catch (error) {
       console.error('Error saving vann marker:', error);
       alert('Error saving vann marker');
@@ -614,6 +661,7 @@ export default function AdminPage() {
       setVannDeleteDialogOpen(false);
       setVannToDelete(null);
       loadVannMarkers();
+      loadLpTonnMap();
     } catch (error) {
       console.error('Error deleting vann marker:', error);
       alert('Error deleting vann marker');
@@ -880,8 +928,17 @@ export default function AdminPage() {
   // Sorted data
   const sortedLandingsplasser = useMemo(() => {
     return [...landingsplasser].sort((a, b) => {
-      const aVal = a[lpSortField];
-      const bVal = b[lpSortField];
+      let aVal: any, bVal: any;
+      if (lpSortField === 'tonn_lp') {
+        aVal = lpTonnMap[a.id] || 0;
+        bVal = lpTonnMap[b.id] || 0;
+      } else if (lpSortField === 'priority') {
+        aVal = lpVannCountMap[a.id] || 0;
+        bVal = lpVannCountMap[b.id] || 0;
+      } else {
+        aVal = a[lpSortField];
+        bVal = b[lpSortField];
+      }
 
       if (aVal === null || aVal === undefined) return 1;
       if (bVal === null || bVal === undefined) return -1;
@@ -896,7 +953,7 @@ export default function AdminPage() {
       if (aVal > bVal) return lpSortDirection === 'asc' ? 1 : -1;
       return 0;
     });
-  }, [landingsplasser, lpSortField, lpSortDirection]);
+  }, [landingsplasser, lpSortField, lpSortDirection, lpTonnMap, lpVannCountMap]);
 
   const sortedVannMarkers = useMemo(() => {
     return [...vannMarkers].sort((a, b) => {
@@ -1030,7 +1087,7 @@ export default function AdminPage() {
                       Tonn {lpSortField === 'tonn_lp' && (lpSortDirection === 'asc' ? '↑' : '↓')}
                     </TableHead>
                     <TableHead onClick={() => handleLpSort('priority')} className="cursor-pointer font-semibold">
-                      Priority {lpSortField === 'priority' && (lpSortDirection === 'asc' ? '↑' : '↓')}
+                      Vann {lpSortField === 'priority' && (lpSortDirection === 'asc' ? '↑' : '↓')}
                     </TableHead>
                     <TableHead onClick={() => handleLpSort('is_done')} className="cursor-pointer font-semibold">
                       Status {lpSortField === 'is_done' && (lpSortDirection === 'asc' ? '↑' : '↓')}
@@ -1051,8 +1108,8 @@ export default function AdminPage() {
                       <TableCell className="text-xs text-muted-foreground font-mono">
                         {lp.latitude && lp.longitude ? `${lp.latitude.toFixed(4)}, ${lp.longitude.toFixed(4)}` : '-'}
                       </TableCell>
-                      <TableCell>{lp.tonn_lp || '-'}</TableCell>
-                      <TableCell>{lp.priority || '-'}</TableCell>
+                      <TableCell>{lpTonnMap[lp.id] ? lpTonnMap[lp.id].toFixed(1) : '-'}</TableCell>
+                      <TableCell>{lpVannCountMap[lp.id] || 0}</TableCell>
                       <TableCell>
                         <Badge variant={lp.is_done ? 'default' : 'secondary'} className={lp.is_done ? 'bg-green-100 text-green-800 hover:bg-green-100' : 'bg-gray-100 text-gray-800 hover:bg-gray-100'}>
                           {lp.is_done ? 'Done' : 'Pending'}

@@ -582,6 +582,7 @@ async function exportChangelogToPDF(
         user_email: session.user.email,
         action_type: 'export_pdf',
         target_type: 'changelog',
+        target_id: 0,
         action_details: {
           source: sourceLabel,
           target: targetLabel,
