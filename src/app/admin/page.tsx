@@ -22,6 +22,7 @@ import { MapboxCoordinatePicker } from '@/components/MapboxCoordinatePicker';
 import { useTableNames } from '@/contexts/TableNamesContext';
 import { PlanningTab } from '@/components/admin/PlanningTab';
 import { YearComparisonTab } from '@/components/admin/YearComparisonTab';
+import { ChangelogTab } from '@/components/admin/ChangelogTab';
 import { ArrowLeft, Plus, MapPin, Trash2, Edit, CheckCircle, XCircle, Database, RefreshCw, AlertTriangle } from 'lucide-react';
 
 interface Landingsplass {
@@ -249,6 +250,43 @@ export default function AdminPage() {
     }
 
     setLpDialogOpen(true);
+  };
+
+  const handleReassociateVann = async (vannId: number, newLpId: number) => {
+    if (!tableNames || !currentLp?.id) return;
+    try {
+      // Get vann coordinates
+      const vann = associatedVannMarkers.find(v => v.id === vannId);
+      // Get new LP coordinates for distance calculation
+      const newLp = landingsplasser.find(lp => lp.id === newLpId);
+
+      let distance: number | null = null;
+      if (vann && newLp && vann.latitude && vann.longitude && newLp.latitude && newLp.longitude) {
+        distance = calculateDistance(newLp.latitude, newLp.longitude, vann.latitude, vann.longitude);
+      }
+
+      // Delete old association
+      await supabase
+        .from(tableNames.vass_associations)
+        .delete()
+        .eq('airport_id', vannId)
+        .eq('landingsplass_id', currentLp.id);
+
+      // Insert new association
+      await supabase
+        .from(tableNames.vass_associations)
+        .insert({
+          airport_id: vannId,
+          landingsplass_id: newLpId,
+          distance_km: distance,
+        });
+
+      // Remove from displayed list since it's no longer associated with this LP
+      setAssociatedVannMarkers(prev => prev.filter(v => v.id !== vannId));
+    } catch (err) {
+      console.error('Failed to reassociate vann:', err);
+      alert('Failed to change association. Please try again.');
+    }
   };
 
   const handleLpSave = async () => {
@@ -952,11 +990,12 @@ export default function AdminPage() {
       )}
 
       <Tabs defaultValue="landingsplass" className="w-full">
-        <TabsList className="w-full grid grid-cols-2 lg:grid-cols-5 mb-8 bg-gray-100/80 p-1">
+        <TabsList className="w-full grid grid-cols-3 lg:grid-cols-6 mb-8 bg-gray-100/80 p-1">
           <TabsTrigger value="landingsplass" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">Landingsplasser</TabsTrigger>
           <TabsTrigger value="vann" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">Vann Markers</TabsTrigger>
           <TabsTrigger value="planning" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">Planning & Optimization</TabsTrigger>
           <TabsTrigger value="comparison" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">Year Comparison</TabsTrigger>
+          <TabsTrigger value="changelog" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">Endringslogg</TabsTrigger>
           <TabsTrigger value="archive" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">Archive</TabsTrigger>
         </TabsList>
 
@@ -1401,6 +1440,22 @@ export default function AdminPage() {
             />
           )}
         </TabsContent>
+
+        {/* Changelog Tab */}
+        <TabsContent value="changelog" className="space-y-6">
+          {availableArchives && currentConfig && (
+            <ChangelogTab
+              availableYears={availableArchives.map(a => ({
+                year: a.year,
+                prefix: a.prefix,
+                label: a.year === 'current'
+                  ? '2025 (Original Data)'
+                  : `${a.year}${a.prefix ? ` (${a.prefix})` : ''}`,
+              }))}
+              currentYear={currentConfig?.active_year || 'current'}
+            />
+          )}
+        </TabsContent>
       </Tabs>
 
       {/* Landingsplass Dialog */}
@@ -1538,35 +1593,60 @@ export default function AdminPage() {
                     {associatedVannMarkers.map((vann) => (
                       <div
                         key={vann.id}
-                        className={`flex items-center justify-between p-3 rounded-lg border ${vann.is_active ? 'bg-gray-50 border-gray-200' : 'bg-gray-100 border-gray-200 opacity-70'}`}
+                        className={`p-3 rounded-lg border ${vann.is_active ? 'bg-gray-50 border-gray-200' : 'bg-gray-100 border-gray-200 opacity-70'}`}
                       >
-                        <div className="flex-1">
-                          <div className="font-medium text-sm">
-                            {vann.name || vann.vannavn || 'Unnamed'}
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <div className="font-medium text-sm">
+                              {vann.name || vann.vannavn || 'Unnamed'}
+                            </div>
+                            <div className="text-xs text-muted-foreground mt-0.5">
+                              ID: {vann.id} • Fylke: {vann.fylke || 'N/A'}
+                              {vann.tonn && ` • Tonn: ${vann.tonn}`}
+                            </div>
                           </div>
-                          <div className="text-xs text-muted-foreground mt-0.5">
-                            ID: {vann.id} • Fylke: {vann.fylke || 'N/A'}
-                            {vann.tonn && ` • Tonn: ${vann.tonn}`}
+
+                          <div className="flex items-center gap-2">
+                            <Badge variant={vann.is_active ? 'default' : 'outline'} className={vann.is_active ? 'bg-blue-100 text-blue-800 hover:bg-blue-100' : 'text-gray-500 border-gray-300'}>
+                              {vann.is_active ? 'Active' : 'Deactivated'}
+                            </Badge>
+
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleVannToggleActiveFromLpModal(vann)}
+                              title={vann.is_active ? 'Deactivate' : 'Activate'}
+                            >
+                              {vann.is_active ? (
+                                <XCircle className="w-4 h-4 text-orange-500" />
+                              ) : (
+                                <CheckCircle className="w-4 h-4 text-green-500" />
+                              )}
+                            </Button>
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-2">
-                          <Badge variant={vann.is_active ? 'default' : 'outline'} className={vann.is_active ? 'bg-blue-100 text-blue-800 hover:bg-blue-100' : 'text-gray-500 border-gray-300'}>
-                            {vann.is_active ? 'Active' : 'Deactivated'}
-                          </Badge>
-
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => handleVannToggleActiveFromLpModal(vann)}
-                            title={vann.is_active ? 'Deactivate' : 'Activate'}
+                        <div className="mt-2">
+                          <Select
+                            value={currentLp?.id?.toString() || ''}
+                            onValueChange={(value) => {
+                              const newLpId = parseInt(value);
+                              if (newLpId !== currentLp?.id) {
+                                handleReassociateVann(vann.id, newLpId);
+                              }
+                            }}
                           >
-                            {vann.is_active ? (
-                              <XCircle className="w-4 h-4 text-orange-500" />
-                            ) : (
-                              <CheckCircle className="w-4 h-4 text-green-500" />
-                            )}
-                          </Button>
+                            <SelectTrigger className="h-8 text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent className="max-h-[300px]">
+                              {landingsplasser.map((lp) => (
+                                <SelectItem key={lp.id} value={lp.id.toString()}>
+                                  {lp.kode || 'No code'} - {lp.lp}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </div>
                       </div>
                     ))}
@@ -1744,7 +1824,7 @@ export default function AdminPage() {
                 <SelectTrigger>
                   <SelectValue placeholder="Select a landingsplass..." />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="max-h-[300px]">
                   <SelectItem value="none">None</SelectItem>
                   {associationOptions}
                 </SelectContent>
