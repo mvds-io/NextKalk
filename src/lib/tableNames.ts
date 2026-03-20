@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 /**
  * Interface for active table configuration
@@ -67,16 +68,17 @@ function buildTableName(baseName: string, year: string, prefix: string): string 
  * Get active table names from app configuration
  * Returns dynamically generated table names based on active year/prefix
  */
-export async function getActiveTableNames(): Promise<TableNamesConfig> {
-  // Check cache first
+export async function getActiveTableNames(client?: SupabaseClient): Promise<TableNamesConfig> {
+  // Check cache first (skip cache when using a custom client to ensure correct results)
   const now = Date.now();
-  if (cachedTableNames && (now - cacheTimestamp) < CACHE_DURATION) {
+  if (!client && cachedTableNames && (now - cacheTimestamp) < CACHE_DURATION) {
     return cachedTableNames;
   }
 
   try {
-    // Fetch app configuration
-    const { data, error } = await supabase
+    // Fetch app configuration using provided client or default
+    const dbClient = client || supabase;
+    const { data, error } = await dbClient
       .from('app_config')
       .select('*')
       .limit(1);

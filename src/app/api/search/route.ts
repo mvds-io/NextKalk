@@ -51,8 +51,9 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Get dynamic table names
-    const tableNames = await getActiveTableNames();
+    // Get dynamic table names using the authenticated client
+    // (the default server-side client has no session and can't read app_config)
+    const tableNames = await getActiveTableNames(authenticatedClient);
 
     const searchTerm = `%${query.trim()}%`;
 
@@ -155,14 +156,14 @@ export async function GET(request: NextRequest) {
     const results = [
       ...(vannResults || []).map((item: Record<string, unknown>) => ({
         ...item,
-        source: 'vass_vann',
+        source: tableNames.vass_vann,
         type: 'water',
         displayName: item.name || item.vannavn,
         color: 'red'
       })),
       ...(lpResults || []).map((item: Record<string, unknown>) => ({
         ...item,
-        source: 'vass_lasteplass', 
+        source: tableNames.vass_lasteplass,
         type: 'landingsplass',
         displayName: item.kode || item.lp,
         color: 'blue'

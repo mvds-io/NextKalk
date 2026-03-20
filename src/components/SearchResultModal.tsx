@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 
 interface SearchResult {
   id: number;
-  source: 'vass_vann' | 'vass_lasteplass';
+  source: string;
   type: 'water' | 'landingsplass';
   displayName: string;
   color: 'red' | 'blue';
@@ -99,7 +99,7 @@ export default function SearchResultModal({ isOpen, onClose, result }: SearchRes
   };
 
   const getSourceBadge = (source: string) => {
-    const isWater = source === 'vass_vann';
+    const isWater = source.includes('vass_vann');
     return (
       <span className={`badge ${isWater ? 'bg-danger' : 'bg-primary'}`}>
         <i className={`fas ${isWater ? 'fa-water' : 'fa-helicopter-symbol'} me-1`}></i>
@@ -178,13 +178,13 @@ export default function SearchResultModal({ isOpen, onClose, result }: SearchRes
                           <td><strong>ID:</strong></td>
                           <td>{detailedData.id}</td>
                         </tr>
-                        {detailedData.source === 'vass_vann' && (
+                        {detailedData.source.includes('vass_vann') && (
                           <tr>
                             <td><strong>Navn:</strong></td>
                             <td>{detailedData.name || 'Ikke oppgitt'}</td>
                           </tr>
                         )}
-                        {detailedData.source === 'vass_lasteplass' && (
+                        {detailedData.source.includes('vass_lasteplass') && (
                           <>
                             <tr>
                               <td><strong>Lasteplass:</strong></td>

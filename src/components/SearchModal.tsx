@@ -6,7 +6,7 @@ import { authenticatedFetch } from '@/lib/auth';
 
 interface SearchResult {
   id: number;
-  source: 'vass_vann' | 'vass_lasteplass';
+  source: string;
   type: 'water' | 'landingsplass';
   displayName: string;
   color: 'red' | 'blue';
@@ -203,7 +203,7 @@ export default function SearchModal({ isOpen, onClose, onResultSelect }: SearchM
                           {result.displayName}
                         </strong>
                         <span className={`badge ${result.color === 'red' ? 'bg-danger' : 'bg-primary'}`} style={{ fontSize: '0.6rem' }}>
-                          {result.source === 'vass_vann' ? 'Vann' : 'LP'}
+                          {result.source.includes('vass_vann') ? 'Vann' : 'LP'}
                         </span>
                         {result.is_done && (
                           <span className="badge bg-success" style={{ fontSize: '0.6rem' }}>
@@ -218,7 +218,7 @@ export default function SearchModal({ isOpen, onClose, onResultSelect }: SearchM
                             {result.fylke}
                           </span>
                         )}
-                        {result.source === 'vass_lasteplass' && result.kode && (
+                        {result.source.includes('vass_lasteplass') && result.kode && (
                           <span className="me-3">
                             <i className="fas fa-tag me-1"></i>
                             {result.kode}
