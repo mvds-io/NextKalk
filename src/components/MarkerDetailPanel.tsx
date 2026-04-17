@@ -1,6 +1,7 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useRef, ReactNode } from 'react';
 import { motion } from 'framer-motion';
 import { Airport, Landingsplass, User } from '@/types';
 import { supabase } from '@/lib/supabase';
@@ -31,6 +32,7 @@ interface ContactPerson {
   forening: string;
   phone: string;
   totalTonn: number;
+  matchCount: number;
 }
 
 interface ImageData {
@@ -47,6 +49,210 @@ interface DocumentData {
   uploaded_at: string;
 }
 
+type TabKey = 'info' | 'files';
+
+const COLORS = {
+  airport: '#CB2B3E',
+  landingsplass: '#667eea',
+  done: '#28a745',
+  border: '#e9ecef',
+  muted: '#6c757d',
+};
+
+// ---------- Small primitives ----------
+
+function Section({
+  title,
+  icon,
+  count,
+  action,
+  children,
+}: {
+  title: string;
+  icon?: string;
+  count?: number;
+  action?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <section
+      style={{
+        background: 'white',
+        border: `1px solid ${COLORS.border}`,
+        borderRadius: 8,
+        marginBottom: 8,
+      }}
+    >
+      <header
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '8px 12px',
+          borderBottom: `1px solid ${COLORS.border}`,
+          background: '#fafbfc',
+          borderTopLeftRadius: 8,
+          borderTopRightRadius: 8,
+        }}
+      >
+        <h6
+          style={{
+            margin: 0,
+            fontSize: '0.8rem',
+            fontWeight: 700,
+            color: '#495057',
+            letterSpacing: '0.2px',
+            textTransform: 'uppercase',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+          }}
+        >
+          {icon && <i className={`fas fa-${icon}`} style={{ fontSize: '0.75rem', color: COLORS.muted }} />}
+          {title}
+          {count != null && (
+            <span
+              style={{
+                fontSize: '0.7rem',
+                color: COLORS.muted,
+                fontWeight: 600,
+                marginLeft: 2,
+              }}
+            >
+              {count}
+            </span>
+          )}
+        </h6>
+        {action}
+      </header>
+      <div style={{ padding: 12 }}>{children}</div>
+    </section>
+  );
+}
+
+function CopyableField({
+  label,
+  value,
+  display,
+  hrefPrefix,
+}: {
+  label: string;
+  value: string;
+  display?: string;
+  hrefPrefix?: 'tel:' | 'mailto:';
+}) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = (e: React.MouseEvent) => {
+    e.preventDefault();
+    navigator.clipboard.writeText(value).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1200);
+    });
+  };
+  const displayText = display ?? value;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+      <span style={{ fontSize: '0.7rem', color: COLORS.muted }}>{label}</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        {hrefPrefix ? (
+          <a
+            href={`${hrefPrefix}${value}`}
+            style={{ fontSize: '0.85rem', fontWeight: 600, color: '#2c3e50', textDecoration: 'none' }}
+          >
+            {displayText}
+          </a>
+        ) : (
+          <strong style={{ fontSize: '0.85rem', color: '#2c3e50' }}>{displayText}</strong>
+        )}
+        <button
+          type="button"
+          onClick={handleCopy}
+          title={copied ? 'Kopiert!' : 'Kopier'}
+          style={{
+            background: 'transparent',
+            border: 'none',
+            padding: '2px 4px',
+            cursor: 'pointer',
+            color: copied ? COLORS.done : COLORS.muted,
+            fontSize: '0.7rem',
+          }}
+        >
+          <i className={`fas fa-${copied ? 'check' : 'copy'}`} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function InfoField({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+      <span style={{ fontSize: '0.7rem', color: COLORS.muted }}>{label}</span>
+      <strong style={{ fontSize: '0.85rem', color: '#2c3e50' }}>{value ?? 'N/A'}</strong>
+    </div>
+  );
+}
+
+function TabButton({
+  active,
+  label,
+  count,
+  onClick,
+}: {
+  active: boolean;
+  label: string;
+  count?: number;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        flex: 1,
+        background: 'transparent',
+        border: 'none',
+        borderBottom: active ? `2px solid ${COLORS.landingsplass}` : '2px solid transparent',
+        padding: '10px 8px',
+        cursor: 'pointer',
+        fontSize: '0.85rem',
+        fontWeight: active ? 700 : 500,
+        color: active ? '#2c3e50' : COLORS.muted,
+        transition: 'color 0.15s, border-color 0.15s',
+      }}
+    >
+      {label}
+      {count != null && count > 0 && (
+        <span
+          style={{
+            marginLeft: 6,
+            fontSize: '0.7rem',
+            padding: '1px 6px',
+            borderRadius: 10,
+            background: active ? COLORS.landingsplass : '#dee2e6',
+            color: active ? 'white' : COLORS.muted,
+            fontWeight: 600,
+          }}
+        >
+          {count}
+        </span>
+      )}
+    </button>
+  );
+}
+
+function Spinner() {
+  return (
+    <div className="text-center py-2">
+      <div className="spinner-border spinner-border-sm" role="status">
+        <span className="visually-hidden">Laster...</span>
+      </div>
+    </div>
+  );
+}
+
+// ---------- Main component ----------
+
 export default function MarkerDetailPanel({
   markerType,
   markerId,
@@ -55,9 +261,10 @@ export default function MarkerDetailPanel({
   user,
   onClose,
   onDataUpdate,
-  completionUsers = {}
+  completionUsers = {},
 }: MarkerDetailPanelProps) {
   const { tableNames } = useTableNames();
+  const [activeTab, setActiveTab] = useState<TabKey>('info');
   const [associations, setAssociations] = useState<Association[]>([]);
   const [contactPersons, setContactPersons] = useState<ContactPerson[]>([]);
   const [images, setImages] = useState<ImageData[]>([]);
@@ -71,612 +278,548 @@ export default function MarkerDetailPanel({
   const [isUploading, setIsUploading] = useState(false);
   const [isUploadingDocument, setIsUploadingDocument] = useState(false);
   const [editingContactId, setEditingContactId] = useState<number | null>(null);
-  const [editingContactData, setEditingContactData] = useState<{forening: string; kontaktperson: string; phone: string} | null>(null);
+  const [editingContactData, setEditingContactData] = useState<{
+    forening: string;
+    kontaktperson: string;
+    phone: string;
+  } | null>(null);
 
-  // Get the current marker data
-  const markerData = markerType === 'airport'
-    ? airports.find(a => a.id === markerId)
-    : landingsplasser.find(l => l.id === markerId);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const documentInputRef = useRef<HTMLInputElement>(null);
+
+  const markerData =
+    markerType === 'airport'
+      ? airports.find((a) => a.id === markerId)
+      : landingsplasser.find((l) => l.id === markerId);
 
   const isDone = markerData ? (markerData.done || (markerData as any).is_done) : false;
+  const accentColor = isDone ? COLORS.done : markerType === 'airport' ? COLORS.airport : COLORS.landingsplass;
 
   // Load associations
   useEffect(() => {
-    const loadAssociations = async () => {
+    const load = async () => {
       if (!markerData || !tableNames) return;
-
       setIsLoadingAssociations(true);
       try {
         if (markerType === 'airport') {
-          // For airports, get associated landingsplasser
           const { data, error } = await supabase
             .from(tableNames.vass_associations)
-            .select(`
-              landingsplass_id,
-              ${tableNames.vass_lasteplass}:landingsplass_id (
-                id, lp, kode, latitude, longitude, tonn_lp
-              )
-            `)
+            .select(
+              `landingsplass_id,
+               ${tableNames.vass_lasteplass}:landingsplass_id (
+                 id, lp, kode, latitude, longitude, tonn_lp
+               )`
+            )
             .eq('airport_id', markerId);
-
           if (error) throw error;
-
-          const associationList: Association[] = (data || [])
-            .filter((assoc: any) => assoc[tableNames.vass_lasteplass])
-            .map((assoc: any) => ({
-              id: assoc[tableNames.vass_lasteplass].id,
-              name: `LP ${assoc[tableNames.vass_lasteplass].lp}${assoc[tableNames.vass_lasteplass].kode ? ` - ${assoc[tableNames.vass_lasteplass].kode}` : ''}`,
-              tonn: assoc[tableNames.vass_lasteplass].tonn_lp || 0,
-              latitude: assoc[tableNames.vass_lasteplass].latitude,
-              longitude: assoc[tableNames.vass_lasteplass].longitude
+          const list: Association[] = (data || [])
+            .filter((a: any) => a[tableNames.vass_lasteplass])
+            .map((a: any) => ({
+              id: a[tableNames.vass_lasteplass].id,
+              name: `LP ${a[tableNames.vass_lasteplass].lp}${
+                a[tableNames.vass_lasteplass].kode ? ` - ${a[tableNames.vass_lasteplass].kode}` : ''
+              }`,
+              tonn: a[tableNames.vass_lasteplass].tonn_lp || 0,
+              latitude: a[tableNames.vass_lasteplass].latitude,
+              longitude: a[tableNames.vass_lasteplass].longitude,
             }));
-
-          setAssociations(associationList);
+          setAssociations(list);
         } else {
-          // For landingsplasser, get associated airports/waters
           const { data, error } = await supabase
             .from(tableNames.vass_associations)
-            .select(`
-              airport_id,
-              ${tableNames.vass_vann}:airport_id (
-                id, name, tonn, latitude, longitude
-              )
-            `)
+            .select(
+              `airport_id,
+               ${tableNames.vass_vann}:airport_id (
+                 id, name, tonn, latitude, longitude
+               )`
+            )
             .eq('landingsplass_id', markerId);
-
           if (error) throw error;
-
-          const associationList: Association[] = (data || [])
-            .filter((assoc: any) => assoc[tableNames.vass_vann])
-            .map((assoc: any) => ({
-              id: assoc[tableNames.vass_vann].id,
-              name: assoc[tableNames.vass_vann].name || 'Ukjent',
-              tonn: assoc[tableNames.vass_vann].tonn || 0,
-              latitude: assoc[tableNames.vass_vann].latitude,
-              longitude: assoc[tableNames.vass_vann].longitude
+          const list: Association[] = (data || [])
+            .filter((a: any) => a[tableNames.vass_vann])
+            .map((a: any) => ({
+              id: a[tableNames.vass_vann].id,
+              name: a[tableNames.vass_vann].name || 'Ukjent',
+              tonn: a[tableNames.vass_vann].tonn || 0,
+              latitude: a[tableNames.vass_vann].latitude,
+              longitude: a[tableNames.vass_vann].longitude,
             }));
-
-          setAssociations(associationList);
+          setAssociations(list);
         }
-      } catch (error) {
-        console.error('Error loading associations:', error);
+      } catch (err) {
+        console.error('Error loading associations:', err);
         setAssociations([]);
       } finally {
         setIsLoadingAssociations(false);
       }
     };
-
-    loadAssociations();
+    load();
   }, [markerType, markerId, markerData, tableNames]);
 
-  // Load contact persons (for landingsplasser only)
+  // Load contact persons (LP only) — also count matches for the bulk-update warning
   useEffect(() => {
-    const loadContactPersons = async () => {
+    const load = async () => {
       if (markerType !== 'landingsplass' || !markerData || !tableNames) return;
-
       setIsLoadingContactPersons(true);
       try {
-        const { data: associations, error } = await supabase
+        const { data: assocs, error } = await supabase
           .from(tableNames.vass_associations)
-          .select(`
-            airport_id,
-            ${tableNames.vass_vann}:airport_id (
-              id, forening, kontaktperson, phone, tonn
-            )
-          `)
+          .select(
+            `airport_id,
+             ${tableNames.vass_vann}:airport_id (
+               id, forening, kontaktperson, phone, tonn
+             )`
+          )
           .eq('landingsplass_id', markerId);
-
         if (error) throw error;
-
-        // Extract and deduplicate contact persons, keeping track of the first wassId for each
-        const contactPersonsMap = new Map();
-        (associations || []).forEach((assoc: any) => {
+        const map = new Map<string, ContactPerson>();
+        (assocs || []).forEach((assoc: any) => {
           const water = assoc[tableNames.vass_vann];
           if (!water) return;
-
           const { id, forening, kontaktperson, phone, tonn } = water;
-          if (kontaktperson || forening || phone) {
-            const phoneStr = phone ? String(phone) : '';
-            const key = `${kontaktperson || ''}-${phoneStr}`;
-            if (!contactPersonsMap.has(key)) {
-              contactPersonsMap.set(key, {
-                wassId: id,
-                forening,
-                kontaktperson,
-                phone: phoneStr,
-                totalTonn: 0
-              });
-            }
-
-            const contact = contactPersonsMap.get(key);
-            if (tonn && tonn !== 'N/A' && !isNaN(parseFloat(tonn))) {
-              contact.totalTonn += parseFloat(tonn);
-            }
+          if (!kontaktperson && !forening && !phone) return;
+          const phoneStr = phone ? String(phone) : '';
+          const key = `${kontaktperson || ''}-${phoneStr}`;
+          if (!map.has(key)) {
+            map.set(key, {
+              wassId: id,
+              forening,
+              kontaktperson,
+              phone: phoneStr,
+              totalTonn: 0,
+              matchCount: 0,
+            });
+          }
+          const c = map.get(key)!;
+          c.matchCount += 1;
+          if (tonn && tonn !== 'N/A' && !isNaN(parseFloat(tonn))) {
+            c.totalTonn += parseFloat(tonn);
           }
         });
-
-        const contactPersonsList = Array.from(contactPersonsMap.values()).sort((a, b) => {
+        const list = Array.from(map.values()).sort((a, b) => {
           if (b.totalTonn !== a.totalTonn) return b.totalTonn - a.totalTonn;
           return (a.kontaktperson || '').localeCompare(b.kontaktperson || '');
         });
-
-        setContactPersons(contactPersonsList);
-      } catch (error) {
-        console.error('Error loading contact persons:', error);
+        setContactPersons(list);
+      } catch (err) {
+        console.error('Error loading contact persons:', err);
         setContactPersons([]);
       } finally {
         setIsLoadingContactPersons(false);
       }
     };
-
-    loadContactPersons();
+    load();
   }, [markerType, markerId, markerData, tableNames]);
 
   // Load images
   useEffect(() => {
-    const loadImages = async () => {
+    const load = async () => {
       if (!markerData || !tableNames) return;
-
       setIsLoadingImages(true);
       try {
-        const tableName = markerType === 'airport' ? tableNames.vass_vann_images : tableNames.vass_lasteplass_images;
-
+        const tableName =
+          markerType === 'airport' ? tableNames.vass_vann_images : tableNames.vass_lasteplass_images;
         const { data, error } = await supabase
           .from(tableName)
           .select('id, image_url, created_at')
           .eq('marker_id', markerId)
           .order('created_at', { ascending: false });
-
         if (error) throw error;
-
-        // Map to our interface format
-        const mappedImages = (data || []).map(img => ({
-          id: img.id,
-          url: img.image_url,
-          uploaded_at: img.created_at
-        }));
-
-        setImages(mappedImages);
-      } catch (error) {
-        console.error('Error loading images:', error);
+        setImages(
+          (data || []).map((img) => ({ id: img.id, url: img.image_url, uploaded_at: img.created_at }))
+        );
+      } catch (err) {
+        console.error('Error loading images:', err);
         setImages([]);
       } finally {
         setIsLoadingImages(false);
       }
     };
-
-    loadImages();
+    load();
   }, [markerType, markerId, markerData, tableNames]);
 
   // Load documents
   useEffect(() => {
-    const loadDocuments = async () => {
+    const load = async () => {
       if (!markerData || !tableNames) return;
-
       setIsLoadingDocuments(true);
       try {
-        const tableName = markerType === 'airport' ? tableNames.vass_vann_documents : tableNames.vass_lasteplass_documents;
-
+        const tableName =
+          markerType === 'airport' ? tableNames.vass_vann_documents : tableNames.vass_lasteplass_documents;
         const { data, error } = await supabase
           .from(tableName)
           .select('id, file_name, document_url, file_type, created_at')
           .eq('marker_id', markerId)
           .order('created_at', { ascending: false });
-
         if (error) throw error;
-
-        const mappedDocuments = (data || []).map(doc => ({
-          id: doc.id,
-          file_name: doc.file_name,
-          document_url: doc.document_url,
-          file_type: doc.file_type,
-          uploaded_at: doc.created_at
-        }));
-
-        setDocuments(mappedDocuments);
-      } catch (error) {
-        console.error('Error loading documents:', error);
+        setDocuments(
+          (data || []).map((d) => ({
+            id: d.id,
+            file_name: d.file_name,
+            document_url: d.document_url,
+            file_type: d.file_type,
+            uploaded_at: d.created_at,
+          }))
+        );
+      } catch (err) {
+        console.error('Error loading documents:', err);
         setDocuments([]);
       } finally {
         setIsLoadingDocuments(false);
       }
     };
-
-    loadDocuments();
+    load();
   }, [markerType, markerId, markerData, tableNames]);
 
-  // Initialize comment text
+  // Init comment
   useEffect(() => {
-    if (markerData) {
-      setCommentText(markerData.comment || '');
-    }
+    if (markerData) setCommentText(markerData.comment || '');
   }, [markerData]);
+
+  // ---------- Handlers (unchanged behavior) ----------
 
   const handleToggleDone = async () => {
     if (!user?.can_edit_markers || !markerData || !tableNames) return;
-
     try {
       const newDoneStatus = !isDone;
-      const tableName = markerType === 'airport' ? tableNames.vass_vann : tableNames.vass_lasteplass;
-
+      const tableName =
+        markerType === 'airport' ? tableNames.vass_vann : tableNames.vass_lasteplass;
       const updates: any = { is_done: newDoneStatus };
-      if (newDoneStatus) {
-        updates.completed_at = new Date().toISOString();
-      } else {
-        updates.completed_at = null;
-      }
-
-      const { error } = await supabase
-        .from(tableName)
-        .update(updates)
-        .eq('id', markerId);
-
+      updates.completed_at = newDoneStatus ? new Date().toISOString() : null;
+      const { error } = await supabase.from(tableName).update(updates).eq('id', markerId);
       if (error) throw error;
-
-      // Log the action
       if (user) {
-        await supabase
-          .from('user_action_logs')
-          .insert({
-            user_email: user.email,
-            action_type: 'toggle_done',
-            target_type: markerType,
-            target_id: markerId,
-            target_name: markerData.name || (markerData as any).navn || (markerData as any).lp || 'Unknown',
-            action_details: {
-              new_status: newDoneStatus ? 'completed' : 'incomplete',
-              completed_at: updates.completed_at
-            }
-          });
+        await supabase.from('user_action_logs').insert({
+          user_email: user.email,
+          action_type: 'toggle_done',
+          target_type: markerType,
+          target_id: markerId,
+          target_name:
+            markerData.name || (markerData as any).navn || (markerData as any).lp || 'Unknown',
+          action_details: {
+            new_status: newDoneStatus ? 'completed' : 'incomplete',
+            completed_at: updates.completed_at,
+          },
+        });
       }
-
-      // Trigger data update and close the panel to allow fresh data to load
       await onDataUpdate();
-
-      // Small delay to ensure data is refreshed, then close panel
-      setTimeout(() => {
-        onClose();
-      }, 100);
-    } catch (error) {
-      console.error('Error toggling done status:', error);
+      setTimeout(() => onClose(), 100);
+    } catch (err) {
+      console.error('Error toggling done status:', err);
       alert('Kunne ikke oppdatere status');
     }
   };
 
   const handleColorChange = async (color: string) => {
     if (!user?.can_edit_markers || markerType !== 'airport' || !markerData || !tableNames) return;
-
     try {
       const { error } = await supabase
         .from(tableNames.vass_vann)
         .update({ marker_color: color })
         .eq('id', markerId);
-
       if (error) throw error;
-
-      // Log the action
       if (user) {
-        await supabase
-          .from('user_action_logs')
-          .insert({
-            user_email: user.email,
-            action_type: 'change_color',
-            target_type: 'airport',
-            target_id: markerId,
-            target_name: markerData.name || 'Unknown',
-            action_details: { new_color: color }
-          });
+        await supabase.from('user_action_logs').insert({
+          user_email: user.email,
+          action_type: 'change_color',
+          target_type: 'airport',
+          target_id: markerId,
+          target_name: markerData.name || 'Unknown',
+          action_details: { new_color: color },
+        });
       }
-
       onDataUpdate();
-    } catch (error) {
-      console.error('Error changing color:', error);
+    } catch (err) {
+      console.error('Error changing color:', err);
       alert('Kunne ikke endre markørfarge');
     }
   };
 
   const handleSaveComment = async () => {
     if (!user?.can_edit_markers || !markerData || !tableNames) return;
-
     try {
-      const tableName = markerType === 'airport' ? tableNames.vass_vann : tableNames.vass_lasteplass;
-
+      const tableName =
+        markerType === 'airport' ? tableNames.vass_vann : tableNames.vass_lasteplass;
       const { error } = await supabase
         .from(tableName)
         .update({
           comment: commentText.trim(),
-          comment_timestamp: new Date().toISOString()
+          comment_timestamp: new Date().toISOString(),
         })
         .eq('id', markerId);
-
       if (error) throw error;
-
-      // Log the action
       if (user) {
-        await supabase
-          .from('user_action_logs')
-          .insert({
-            user_email: user.email,
-            action_type: 'add_comment',
-            target_type: markerType,
-            target_id: markerId,
-            target_name: markerData.name || (markerData as any).navn || (markerData as any).lp || 'Unknown',
-            action_details: { comment_length: commentText.trim().length }
-          });
+        await supabase.from('user_action_logs').insert({
+          user_email: user.email,
+          action_type: 'add_comment',
+          target_type: markerType,
+          target_id: markerId,
+          target_name:
+            markerData.name || (markerData as any).navn || (markerData as any).lp || 'Unknown',
+          action_details: { comment_length: commentText.trim().length },
+        });
       }
-
       setIsEditingComment(false);
       onDataUpdate();
-    } catch (error) {
-      console.error('Error saving comment:', error);
+    } catch (err) {
+      console.error('Error saving comment:', err);
       alert('Kunne ikke lagre kommentar');
     }
   };
 
   const handleSaveContact = async () => {
     if (!user?.can_edit_markers || !editingContactData || editingContactId === null || !tableNames) return;
-
     try {
-      // Validate phone number length (max integer value is 2,147,483,647)
       const phoneValue = editingContactData.phone.trim();
       if (phoneValue && (!/^\d*$/.test(phoneValue) || parseInt(phoneValue) > 2147483647)) {
         alert('Telefonnummeret er for langt eller ugyldig. Bruk maksimalt 10 siffer.');
         return;
       }
-
-      // First, get the original contact info to find all matching records
       const { data: originalContact } = await supabase
         .from(tableNames.vass_vann)
         .select('kontaktperson, phone')
         .eq('id', editingContactId)
         .single();
-
       if (!originalContact) {
         alert('Kunne ikke finne kontaktperson');
         return;
       }
-
-      // Update ALL vass_vann records that have the same kontaktperson and phone
+      // Confirm bulk update (may touch many rows)
+      const editing = contactPersons.find((c) => c.wassId === editingContactId);
+      const affected = editing?.matchCount ?? 1;
+      if (affected > 1) {
+        const ok = confirm(
+          `Denne endringen oppdaterer ${affected} vann som deler samme kontaktperson. Fortsett?`
+        );
+        if (!ok) return;
+      }
       const { error } = await supabase
         .from(tableNames.vass_vann)
         .update({
           forening: editingContactData.forening.trim(),
           kontaktperson: editingContactData.kontaktperson.trim(),
-          phone: phoneValue || null
+          phone: phoneValue || null,
         })
         .eq('kontaktperson', originalContact.kontaktperson)
         .eq('phone', originalContact.phone);
-
       if (error) throw error;
-
-      // Log the action
       if (user) {
-        await supabase
-          .from('user_action_logs')
-          .insert({
-            user_email: user.email,
-            action_type: 'edit_contact',
-            target_type: 'vass_vann',
-            target_id: editingContactId,
-            target_name: editingContactData.kontaktperson || 'Unknown',
-            action_details: {
-              original_kontaktperson: originalContact.kontaktperson,
-              original_phone: originalContact.phone,
-              new_forening: editingContactData.forening,
-              new_kontaktperson: editingContactData.kontaktperson,
-              new_phone: editingContactData.phone,
-              update_type: 'bulk_update_matching_contacts'
-            }
-          });
+        await supabase.from('user_action_logs').insert({
+          user_email: user.email,
+          action_type: 'edit_contact',
+          target_type: 'vass_vann',
+          target_id: editingContactId,
+          target_name: editingContactData.kontaktperson || 'Unknown',
+          action_details: {
+            original_kontaktperson: originalContact.kontaktperson,
+            original_phone: originalContact.phone,
+            new_forening: editingContactData.forening,
+            new_kontaktperson: editingContactData.kontaktperson,
+            new_phone: editingContactData.phone,
+            update_type: 'bulk_update_matching_contacts',
+            affected_count: affected,
+          },
+        });
       }
-
       setEditingContactId(null);
       setEditingContactData(null);
       onDataUpdate();
-    } catch (error) {
-      console.error('Error saving contact:', error);
+    } catch (err) {
+      console.error('Error saving contact:', err);
       alert('Kunne ikke lagre kontaktperson');
     }
   };
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     if (!event.target.files || event.target.files.length === 0 || !markerData || !tableNames) return;
-
     const file = event.target.files[0];
     setIsUploading(true);
-
     try {
-      // Upload to Supabase storage
       const fileExt = file.name.split('.').pop();
       const fileName = `${markerId}_${Date.now()}.${fileExt}`;
       const folderPath = markerType === 'airport' ? 'airport_images' : 'landingsplass_images';
       const filePath = `${folderPath}/${fileName}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('images')
-        .upload(filePath, file);
-
+      const { error: uploadError } = await supabase.storage.from('images').upload(filePath, file);
       if (uploadError) throw uploadError;
-
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('images')
-        .getPublicUrl(filePath);
-
-      // Save reference in database
-      const tableName = markerType === 'airport' ? tableNames.vass_vann_images : tableNames.vass_lasteplass_images;
-
-      const { error: dbError } = await supabase
-        .from(tableName)
-        .insert({
-          marker_id: markerId,
-          image_url: publicUrl,
-          created_at: new Date().toISOString()
-        });
-
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from('images').getPublicUrl(filePath);
+      const tableName =
+        markerType === 'airport' ? tableNames.vass_vann_images : tableNames.vass_lasteplass_images;
+      const { error: dbError } = await supabase.from(tableName).insert({
+        marker_id: markerId,
+        image_url: publicUrl,
+        created_at: new Date().toISOString(),
+      });
       if (dbError) throw dbError;
-
-      // Reload images
       const { data: newImages } = await supabase
         .from(tableName)
         .select('id, image_url, created_at')
         .eq('marker_id', markerId)
         .order('created_at', { ascending: false });
-
-      const mappedImages = (newImages || []).map(img => ({
-        id: img.id,
-        url: img.image_url,
-        uploaded_at: img.created_at
-      }));
-
-      setImages(mappedImages);
-
-      // Log the action
+      setImages(
+        (newImages || []).map((img) => ({ id: img.id, url: img.image_url, uploaded_at: img.created_at }))
+      );
       if (user) {
-        await supabase
-          .from('user_action_logs')
-          .insert({
-            user_email: user.email,
-            action_type: 'upload_image',
-            target_type: markerType,
-            target_id: markerId,
-            target_name: markerData.name || (markerData as any).navn || (markerData as any).lp || 'Unknown',
-            action_details: { file_name: fileName }
-          });
+        await supabase.from('user_action_logs').insert({
+          user_email: user.email,
+          action_type: 'upload_image',
+          target_type: markerType,
+          target_id: markerId,
+          target_name:
+            markerData.name || (markerData as any).navn || (markerData as any).lp || 'Unknown',
+          action_details: { file_name: fileName },
+        });
       }
-    } catch (error) {
-      console.error('Error uploading file:', error);
+    } catch (err) {
+      console.error('Error uploading file:', err);
       alert('Kunne ikke laste opp bilde');
     } finally {
       setIsUploading(false);
+      if (imageInputRef.current) imageInputRef.current.value = '';
     }
   };
 
   const handleDeleteImage = async (imageId: number) => {
-    if (!user?.can_edit_markers || !confirm('Er du sikker på at du vil slette dette bildet?') || !tableNames) return;
-
+    if (!user?.can_edit_markers || !tableNames) return;
+    if (!confirm('Er du sikker på at du vil slette dette bildet?')) return;
     try {
-      const tableName = markerType === 'airport' ? tableNames.vass_vann_images : tableNames.vass_lasteplass_images;
-
-      const { error } = await supabase
-        .from(tableName)
-        .delete()
-        .eq('id', imageId);
-
+      const tableName =
+        markerType === 'airport' ? tableNames.vass_vann_images : tableNames.vass_lasteplass_images;
+      const { error } = await supabase.from(tableName).delete().eq('id', imageId);
       if (error) throw error;
-
-      setImages(images.filter(img => img.id !== imageId));
-    } catch (error) {
-      console.error('Error deleting image:', error);
+      setImages(images.filter((img) => img.id !== imageId));
+    } catch (err) {
+      console.error('Error deleting image:', err);
       alert('Kunne ikke slette bilde');
     }
   };
 
   const handleDocumentUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     if (!event.target.files || event.target.files.length === 0 || !markerData || !tableNames) return;
-
     const file = event.target.files[0];
     setIsUploadingDocument(true);
-
     try {
-      // Upload to Supabase storage
       const fileExt = file.name.split('.').pop();
       const fileName = `${markerId}_${Date.now()}.${fileExt}`;
       const folderPath = markerType === 'airport' ? 'airport_documents' : 'landingsplass_documents';
       const filePath = `${folderPath}/${fileName}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('documents')
-        .upload(filePath, file);
-
+      const { error: uploadError } = await supabase.storage.from('documents').upload(filePath, file);
       if (uploadError) throw uploadError;
-
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('documents')
-        .getPublicUrl(filePath);
-
-      // Save reference in database
-      const tableName = markerType === 'airport' ? tableNames.vass_vann_documents : tableNames.vass_lasteplass_documents;
-
-      const { error: dbError } = await supabase
-        .from(tableName)
-        .insert({
-          marker_id: markerId,
-          file_name: file.name,
-          document_url: publicUrl,
-          file_type: fileExt || 'unknown',
-          created_at: new Date().toISOString()
-        });
-
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from('documents').getPublicUrl(filePath);
+      const tableName =
+        markerType === 'airport' ? tableNames.vass_vann_documents : tableNames.vass_lasteplass_documents;
+      const { error: dbError } = await supabase.from(tableName).insert({
+        marker_id: markerId,
+        file_name: file.name,
+        document_url: publicUrl,
+        file_type: fileExt || 'unknown',
+        created_at: new Date().toISOString(),
+      });
       if (dbError) throw dbError;
-
-      // Reload documents
       const { data: newDocuments } = await supabase
         .from(tableName)
         .select('id, file_name, document_url, file_type, created_at')
         .eq('marker_id', markerId)
         .order('created_at', { ascending: false });
-
-      const mappedDocuments = (newDocuments || []).map(doc => ({
-        id: doc.id,
-        file_name: doc.file_name,
-        document_url: doc.document_url,
-        file_type: doc.file_type,
-        uploaded_at: doc.created_at
-      }));
-
-      setDocuments(mappedDocuments);
-
-      // Log the action
+      setDocuments(
+        (newDocuments || []).map((d) => ({
+          id: d.id,
+          file_name: d.file_name,
+          document_url: d.document_url,
+          file_type: d.file_type,
+          uploaded_at: d.created_at,
+        }))
+      );
       if (user) {
-        await supabase
-          .from('user_action_logs')
-          .insert({
-            user_email: user.email,
-            action_type: 'upload_document',
-            target_type: markerType,
-            target_id: markerId,
-            target_name: markerData.name || (markerData as any).navn || (markerData as any).lp || 'Unknown',
-            action_details: { file_name: file.name }
-          });
+        await supabase.from('user_action_logs').insert({
+          user_email: user.email,
+          action_type: 'upload_document',
+          target_type: markerType,
+          target_id: markerId,
+          target_name:
+            markerData.name || (markerData as any).navn || (markerData as any).lp || 'Unknown',
+          action_details: { file_name: file.name },
+        });
       }
-    } catch (error) {
-      console.error('Error uploading document:', error);
+    } catch (err) {
+      console.error('Error uploading document:', err);
       alert('Kunne ikke laste opp dokument');
     } finally {
       setIsUploadingDocument(false);
+      if (documentInputRef.current) documentInputRef.current.value = '';
     }
   };
 
   const handleDeleteDocument = async (documentId: number) => {
-    if (!user?.can_edit_markers || !confirm('Er du sikker på at du vil slette dette dokumentet?') || !tableNames) return;
-
+    if (!user?.can_edit_markers || !tableNames) return;
+    if (!confirm('Er du sikker på at du vil slette dette dokumentet?')) return;
     try {
-      const tableName = markerType === 'airport' ? tableNames.vass_vann_documents : tableNames.vass_lasteplass_documents;
-
-      const { error } = await supabase
-        .from(tableName)
-        .delete()
-        .eq('id', documentId);
-
+      const tableName =
+        markerType === 'airport' ? tableNames.vass_vann_documents : tableNames.vass_lasteplass_documents;
+      const { error } = await supabase.from(tableName).delete().eq('id', documentId);
       if (error) throw error;
-
-      setDocuments(documents.filter(doc => doc.id !== documentId));
-    } catch (error) {
-      console.error('Error deleting document:', error);
+      setDocuments(documents.filter((doc) => doc.id !== documentId));
+    } catch (err) {
+      console.error('Error deleting document:', err);
       alert('Kunne ikke slette dokument');
     }
   };
 
+  const handleExportGpx = () => {
+    if (!markerData || !markerData.latitude || !markerData.longitude) return;
+    const mainName =
+      markerType === 'airport'
+        ? markerData.name || (markerData as any).navn
+        : `LP ${(markerData as any).lp}`;
+    let waypointsXml = `  <wpt lat="${markerData.latitude}" lon="${markerData.longitude}">
+    <name>${mainName}</name>
+    <desc>${markerType === 'airport' ? 'Vann' : 'Landingsplass'}</desc>
+  </wpt>`;
+    if (markerType === 'landingsplass' && associations.length > 0) {
+      associations.forEach((assoc) => {
+        if (assoc.latitude && assoc.longitude) {
+          waypointsXml += `
+  <wpt lat="${assoc.latitude}" lon="${assoc.longitude}">
+    <name>${assoc.name}</name>
+    <desc>Vann (${assoc.tonn}t)</desc>
+  </wpt>`;
+        }
+      });
+    }
+    const gpxContent = `<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="NextKalk" xmlns="http://www.topografix.com/GPX/1/1">
+${waypointsXml}
+</gpx>`;
+    const blob = new Blob([gpxContent], { type: 'application/gpx+xml' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${markerType === 'airport' ? mainName : `LP_${(markerData as any).lp}`}.gpx`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleOpenRoute = () => {
+    if (!markerData || !markerData.latitude || !markerData.longitude) return;
+    window.open(
+      `https://www.google.com/maps/dir/?api=1&destination=${markerData.latitude},${markerData.longitude}`,
+      '_blank'
+    );
+  };
+
+  // ---------- Missing data ----------
+
   if (!markerData) {
     return (
-      <div className="marker-detail-panel" style={{
-        height: '100%',
-        background: '#f8f9fa',
-        padding: '1rem',
-        overflowY: 'auto'
-      }}>
+      <div
+        className="marker-detail-panel"
+        style={{ height: '100%', background: '#f8f9fa', padding: 16, overflowY: 'auto' }}
+      >
         <div className="text-center py-4">
           <i className="fas fa-exclamation-triangle fa-2x text-warning mb-2"></i>
           <p>Kunne ikke finne markørdata</p>
@@ -685,17 +828,36 @@ export default function MarkerDetailPanel({
     );
   }
 
-  const completedDate = (markerData as any).completed_at ?
-    new Date((markerData as any).completed_at).toLocaleString('nb-NO', {
-      year: 'numeric', month: 'short', day: 'numeric',
-      hour: '2-digit', minute: '2-digit'
-    }) : '';
+  const completedDate = (markerData as any).completed_at
+    ? new Date((markerData as any).completed_at).toLocaleString('nb-NO', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    : '';
 
-  const commentTimestamp = markerData.comment_timestamp ?
-    new Date(markerData.comment_timestamp).toLocaleString('nb-NO', {
-      year: 'numeric', month: 'short', day: 'numeric',
-      hour: '2-digit', minute: '2-digit'
-    }) : '';
+  const commentTimestamp = markerData.comment_timestamp
+    ? new Date(markerData.comment_timestamp).toLocaleString('nb-NO', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    : '';
+
+  const titleText =
+    markerType === 'airport'
+      ? markerData.name || (markerData as any).navn || 'Ukjent'
+      : `${(markerData as any).kode ? `${(markerData as any).kode} - ` : ''}LP ${
+          (markerData as any).lp || 'N/A'
+        }`;
+
+  const fileCount = images.length + documents.length;
+
+  // ---------- Render ----------
 
   return (
     <motion.div
@@ -705,727 +867,916 @@ export default function MarkerDetailPanel({
         background: '#f8f9fa',
         display: 'flex',
         flexDirection: 'column',
-        position: 'relative'
+        position: 'relative',
       }}
       initial={{ x: '100%', opacity: 0 }}
       animate={{ x: 0, opacity: 1 }}
       exit={{ x: '100%', opacity: 0 }}
-      transition={{ duration: 0.3, ease: 'easeInOut' }}
+      transition={{ duration: 0.25, ease: 'easeOut' }}
     >
-      {/* Header */}
-      <div className="card mb-2 mx-2 mt-2" style={{
-        border: '1px solid #dee2e6',
-        position: 'sticky',
-        top: 0,
-        zIndex: 10,
-        background: 'white'
-      }}>
-        <div className="card-body p-2">
-          <div className="d-flex justify-content-between align-items-start">
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div className="d-flex align-items-center mb-1">
-                <div style={{
-                  fontSize: '1.1rem',
-                  color: isDone ? '#28a745' : (markerType === 'airport' ? '#CB2B3E' : '#667eea'),
-                  marginRight: '0.5rem'
-                }}>
-                  <i className={`fas fa-${markerType === 'airport' ? 'water' : 'helicopter-symbol'}`}></i>
-                </div>
-                <h6 className="mb-0" style={{
-                  fontWeight: 600,
-                  fontSize: '0.95rem',
-                  color: '#333',
-                  wordBreak: 'break-word'
-                }}>
-                  {markerType === 'airport'
-                    ? (markerData.name || (markerData as any).navn || 'Ukjent')
-                    : `${(markerData as any).kode ? `${(markerData as any).kode} - ` : ''}LP ${(markerData as any).lp || 'N/A'}`
-                  }
-                </h6>
-              </div>
+      {/* ---------- Header ---------- */}
+      <header
+        style={{
+          background: 'white',
+          borderBottom: `1px solid ${COLORS.border}`,
+          borderLeft: `3px solid ${accentColor}`,
+          padding: '10px 12px 8px',
+          position: 'sticky',
+          top: 0,
+          zIndex: 10,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+          <div
+            style={{
+              fontSize: '1.1rem',
+              color: accentColor,
+              marginTop: 2,
+              flexShrink: 0,
+            }}
+          >
+            <i className={`fas fa-${markerType === 'airport' ? 'water' : 'helicopter-symbol'}`} />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div
+              style={{
+                fontSize: '1rem',
+                fontWeight: 700,
+                color: '#2c3e50',
+                wordBreak: 'break-word',
+                lineHeight: 1.3,
+              }}
+            >
+              {titleText}
+            </div>
+            <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
               {isDone && (
-                <span className="badge bg-success" style={{ fontSize: '0.65rem' }}>
+                <span
+                  className="badge"
+                  style={{
+                    fontSize: '0.65rem',
+                    background: COLORS.done,
+                    color: 'white',
+                    fontWeight: 700,
+                    padding: '3px 7px',
+                  }}
+                >
                   UTFØRT
                 </span>
               )}
+              {markerType === 'landingsplass' && (markerData as any).priority && (
+                <span
+                  style={{
+                    fontSize: '0.65rem',
+                    background: '#e9ecef',
+                    color: '#495057',
+                    fontWeight: 700,
+                    padding: '3px 7px',
+                    borderRadius: 4,
+                  }}
+                >
+                  P{(markerData as any).priority}
+                </span>
+              )}
+              {markerData.fylke && (
+                <span style={{ fontSize: '0.7rem', color: COLORS.muted }}>{markerData.fylke}</span>
+              )}
             </div>
-            <button
-              className="btn btn-sm btn-outline-secondary"
-              onClick={onClose}
-              style={{ flexShrink: 0, marginLeft: '0.5rem', fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}
-            >
-              <i className="fas fa-times"></i>
-            </button>
           </div>
+          <button
+            type="button"
+            onClick={onClose}
+            title="Lukk"
+            style={{
+              background: 'transparent',
+              border: 'none',
+              fontSize: '1rem',
+              color: COLORS.muted,
+              cursor: 'pointer',
+              padding: 4,
+              lineHeight: 1,
+              flexShrink: 0,
+            }}
+          >
+            <i className="fas fa-times" />
+          </button>
         </div>
+
+        {/* Action row */}
+        <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
+          <button
+            type="button"
+            onClick={handleExportGpx}
+            title="Eksporter GPX"
+            style={{
+              flex: 1,
+              background: 'white',
+              border: `1px solid ${COLORS.border}`,
+              borderRadius: 6,
+              padding: '6px 8px',
+              fontSize: '0.78rem',
+              color: '#495057',
+              cursor: 'pointer',
+              fontWeight: 500,
+            }}
+          >
+            <i className="fas fa-download me-1" />
+            GPX
+          </button>
+          <button
+            type="button"
+            onClick={handleOpenRoute}
+            title="Åpne rute i Google Maps"
+            style={{
+              flex: 1,
+              background: 'white',
+              border: `1px solid ${COLORS.border}`,
+              borderRadius: 6,
+              padding: '6px 8px',
+              fontSize: '0.78rem',
+              color: '#495057',
+              cursor: 'pointer',
+              fontWeight: 500,
+            }}
+          >
+            <i className="fas fa-route me-1" />
+            Rute
+          </button>
+          {user?.can_edit_markers ? (
+            <button
+              type="button"
+              onClick={handleToggleDone}
+              style={{
+                flex: 2,
+                background: isDone ? '#fff3cd' : COLORS.done,
+                border: `1px solid ${isDone ? '#ffc107' : COLORS.done}`,
+                borderRadius: 6,
+                padding: '6px 8px',
+                fontSize: '0.8rem',
+                color: isDone ? '#856404' : 'white',
+                cursor: 'pointer',
+                fontWeight: 700,
+              }}
+            >
+              <i className={`fas fa-${isDone ? 'undo' : 'check'} me-1`} />
+              {isDone ? 'Angre' : 'Marker som utført'}
+            </button>
+          ) : (
+            <div
+              style={{
+                flex: 2,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '0.7rem',
+                color: COLORS.muted,
+                border: `1px dashed ${COLORS.border}`,
+                borderRadius: 6,
+                padding: '6px 8px',
+              }}
+              title="Ingen tilgang til å endre status"
+            >
+              <i className="fas fa-lock me-1" />
+              Lås
+            </div>
+          )}
+        </div>
+      </header>
+
+      {/* ---------- Tabs ---------- */}
+      <div
+        style={{
+          display: 'flex',
+          background: 'white',
+          borderBottom: `1px solid ${COLORS.border}`,
+          position: 'sticky',
+          top: 0,
+          zIndex: 9,
+        }}
+      >
+        <TabButton
+          active={activeTab === 'info'}
+          label="Info"
+          onClick={() => setActiveTab('info')}
+        />
+        <TabButton
+          active={activeTab === 'files'}
+          label="Filer"
+          count={fileCount}
+          onClick={() => setActiveTab('files')}
+        />
       </div>
 
-      {/* Scrollable Content */}
-      <div style={{
-        flex: 1,
-        overflowY: 'auto',
-        padding: '0.75rem'
-      }}>
-        {/* Action Buttons */}
-        <div className="card mb-2">
-          <div className="card-body p-2">
-            <div className="d-flex gap-2">
-              <button
-                className="btn btn-outline-primary btn-sm flex-fill"
-                style={{ fontSize: '0.8rem' }}
-                onClick={() => {
-                  if (markerData.latitude && markerData.longitude) {
-                    // Generate GPX file with main marker and associations
-                    let waypointsXml = `  <wpt lat="${markerData.latitude}" lon="${markerData.longitude}">
-    <name>${markerType === 'airport' ? (markerData.name || (markerData as any).navn) : `LP ${(markerData as any).lp}`}</name>
-    <desc>${markerType === 'airport' ? 'Vann' : 'Landingsplass'}</desc>
-  </wpt>`;
-
-                    // For landingsplasser, include all associated waters
-                    if (markerType === 'landingsplass' && associations.length > 0) {
-                      associations.forEach(assoc => {
-                        if (assoc.latitude && assoc.longitude) {
-                          waypointsXml += `
-  <wpt lat="${assoc.latitude}" lon="${assoc.longitude}">
-    <name>${assoc.name}</name>
-    <desc>Vann (${assoc.tonn}t)</desc>
-  </wpt>`;
-                        }
-                      });
-                    }
-
-                    const gpxContent = `<?xml version="1.0" encoding="UTF-8"?>
-<gpx version="1.1" creator="NextKalk" xmlns="http://www.topografix.com/GPX/1/1">
-${waypointsXml}
-</gpx>`;
-                    const blob = new Blob([gpxContent], { type: 'application/gpx+xml' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `${markerType === 'airport' ? (markerData.name || (markerData as any).navn) : `LP_${(markerData as any).lp}`}.gpx`;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    URL.revokeObjectURL(url);
-                  }
+      {/* ---------- Scrollable content ---------- */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: 10 }}>
+        {activeTab === 'info' && (
+          <>
+            {/* Completion banner */}
+            {isDone && completedDate && (
+              <div
+                style={{
+                  background: 'linear-gradient(135deg, #d4edda, #c3e6cb)',
+                  border: '1px solid #b8dcc4',
+                  borderRadius: 8,
+                  padding: '8px 12px',
+                  marginBottom: 8,
+                  color: '#155724',
+                  fontSize: '0.8rem',
                 }}
-                title="Eksporter GPX"
               >
-                <i className="fas fa-download me-1"></i>
-                GPX
-              </button>
-              <button
-                className="btn btn-outline-success btn-sm flex-fill"
-                style={{ fontSize: '0.8rem' }}
-                onClick={() => {
-                  if (markerData.latitude && markerData.longitude) {
-                    // Open Google Maps directions
-                    window.open(
-                      `https://www.google.com/maps/dir/?api=1&destination=${markerData.latitude},${markerData.longitude}`,
-                      '_blank'
-                    );
-                  }
-                }}
-                title="Åpne rute i Google Maps"
-              >
-                <i className="fas fa-route me-1"></i>
-                Rute
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Basic Information */}
-        <div className="card mb-2">
-          <div className="card-body p-2">
-            <h6 className="card-title mb-2" style={{ fontSize: '0.85rem', fontWeight: 600 }}>
-              <i className="fas fa-info-circle me-1" style={{ fontSize: '0.75rem' }}></i>Grunnleggende info
-            </h6>
-            <div className="row g-2" style={{ fontSize: '0.8rem' }}>
-              {markerType === 'airport' ? (
-                <>
-                  <div className="col-6">
-                    <small className="text-muted d-block">P.Nr:</small>
-                    <strong>{(markerData as any).pnr || 'N/A'}</strong>
-                  </div>
-                  <div className="col-6">
-                    <small className="text-muted d-block">Tonn:</small>
-                    <strong>{(markerData as any).tonn || (markerData as any).tonn_vann || 'N/A'}</strong>
-                  </div>
-                  <div className="col-12">
-                    <small className="text-muted d-block">Forening:</small>
-                    <strong>{(markerData as any).forening || 'N/A'}</strong>
-                  </div>
-                  <div className="col-12">
-                    <small className="text-muted d-block">Kontaktperson:</small>
-                    <strong>{(markerData as any).kontaktperson || 'N/A'}</strong>
-                  </div>
-                  {(markerData as any).phone && (
-                    <div className="col-12">
-                      <small className="text-muted d-block">Telefon:</small>
-                      <strong>{(markerData as any).phone}</strong>
-                    </div>
-                  )}
-                </>
-              ) : (
-                <>
-                  <div className="col-6">
-                    <small className="text-muted d-block">Tonn:</small>
-                    <strong>{(markerData as any).calculated_tonn ? `${(markerData as any).calculated_tonn.toFixed(1)}t` : 'N/A'}</strong>
-                  </div>
-                  <div className="col-6">
-                    <small className="text-muted d-block">Prioritet:</small>
-                    <strong>{(markerData as any).priority || 'N/A'}</strong>
-                  </div>
-                </>
-              )}
-              <div className="col-12">
-                <small className="text-muted d-block">Koordinater:</small>
-                <strong style={{ fontSize: '0.85rem' }}>
-                  {markerData.latitude?.toFixed(4)}, {markerData.longitude?.toFixed(4)}
-                </strong>
-              </div>
-              <div className="col-6">
-                <small className="text-muted d-block">Fylke:</small>
-                <strong>{markerData.fylke || 'N/A'}</strong>
-              </div>
-              {(markerData as any).kommune && (
-                <div className="col-6">
-                  <small className="text-muted d-block">Kommune:</small>
-                  <strong>{(markerData as any).kommune}</strong>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Completion Info */}
-        {isDone && completedDate && (
-          <div className="card mb-2" style={{ background: 'linear-gradient(135deg, #d4edda, #c3e6cb)' }}>
-            <div className="card-body p-2">
-              <h6 className="card-title mb-1" style={{ color: '#155724', fontSize: '0.85rem', fontWeight: 600 }}>
-                <i className="fas fa-calendar-check me-1" style={{ fontSize: '0.75rem' }}></i>Fullført
-              </h6>
-              <p className="mb-0" style={{ fontSize: '0.75rem', color: '#155724' }}>
-                {completedDate}
+                <i className="fas fa-calendar-check me-1" />
+                Fullført {completedDate}
                 {completionUsers[markerId] && (
-                  <span className="ms-2" style={{ fontSize: '0.7rem' }}>
+                  <span style={{ fontStyle: 'italic', marginLeft: 6 }}>
                     av {completionUsers[markerId]}
                   </span>
                 )}
-              </p>
-            </div>
-          </div>
-        )}
+              </div>
+            )}
 
-        {/* Contact Persons (for landingsplasser) */}
-        {markerType === 'landingsplass' && (
-          <div className="card mb-2">
-            <div className="card-body p-2">
-              <h6 className="card-title mb-2" style={{ fontSize: '0.85rem', fontWeight: 600 }}>
-                <i className="fas fa-address-book me-1" style={{ fontSize: '0.75rem' }}></i>
-                Kontaktpersoner ({contactPersons.length})
-              </h6>
-              {isLoadingContactPersons ? (
-                <div className="text-center py-2">
-                  <div className="spinner-border spinner-border-sm" role="status">
-                    <span className="visually-hidden">Laster...</span>
-                  </div>
+            {/* Grunnleggende info */}
+            <Section title="Grunnleggende info" icon="info-circle">
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(2, 1fr)',
+                  gap: 10,
+                }}
+              >
+                {markerType === 'airport' ? (
+                  <>
+                    <InfoField label="P.Nr" value={(markerData as any).pnr} />
+                    <InfoField
+                      label="Tonn"
+                      value={(markerData as any).tonn || (markerData as any).tonn_vann}
+                    />
+                    <div style={{ gridColumn: '1 / -1' }}>
+                      <InfoField label="Forening" value={(markerData as any).forening} />
+                    </div>
+                    <div style={{ gridColumn: '1 / -1' }}>
+                      <InfoField label="Kontaktperson" value={(markerData as any).kontaktperson} />
+                    </div>
+                    {(markerData as any).phone && (
+                      <div style={{ gridColumn: '1 / -1' }}>
+                        <CopyableField
+                          label="Telefon"
+                          value={String((markerData as any).phone)}
+                          hrefPrefix="tel:"
+                        />
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <InfoField
+                      label="Tonn"
+                      value={
+                        (markerData as any).calculated_tonn
+                          ? `${(markerData as any).calculated_tonn.toFixed(1)}t`
+                          : 'N/A'
+                      }
+                    />
+                    <InfoField label="Prioritet" value={(markerData as any).priority} />
+                  </>
+                )}
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <CopyableField
+                    label="Koordinater"
+                    value={`${markerData.latitude}, ${markerData.longitude}`}
+                    display={`${markerData.latitude?.toFixed(4)}, ${markerData.longitude?.toFixed(4)}`}
+                  />
                 </div>
-              ) : contactPersons.length === 0 ? (
-                <p className="text-muted mb-0" style={{ fontSize: '0.75rem' }}>
-                  <em>Ingen kontaktpersoner</em>
-                </p>
-              ) : (
-                <div style={{ maxHeight: '250px', overflowY: 'auto' }}>
-                  {contactPersons.map((contact, index) => (
-                    <div
-                      key={`${contact.wassId}-${index}`}
-                      className="mb-1 pb-1"
-                      style={{ borderBottom: index < contactPersons.length - 1 ? '1px solid #e9ecef' : 'none' }}
-                    >
-                      {editingContactId === contact.wassId ? (
-                        // Edit mode
-                        <div>
-                          <div className="mb-2">
-                            <label style={{ fontSize: '0.7rem', color: '#6c757d', display: 'block', marginBottom: '0.25rem' }}>
-                              Forening:
-                            </label>
-                            <input
-                              type="text"
-                              className="form-control form-control-sm"
-                              style={{ fontSize: '0.75rem' }}
-                              value={editingContactData?.forening || ''}
-                              onChange={(e) => setEditingContactData({
-                                ...editingContactData!,
-                                forening: e.target.value
-                              })}
-                            />
-                          </div>
-                          <div className="mb-2">
-                            <label style={{ fontSize: '0.7rem', color: '#6c757d', display: 'block', marginBottom: '0.25rem' }}>
-                              Kontaktperson:
-                            </label>
-                            <input
-                              type="text"
-                              className="form-control form-control-sm"
-                              style={{ fontSize: '0.75rem' }}
-                              value={editingContactData?.kontaktperson || ''}
-                              onChange={(e) => setEditingContactData({
-                                ...editingContactData!,
-                                kontaktperson: e.target.value
-                              })}
-                            />
-                          </div>
-                          <div className="mb-2">
-                            <label style={{ fontSize: '0.7rem', color: '#6c757d', display: 'block', marginBottom: '0.25rem' }}>
-                              Telefon:
-                            </label>
-                            <input
-                              type="text"
-                              className="form-control form-control-sm"
-                              style={{ fontSize: '0.75rem' }}
-                              value={editingContactData?.phone || ''}
-                              onChange={(e) => setEditingContactData({
-                                ...editingContactData!,
-                                phone: e.target.value
-                              })}
-                            />
-                          </div>
-                          <div className="d-flex gap-2">
-                            <button
-                              className="btn btn-success btn-sm flex-fill"
-                              style={{ fontSize: '0.75rem' }}
-                              onClick={handleSaveContact}
-                            >
-                              <i className="fas fa-save me-1"></i>Lagre
-                            </button>
-                            <button
-                              className="btn btn-outline-secondary btn-sm flex-fill"
-                              style={{ fontSize: '0.75rem' }}
-                              onClick={() => {
-                                setEditingContactId(null);
-                                setEditingContactData(null);
+                <InfoField label="Fylke" value={markerData.fylke} />
+                {(markerData as any).kommune && (
+                  <InfoField label="Kommune" value={(markerData as any).kommune} />
+                )}
+              </div>
+            </Section>
+
+            {/* Contact persons (LP only) */}
+            {markerType === 'landingsplass' && (
+              <Section
+                title="Kontaktpersoner"
+                icon="address-book"
+                count={contactPersons.length}
+              >
+                {isLoadingContactPersons ? (
+                  <Spinner />
+                ) : contactPersons.length === 0 ? (
+                  <p className="text-muted mb-0" style={{ fontSize: '0.8rem', fontStyle: 'italic' }}>
+                    Ingen kontaktpersoner
+                  </p>
+                ) : (
+                  <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+                    {contactPersons.map((contact, index) => (
+                      <li
+                        key={`${contact.wassId}-${index}`}
+                        style={{
+                          padding: '8px 0',
+                          borderBottom:
+                            index < contactPersons.length - 1
+                              ? `1px solid ${COLORS.border}`
+                              : 'none',
+                        }}
+                      >
+                        {editingContactId === contact.wassId ? (
+                          <div>
+                            <label
+                              style={{
+                                fontSize: '0.7rem',
+                                color: COLORS.muted,
+                                display: 'block',
+                                marginBottom: 2,
                               }}
                             >
-                              <i className="fas fa-times me-1"></i>Avbryt
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        // View mode
-                        <div className="d-flex justify-content-between align-items-start">
-                          <div style={{ flex: 1 }}>
-                            <div style={{ fontWeight: 600, fontSize: '0.8rem' }}>
-                              <i className="fas fa-user me-1 text-secondary" style={{ fontSize: '0.7rem' }}></i>
-                              {contact.kontaktperson || 'Ukjent'}
-                            </div>
-                            {contact.forening && (
-                              <div style={{ fontSize: '0.75rem', color: '#6c757d', marginLeft: '1rem' }}>
-                                <i className="fas fa-users me-1" style={{ fontSize: '0.65rem' }}></i>
-                                {contact.forening}
-                              </div>
-                            )}
-                            {contact.phone && contact.phone.trim() && (
-                              <div style={{ fontSize: '0.75rem', color: '#6c757d', marginLeft: '1rem' }}>
-                                <i className="fas fa-phone me-1" style={{ fontSize: '0.65rem' }}></i>
-                                {contact.phone}
-                              </div>
-                            )}
-                          </div>
-                          <div className="d-flex align-items-center gap-1">
-                            {contact.totalTonn > 0 && (
-                              <span className="badge bg-success" style={{ fontSize: '0.65rem' }}>
-                                {contact.totalTonn.toFixed(1)}t
-                              </span>
-                            )}
-                            {user?.can_edit_markers && (
-                              <button
-                                className="btn btn-outline-primary btn-sm"
-                                style={{ fontSize: '0.65rem', padding: '0.15rem 0.35rem' }}
-                                onClick={() => {
-                                  setEditingContactId(contact.wassId);
-                                  setEditingContactData({
-                                    forening: contact.forening,
-                                    kontaktperson: contact.kontaktperson,
-                                    phone: contact.phone
-                                  });
+                              Forening
+                            </label>
+                            <input
+                              type="text"
+                              className="form-control form-control-sm mb-2"
+                              style={{ fontSize: '0.82rem' }}
+                              value={editingContactData?.forening || ''}
+                              onChange={(e) =>
+                                setEditingContactData({
+                                  ...editingContactData!,
+                                  forening: e.target.value,
+                                })
+                              }
+                            />
+                            <label
+                              style={{
+                                fontSize: '0.7rem',
+                                color: COLORS.muted,
+                                display: 'block',
+                                marginBottom: 2,
+                              }}
+                            >
+                              Kontaktperson
+                            </label>
+                            <input
+                              type="text"
+                              className="form-control form-control-sm mb-2"
+                              style={{ fontSize: '0.82rem' }}
+                              value={editingContactData?.kontaktperson || ''}
+                              onChange={(e) =>
+                                setEditingContactData({
+                                  ...editingContactData!,
+                                  kontaktperson: e.target.value,
+                                })
+                              }
+                            />
+                            <label
+                              style={{
+                                fontSize: '0.7rem',
+                                color: COLORS.muted,
+                                display: 'block',
+                                marginBottom: 2,
+                              }}
+                            >
+                              Telefon
+                            </label>
+                            <input
+                              type="text"
+                              className="form-control form-control-sm mb-2"
+                              style={{ fontSize: '0.82rem' }}
+                              value={editingContactData?.phone || ''}
+                              onChange={(e) =>
+                                setEditingContactData({
+                                  ...editingContactData!,
+                                  phone: e.target.value,
+                                })
+                              }
+                            />
+                            {contact.matchCount > 1 && (
+                              <div
+                                style={{
+                                  fontSize: '0.7rem',
+                                  color: '#856404',
+                                  background: '#fff3cd',
+                                  border: '1px solid #ffeaa7',
+                                  borderRadius: 4,
+                                  padding: '4px 8px',
+                                  marginBottom: 8,
                                 }}
-                                title="Rediger kontaktperson"
                               >
-                                <i className="fas fa-edit"></i>
-                              </button>
+                                <i className="fas fa-exclamation-triangle me-1" />
+                                Endringen vil oppdatere {contact.matchCount} vann som deler samme kontakt.
+                              </div>
                             )}
+                            <div style={{ display: 'flex', gap: 6 }}>
+                              <button
+                                className="btn btn-success btn-sm flex-fill"
+                                style={{ fontSize: '0.78rem' }}
+                                onClick={handleSaveContact}
+                              >
+                                <i className="fas fa-save me-1" />
+                                Lagre
+                              </button>
+                              <button
+                                className="btn btn-outline-secondary btn-sm flex-fill"
+                                style={{ fontSize: '0.78rem' }}
+                                onClick={() => {
+                                  setEditingContactId(null);
+                                  setEditingContactData(null);
+                                }}
+                              >
+                                Avbryt
+                              </button>
+                            </div>
                           </div>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Associations */}
-        <div className="card mb-2">
-          <div className="card-body p-2">
-            <h6 className="card-title mb-2" style={{ fontSize: '0.85rem', fontWeight: 600 }}>
-              <i className={`fas fa-${markerType === 'airport' ? 'helicopter-symbol' : 'water'} me-1`} style={{ fontSize: '0.75rem' }}></i>
-              {markerType === 'airport' ? 'Tilhørende lasteplass' : 'Relaterte vann'} ({associations.length})
-            </h6>
-            {isLoadingAssociations ? (
-              <div className="text-center py-1">
-                <div className="spinner-border spinner-border-sm" role="status">
-                  <span className="visually-hidden">Laster...</span>
-                </div>
-              </div>
-            ) : associations.length === 0 ? (
-              <p className="text-muted mb-0" style={{ fontSize: '0.75rem' }}>
-                <em>Ingen assosiasjoner</em>
-              </p>
-            ) : (
-              <div style={{ maxHeight: '150px', overflowY: 'auto' }}>
-                {associations.map(assoc => (
-                  <div
-                    key={assoc.id}
-                    className="d-flex justify-content-between align-items-center py-1"
-                    style={{ borderBottom: '1px solid #e9ecef', fontSize: '0.8rem' }}
-                  >
-                    <span style={{ flex: 1, wordBreak: 'break-word' }}>
-                      <i className={`fas fa-${markerType === 'airport' ? 'helicopter-symbol' : 'water'} me-1 text-secondary`} style={{ fontSize: '0.7rem' }}></i>
-                      {assoc.name}
-                    </span>
-                    <span className="badge bg-primary" style={{ fontSize: '0.65rem', marginLeft: '0.5rem' }}>
-                      {assoc.tonn ? `${assoc.tonn}t` : 'N/A'}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Color Picker (for airports only) */}
-        {markerType === 'airport' && user?.can_edit_markers && !isDone && (
-          <div className="card mb-2">
-            <div className="card-body p-2">
-              <h6 className="card-title mb-2" style={{ fontSize: '0.85rem', fontWeight: 600 }}>
-                <i className="fas fa-palette me-1" style={{ fontSize: '0.75rem' }}></i>Marker farge
-              </h6>
-              <div className="d-flex flex-wrap gap-1">
-                {['red', 'orange', 'blue', 'purple', 'darkgreen', 'cadetblue', 'darkred', 'darkpurple'].map(color => {
-                  const colorMap: Record<string, string> = {
-                    red: '#CB2B3E',
-                    orange: '#FF7F00',
-                    blue: '#2E8B57',
-                    purple: '#663399',
-                    darkgreen: '#006400',
-                    cadetblue: '#5F9EA0',
-                    darkred: '#8B0000',
-                    darkpurple: '#4B0082'
-                  };
-
-                  const isActive = ((markerData as any).marker_color || 'red') === color;
-
-                  return (
-                    <button
-                      key={color}
-                      className="btn btn-sm"
-                      style={{
-                        width: '28px',
-                        height: '28px',
-                        border: `2px solid ${isActive ? '#333' : '#ccc'}`,
-                        borderRadius: '6px',
-                        background: colorMap[color],
-                        cursor: 'pointer',
-                        padding: 0
-                      }}
-                      onClick={() => handleColorChange(color)}
-                      title={color}
-                    />
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Comment Section */}
-        <div className="card mb-2">
-          <div className="card-body p-2">
-            <h6 className="card-title mb-2" style={{ fontSize: '0.85rem', fontWeight: 600 }}>
-              <i className="fas fa-comment me-1" style={{ fontSize: '0.75rem' }}></i>Kommentarer
-            </h6>
-            {isEditingComment ? (
-              <>
-                <textarea
-                  className="form-control mb-2"
-                  rows={3}
-                  value={commentText}
-                  onChange={(e) => setCommentText(e.target.value)}
-                  style={{ fontSize: '0.8rem', resize: 'vertical' }}
-                />
-                <div className="d-flex gap-2">
-                  <button
-                    className="btn btn-success btn-sm flex-fill"
-                    style={{ fontSize: '0.8rem' }}
-                    onClick={handleSaveComment}
-                  >
-                    <i className="fas fa-save me-1"></i>Lagre
-                  </button>
-                  <button
-                    className="btn btn-outline-secondary btn-sm flex-fill"
-                    style={{ fontSize: '0.8rem' }}
-                    onClick={() => {
-                      setIsEditingComment(false);
-                      setCommentText(markerData.comment || '');
-                    }}
-                  >
-                    <i className="fas fa-times me-1"></i>Avbryt
-                  </button>
-                </div>
-              </>
-            ) : (
-              <>
-                <div style={{
-                  padding: '0.5rem',
-                  background: '#f8f9fa',
-                  borderRadius: '0.375rem',
-                  marginBottom: '0.5rem',
-                  minHeight: '40px'
-                }}>
-                  {markerData.comment ? (
-                    <p className="mb-0" style={{ fontSize: '0.8rem', whiteSpace: 'pre-wrap' }}>
-                      {markerData.comment}
-                    </p>
-                  ) : (
-                    <p className="text-muted mb-0" style={{ fontSize: '0.75rem' }}>
-                      <em>Ingen kommentarer lagt til</em>
-                    </p>
-                  )}
-                </div>
-                {commentTimestamp && (
-                  <div className="text-muted mb-2" style={{ fontSize: '0.7rem' }}>
-                    {commentTimestamp}
-                  </div>
+                        ) : (
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 6 }}>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontWeight: 600, fontSize: '0.85rem', color: '#2c3e50' }}>
+                                <i className="fas fa-user me-1" style={{ color: COLORS.muted, fontSize: '0.7rem' }} />
+                                {contact.kontaktperson || 'Ukjent'}
+                              </div>
+                              {contact.forening && (
+                                <div style={{ fontSize: '0.75rem', color: COLORS.muted, marginTop: 2 }}>
+                                  <i className="fas fa-users me-1" style={{ fontSize: '0.65rem' }} />
+                                  {contact.forening}
+                                </div>
+                              )}
+                              {contact.phone && contact.phone.trim() && (
+                                <div style={{ marginTop: 4 }}>
+                                  <a
+                                    href={`tel:${contact.phone}`}
+                                    style={{
+                                      fontSize: '0.78rem',
+                                      color: COLORS.landingsplass,
+                                      textDecoration: 'none',
+                                      fontWeight: 500,
+                                    }}
+                                  >
+                                    <i className="fas fa-phone me-1" style={{ fontSize: '0.65rem' }} />
+                                    {contact.phone}
+                                  </a>
+                                </div>
+                              )}
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                              {contact.totalTonn > 0 && (
+                                <span
+                                  className="badge bg-success"
+                                  style={{ fontSize: '0.65rem' }}
+                                  title="Totale tonn"
+                                >
+                                  {contact.totalTonn.toFixed(1)}t
+                                </span>
+                              )}
+                              {user?.can_edit_markers && (
+                                <button
+                                  className="btn btn-outline-primary btn-sm"
+                                  style={{ fontSize: '0.65rem', padding: '2px 6px' }}
+                                  onClick={() => {
+                                    setEditingContactId(contact.wassId);
+                                    setEditingContactData({
+                                      forening: contact.forening,
+                                      kontaktperson: contact.kontaktperson,
+                                      phone: contact.phone,
+                                    });
+                                  }}
+                                  title="Rediger"
+                                >
+                                  <i className="fas fa-edit" />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
                 )}
-                {user?.can_edit_markers && !isDone && (
+              </Section>
+            )}
+
+            {/* Associations */}
+            <Section
+              title={markerType === 'airport' ? 'Tilhørende lasteplass' : 'Relaterte vann'}
+              icon={markerType === 'airport' ? 'helicopter-symbol' : 'water'}
+              count={associations.length}
+            >
+              {isLoadingAssociations ? (
+                <Spinner />
+              ) : associations.length === 0 ? (
+                <p className="text-muted mb-0" style={{ fontSize: '0.8rem', fontStyle: 'italic' }}>
+                  Ingen assosiasjoner
+                </p>
+              ) : (
+                <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+                  {associations.map((assoc, idx) => (
+                    <li
+                      key={assoc.id}
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        padding: '6px 0',
+                        borderBottom:
+                          idx < associations.length - 1 ? `1px solid ${COLORS.border}` : 'none',
+                        fontSize: '0.82rem',
+                      }}
+                    >
+                      <span style={{ flex: 1, minWidth: 0, wordBreak: 'break-word' }}>
+                        <i
+                          className={`fas fa-${
+                            markerType === 'airport' ? 'helicopter-symbol' : 'water'
+                          } me-1`}
+                          style={{ color: COLORS.muted, fontSize: '0.7rem' }}
+                        />
+                        {assoc.name}
+                      </span>
+                      <span
+                        className="badge bg-primary"
+                        style={{ fontSize: '0.65rem', flexShrink: 0 }}
+                      >
+                        {assoc.tonn ? `${assoc.tonn}t` : 'N/A'}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Section>
+
+            {/* Color picker (airport only) */}
+            {markerType === 'airport' && user?.can_edit_markers && !isDone && (
+              <Section title="Markør farge" icon="palette">
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {[
+                    { key: 'red', hex: '#CB2B3E', label: 'Rød' },
+                    { key: 'orange', hex: '#FF7F00', label: 'Oransje' },
+                    { key: 'blue', hex: '#2E8B57', label: 'Grønn' },
+                    { key: 'purple', hex: '#663399', label: 'Lilla' },
+                    { key: 'darkgreen', hex: '#006400', label: 'Mørkegrønn' },
+                    { key: 'cadetblue', hex: '#5F9EA0', label: 'Cadetblå' },
+                    { key: 'darkred', hex: '#8B0000', label: 'Mørkerød' },
+                    { key: 'darkpurple', hex: '#4B0082', label: 'Mørkelilla' },
+                  ].map(({ key, hex, label }) => {
+                    const isActive = ((markerData as any).marker_color || 'red') === key;
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        title={label}
+                        onClick={() => handleColorChange(key)}
+                        style={{
+                          width: 30,
+                          height: 30,
+                          border: `2px solid ${isActive ? '#333' : '#ddd'}`,
+                          borderRadius: 6,
+                          background: hex,
+                          cursor: 'pointer',
+                          padding: 0,
+                          position: 'relative',
+                        }}
+                      >
+                        {isActive && (
+                          <i
+                            className="fas fa-check"
+                            style={{
+                              position: 'absolute',
+                              top: '50%',
+                              left: '50%',
+                              transform: 'translate(-50%, -50%)',
+                              color: 'white',
+                              fontSize: '0.7rem',
+                              textShadow: '0 0 2px rgba(0,0,0,0.6)',
+                            }}
+                          />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </Section>
+            )}
+
+            {/* Comment */}
+            <Section
+              title="Kommentarer"
+              icon="comment"
+              action={
+                !isEditingComment &&
+                user?.can_edit_markers &&
+                !isDone && (
                   <button
-                    className="btn btn-outline-primary btn-sm"
-                    style={{ fontSize: '0.8rem' }}
+                    className="btn btn-sm btn-outline-primary"
+                    style={{ fontSize: '0.7rem', padding: '2px 8px' }}
                     onClick={() => setIsEditingComment(true)}
                   >
-                    <i className="fas fa-edit me-1"></i>
+                    <i className="fas fa-edit me-1" />
                     {markerData.comment ? 'Rediger' : 'Legg til'}
                   </button>
-                )}
-              </>
-            )}
-          </div>
-        </div>
+                )
+              }
+            >
+              {isEditingComment ? (
+                <>
+                  <textarea
+                    className="form-control mb-2"
+                    rows={4}
+                    value={commentText}
+                    onChange={(e) => setCommentText(e.target.value)}
+                    style={{ fontSize: '0.85rem', resize: 'vertical' }}
+                    autoFocus
+                  />
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button
+                      className="btn btn-success btn-sm flex-fill"
+                      style={{ fontSize: '0.8rem' }}
+                      onClick={handleSaveComment}
+                    >
+                      <i className="fas fa-save me-1" />
+                      Lagre
+                    </button>
+                    <button
+                      className="btn btn-outline-secondary btn-sm flex-fill"
+                      style={{ fontSize: '0.8rem' }}
+                      onClick={() => {
+                        setIsEditingComment(false);
+                        setCommentText(markerData.comment || '');
+                      }}
+                    >
+                      Avbryt
+                    </button>
+                  </div>
+                </>
+              ) : markerData.comment ? (
+                <>
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: '0.85rem',
+                      whiteSpace: 'pre-wrap',
+                      color: '#2c3e50',
+                    }}
+                  >
+                    {markerData.comment}
+                  </p>
+                  {commentTimestamp && (
+                    <div style={{ fontSize: '0.7rem', color: COLORS.muted, marginTop: 6 }}>
+                      {commentTimestamp}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <p
+                  className="text-muted mb-0"
+                  style={{ fontSize: '0.8rem', fontStyle: 'italic' }}
+                >
+                  Ingen kommentarer lagt til
+                </p>
+              )}
+            </Section>
+          </>
+        )}
 
-        {/* Images Section */}
-        <div className="card mb-2">
-          <div className="card-body p-2">
-            <h6 className="card-title mb-2" style={{ fontSize: '0.85rem', fontWeight: 600 }}>
-              <i className="fas fa-images me-1" style={{ fontSize: '0.75rem' }}></i>Bilder ({images.length})
-            </h6>
-            {isLoadingImages ? (
-              <div className="text-center py-2">
-                <div className="spinner-border spinner-border-sm" role="status">
-                  <span className="visually-hidden">Laster...</span>
-                </div>
-              </div>
-            ) : (
-              <>
-                {images.length > 0 && (
-                  <div className="row g-1 mb-2">
-                    {images.map(image => (
-                      <div key={image.id} className="col-6">
-                        <div style={{ position: 'relative' }}>
+        {activeTab === 'files' && (
+          <>
+            {/* Images */}
+            <Section title="Bilder" icon="images" count={images.length}>
+              {isLoadingImages ? (
+                <Spinner />
+              ) : (
+                <>
+                  {images.length > 0 ? (
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(3, 1fr)',
+                        gap: 6,
+                        marginBottom: !isDone && user?.can_edit_markers ? 10 : 0,
+                      }}
+                    >
+                      {images.map((image) => (
+                        <div
+                          key={image.id}
+                          style={{
+                            position: 'relative',
+                            aspectRatio: '1 / 1',
+                            borderRadius: 6,
+                            overflow: 'hidden',
+                            border: `1px solid ${COLORS.border}`,
+                          }}
+                        >
                           <img
                             src={image.url}
-                            alt="Marker image"
+                            alt={`${titleText} — ${new Date(image.uploaded_at).toLocaleDateString('nb-NO')}`}
                             style={{
                               width: '100%',
-                              height: '80px',
+                              height: '100%',
                               objectFit: 'cover',
-                              borderRadius: '0.25rem',
-                              cursor: 'pointer'
+                              cursor: 'pointer',
+                              display: 'block',
                             }}
                             onClick={() => window.open(image.url, '_blank')}
                           />
                           {user?.can_edit_markers && !isDone && (
                             <button
-                              className="btn btn-danger btn-sm"
+                              type="button"
+                              onClick={() => handleDeleteImage(image.id)}
+                              title="Slett bilde"
                               style={{
                                 position: 'absolute',
-                                top: '2px',
-                                right: '2px',
-                                padding: '0.15rem 0.35rem',
-                                fontSize: '0.65rem'
+                                top: 4,
+                                right: 4,
+                                background: 'rgba(220,53,69,0.9)',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: 4,
+                                width: 24,
+                                height: 24,
+                                fontSize: '0.7rem',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
                               }}
-                              onClick={() => handleDeleteImage(image.id)}
                             >
-                              <i className="fas fa-trash"></i>
+                              <i className="fas fa-trash" />
                             </button>
                           )}
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {!isDone && (
-                  <>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      style={{ display: 'none' }}
-                      id="file-input"
-                      onChange={handleFileUpload}
-                      disabled={isUploading}
-                    />
-                    <button
-                      className="btn btn-outline-primary btn-sm"
-                      style={{ fontSize: '0.8rem' }}
-                      onClick={() => document.getElementById('file-input')?.click()}
-                      disabled={isUploading}
+                      ))}
+                    </div>
+                  ) : (
+                    <p
+                      className="text-muted mb-0"
+                      style={{ fontSize: '0.8rem', fontStyle: 'italic' }}
                     >
-                      <i className={`fas fa-${isUploading ? 'spinner fa-spin' : 'upload'} me-1`}></i>
-                      {isUploading ? 'Laster opp...' : 'Last opp bilde'}
-                    </button>
-                  </>
-                )}
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* Documents Section */}
-        <div className="card mb-2">
-          <div className="card-body p-2">
-            <h6 className="card-title mb-2" style={{ fontSize: '0.85rem', fontWeight: 600 }}>
-              <i className="fas fa-file-alt me-1" style={{ fontSize: '0.75rem' }}></i>Dokumenter ({documents.length})
-            </h6>
-            {isLoadingDocuments ? (
-              <div className="text-center py-2">
-                <div className="spinner-border spinner-border-sm" role="status">
-                  <span className="visually-hidden">Laster...</span>
-                </div>
-              </div>
-            ) : (
-              <>
-                {documents.length > 0 && (
-                  <div className="mb-2">
-                    {documents.map(doc => (
-                      <div
-                        key={doc.id}
-                        className="d-flex justify-content-between align-items-center p-1 mb-1"
-                        style={{
-                          background: '#f8f9fa',
-                          borderRadius: '0.25rem',
-                          border: '1px solid #e9ecef'
-                        }}
+                      Ingen bilder lastet opp
+                    </p>
+                  )}
+                  {!isDone && user?.can_edit_markers && (
+                    <>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        style={{ display: 'none' }}
+                        ref={imageInputRef}
+                        onChange={handleFileUpload}
+                        disabled={isUploading}
+                      />
+                      <button
+                        className="btn btn-outline-primary btn-sm w-100"
+                        style={{ fontSize: '0.8rem', marginTop: images.length > 0 ? 4 : 8 }}
+                        onClick={() => imageInputRef.current?.click()}
+                        disabled={isUploading}
                       >
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div
-                            style={{
-                              fontSize: '0.75rem',
-                              fontWeight: 500,
-                              color: '#333',
-                              whiteSpace: 'nowrap',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              cursor: 'pointer'
-                            }}
-                            onClick={() => window.open(doc.document_url, '_blank')}
-                            title={doc.file_name}
-                          >
-                            <i className={`fas fa-file-${doc.file_type === 'pdf' ? 'pdf' : doc.file_type.match(/^(doc|docx)$/) ? 'word' : doc.file_type.match(/^(xls|xlsx)$/) ? 'excel' : 'alt'} me-1`} style={{ fontSize: '0.7rem' }}></i>
-                            {doc.file_name}
-                          </div>
-                          <div style={{ fontSize: '0.65rem', color: '#6c757d', marginTop: '0.15rem' }}>
-                            {new Date(doc.uploaded_at).toLocaleString('nb-NO', {
-                              year: 'numeric',
-                              month: 'short',
-                              day: 'numeric'
-                            })}
-                          </div>
-                        </div>
-                        <div className="d-flex gap-1 ms-1">
-                          <button
-                            className="btn btn-sm btn-outline-primary"
-                            style={{ fontSize: '0.65rem', padding: '0.15rem 0.35rem' }}
-                            onClick={() => window.open(doc.document_url, '_blank')}
-                            title="Åpne dokument"
-                          >
-                            <i className="fas fa-external-link-alt"></i>
-                          </button>
-                          {user?.can_edit_markers && !isDone && (
-                            <button
-                              className="btn btn-sm btn-outline-danger"
-                              style={{ fontSize: '0.65rem', padding: '0.15rem 0.35rem' }}
-                              onClick={() => handleDeleteDocument(doc.id)}
-                              title="Slett dokument"
-                            >
-                              <i className="fas fa-trash"></i>
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {!isDone && (
-                  <>
-                    <input
-                      type="file"
-                      accept=".pdf,.doc,.docx,.xls,.xlsx,.txt"
-                      style={{ display: 'none' }}
-                      id="document-input"
-                      onChange={handleDocumentUpload}
-                      disabled={isUploadingDocument}
-                    />
-                    <button
-                      className="btn btn-outline-primary btn-sm"
-                      style={{ fontSize: '0.8rem' }}
-                      onClick={() => document.getElementById('document-input')?.click()}
-                      disabled={isUploadingDocument}
-                    >
-                      <i className={`fas fa-${isUploadingDocument ? 'spinner fa-spin' : 'upload'} me-1`}></i>
-                      {isUploadingDocument ? 'Laster opp...' : 'Last opp dokument'}
-                    </button>
-                  </>
-                )}
-              </>
-            )}
-          </div>
-        </div>
-      </div>
+                        <i
+                          className={`fas fa-${isUploading ? 'spinner fa-spin' : 'upload'} me-1`}
+                        />
+                        {isUploading ? 'Laster opp...' : 'Last opp bilde'}
+                      </button>
+                    </>
+                  )}
+                </>
+              )}
+            </Section>
 
-      {/* Footer Actions */}
-      <div style={{
-        padding: '0.5rem',
-        borderTop: '2px solid #dee2e6',
-        background: 'white',
-        position: 'sticky',
-        bottom: 0
-      }}>
-        {user?.can_edit_markers ? (
-          <button
-            className={`btn btn-sm ${isDone ? 'btn-warning' : 'btn-success'} w-100`}
-            style={{ fontSize: '0.85rem', fontWeight: 600 }}
-            onClick={handleToggleDone}
-          >
-            <i className={`fas fa-${isDone ? 'undo' : 'check'} me-1`}></i>
-            {isDone ? 'Angre' : 'Marker som utført'}
-          </button>
-        ) : (
-          <div className="text-center text-muted" style={{ fontSize: '0.75rem' }}>
-            <i className="fas fa-lock me-1"></i>
-            Du har ikke tilgang til å endre status
-          </div>
+            {/* Documents */}
+            <Section title="Dokumenter" icon="file-alt" count={documents.length}>
+              {isLoadingDocuments ? (
+                <Spinner />
+              ) : (
+                <>
+                  {documents.length > 0 ? (
+                    <ul style={{ listStyle: 'none', margin: '0 0 8px', padding: 0 }}>
+                      {documents.map((doc) => {
+                        const iconName =
+                          doc.file_type === 'pdf'
+                            ? 'pdf'
+                            : doc.file_type.match(/^(doc|docx)$/)
+                            ? 'word'
+                            : doc.file_type.match(/^(xls|xlsx)$/)
+                            ? 'excel'
+                            : 'alt';
+                        return (
+                          <li
+                            key={doc.id}
+                            style={{
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              gap: 6,
+                              padding: '6px 8px',
+                              background: '#fafbfc',
+                              border: `1px solid ${COLORS.border}`,
+                              borderRadius: 6,
+                              marginBottom: 4,
+                            }}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => window.open(doc.document_url, '_blank')}
+                              title={doc.file_name}
+                              style={{
+                                flex: 1,
+                                minWidth: 0,
+                                background: 'transparent',
+                                border: 'none',
+                                padding: 0,
+                                textAlign: 'left',
+                                cursor: 'pointer',
+                              }}
+                            >
+                              <div
+                                style={{
+                                  fontSize: '0.8rem',
+                                  fontWeight: 500,
+                                  color: '#2c3e50',
+                                  whiteSpace: 'nowrap',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                }}
+                              >
+                                <i className={`fas fa-file-${iconName} me-1`} />
+                                {doc.file_name}
+                              </div>
+                              <div style={{ fontSize: '0.7rem', color: COLORS.muted, marginTop: 1 }}>
+                                {new Date(doc.uploaded_at).toLocaleString('nb-NO', {
+                                  year: 'numeric',
+                                  month: 'short',
+                                  day: 'numeric',
+                                })}
+                              </div>
+                            </button>
+                            <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                              <button
+                                type="button"
+                                onClick={() => window.open(doc.document_url, '_blank')}
+                                title="Åpne dokument"
+                                style={{
+                                  background: 'transparent',
+                                  border: 'none',
+                                  padding: '4px 6px',
+                                  color: COLORS.landingsplass,
+                                  cursor: 'pointer',
+                                  fontSize: '0.8rem',
+                                }}
+                              >
+                                <i className="fas fa-external-link-alt" />
+                              </button>
+                              {user?.can_edit_markers && !isDone && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteDocument(doc.id)}
+                                  title="Slett dokument"
+                                  style={{
+                                    background: 'transparent',
+                                    border: 'none',
+                                    padding: '4px 6px',
+                                    color: '#dc3545',
+                                    cursor: 'pointer',
+                                    fontSize: '0.8rem',
+                                  }}
+                                >
+                                  <i className="fas fa-trash" />
+                                </button>
+                              )}
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  ) : (
+                    <p
+                      className="text-muted mb-0"
+                      style={{ fontSize: '0.8rem', fontStyle: 'italic' }}
+                    >
+                      Ingen dokumenter lastet opp
+                    </p>
+                  )}
+                  {!isDone && user?.can_edit_markers && (
+                    <>
+                      <input
+                        type="file"
+                        accept=".pdf,.doc,.docx,.xls,.xlsx,.txt"
+                        style={{ display: 'none' }}
+                        ref={documentInputRef}
+                        onChange={handleDocumentUpload}
+                        disabled={isUploadingDocument}
+                      />
+                      <button
+                        className="btn btn-outline-primary btn-sm w-100"
+                        style={{ fontSize: '0.8rem', marginTop: documents.length > 0 ? 4 : 8 }}
+                        onClick={() => documentInputRef.current?.click()}
+                        disabled={isUploadingDocument}
+                      >
+                        <i
+                          className={`fas fa-${
+                            isUploadingDocument ? 'spinner fa-spin' : 'upload'
+                          } me-1`}
+                        />
+                        {isUploadingDocument ? 'Laster opp...' : 'Last opp dokument'}
+                      </button>
+                    </>
+                  )}
+                </>
+              )}
+            </Section>
+          </>
         )}
       </div>
     </motion.div>
