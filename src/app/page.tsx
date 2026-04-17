@@ -684,10 +684,10 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
   }
 
   return (
-    <>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
       {/* Show counter unless hidden on mobile or in fullscreen */}
       {(!isMobile || !isMobileTopBarHidden) && !isFullScreen && (
-        <div className={`${isMobile && isMobileTopBarHidden ? 'mobile-hidden' : ''}`}>
+        <div className={`${isMobile && isMobileTopBarHidden ? 'mobile-hidden' : ''}`} style={{ flexShrink: 0 }}>
           <Counter
             counterData={counterData}
             counties={counties}
@@ -702,10 +702,11 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
         </div>
       )}
 
-      <div className={`main-split-container ${isMobile && isMobileUIMinimized ? 'panel-minimized' : ''} ${!isMobile && isProgressPlanMinimized ? 'progress-plan-minimized' : ''} ${isFullScreen ? 'fullscreen' : ''}`} style={{ 
-        display: 'flex', 
-        flexDirection: isMobile ? 'column' : 'row', 
-        height: isFullScreen ? '100vh' : (isMobile ? (isMobileTopBarHidden ? '100vh' : 'calc(100vh - 60px)') : 'calc(100vh - 70px)') 
+      <div className={`main-split-container ${isMobile && isMobileUIMinimized ? 'panel-minimized' : ''} ${!isMobile && isProgressPlanMinimized ? 'progress-plan-minimized' : ''} ${isFullScreen ? 'fullscreen' : ''}`} style={{
+        display: 'flex',
+        flexDirection: isMobile ? 'column' : 'row',
+        flex: 1,
+        minHeight: 0
       }}>
         <div className="left-panel" style={{ 
           flex: isFullScreen ? '1' : (!isMobile && isProgressPlanMinimized ? '1' : '0 0 70%'), 
@@ -858,7 +859,7 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
           Vis paneler
         </button>
       )}
-    </>
+    </div>
   );
 }
 

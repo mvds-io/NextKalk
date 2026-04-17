@@ -651,11 +651,15 @@ export function calculateFylkeOptimizationImpact(
 // ============================================================================
 
 export interface FlightOperationsConfig {
-  bucketCapacity: number;      // Tons per trip (default: 1)
-  bucketSpeed: number;          // Knots (default: 70)
-  transitSpeed: number;         // Knots between LPs (default: 120)
-  hoursPerDay: number;          // Flying hours per day (default: 4)
-  daysPerWeek: number;          // Working days per week (default: 5)
+  bucketCapacity: number;        // Tons per trip (default: 1)
+  bucketSpeed: number;           // Knots (default: 70)
+  transitSpeed: number;          // Knots between LPs (default: 120)
+  hoursPerDay: number;           // Flying hours per day (default: 4)
+  daysPerWeek: number;           // Working days per week (default: 5)
+  tripOverheadMinutes: number;   // Loading/hovering overhead per bucket trip (default: 5)
+  lpSetupMinutes: number;        // Equipment setup time at each new LP (default: 30)
+  truckSpeedKmh: number;        // Average truck speed on roads (default: 50)
+  roadDistanceMultiplier: number; // Multiplier on straight-line distance for road distance (default: 1.4)
 }
 
 export const DEFAULT_FLIGHT_CONFIG: FlightOperationsConfig = {
@@ -664,17 +668,28 @@ export const DEFAULT_FLIGHT_CONFIG: FlightOperationsConfig = {
   transitSpeed: 120,
   hoursPerDay: 4,
   daysPerWeek: 5,
+  tripOverheadMinutes: 5,
+  lpSetupMinutes: 30,
+  truckSpeedKmh: 50,
+  roadDistanceMultiplier: 1.4,
 };
 
 export interface LandingsplassWorkload {
   lpId: number;
   lpName: string;
   fylke?: string;
+  completedAt?: string;            // completion timestamp (for ordering)
   totalTonnage: number;
   totalTrips: number;
   vannCount: number;
   totalBucketDistance: number;     // km (sum of: distance × trips for each vann)
   totalBucketFlightTime: number;   // hours
+  tripOverheadTime: number;        // hours (loading/hovering overhead for all trips)
+  lpSetupTime: number;             // hours (equipment setup time at this LP)
+  transitTime: number;             // hours (transit from previous LP — truck or heli bottleneck)
+  transitDistance: number;         // km (straight-line distance from previous LP)
+  transitBottleneck: 'truck' | 'helicopter' | 'none'; // which was slower
+  totalLpTime: number;             // hours (bucket + overhead + setup + transit)
   estimatedDays: number;
   estimatedWeeks: number;
   vann: Array<{
@@ -693,9 +708,12 @@ export interface FlightOperationsStats {
   totalTrips: number;
   totalBucketDistance: number;      // km (actual flying with buckets)
   totalBucketFlightTime: number;    // hours
+  totalTripOverheadTime: number;    // hours (all trip overhead)
+  totalLpSetupTime: number;         // hours (all LP setup time)
   totalTransitDistance: number;     // km (between LPs)
-  totalTransitFlightTime: number;   // hours
-  totalFlightTime: number;          // hours (bucket + transit)
+  totalTransitFlightTime: number;   // hours (bottleneck: max of truck/heli)
+  totalOperationalTime: number;     // hours (bucket + overhead + setup + transit)
+  totalFlightTime: number;          // hours (bucket + transit — kept for backwards compat)
   estimatedDays: number;
   estimatedWeeks: number;
   landingsplasserWorkload: LandingsplassWorkload[];
@@ -745,15 +763,37 @@ export function calculateFlightOperations(
     assocByLP.get(assoc.landingsplass_id)!.push(assoc);
   });
 
+  // Sort LPs by completed_at timestamp (ascending), fallback to ID
+  const sortedLpIds = Array.from(assocByLP.keys()).sort((a, b) => {
+    const lpA = lpMap.get(a);
+    const lpB = lpMap.get(b);
+    const completedA = lpA?.completed_at;
+    const completedB = lpB?.completed_at;
+
+    // Both have completed_at: sort by timestamp
+    if (completedA && completedB) {
+      return new Date(completedA).getTime() - new Date(completedB).getTime();
+    }
+    // Only one has completed_at: it goes first
+    if (completedA && !completedB) return -1;
+    if (!completedA && completedB) return 1;
+    // Neither has completed_at: sort by ID
+    return a - b;
+  });
+
   // Calculate workload for each landingsplass
   const landingsplasserWorkload: LandingsplassWorkload[] = [];
   let totalTonnage = 0;
   let totalTrips = 0;
   let totalBucketDistance = 0;
   let totalBucketFlightTime = 0;
+  let totalTripOverheadTime = 0;
+  let totalLpSetupTime = 0;
+  let totalTransitDistance = 0;
+  let totalTransitFlightTime = 0;
 
-  // Sort LPs by ID for consistent ordering
-  const sortedLpIds = Array.from(assocByLP.keys()).sort((a, b) => a - b);
+  let prevLp: LandingsplassWithCoords | null = null;
+  let lpIndex = 0;
 
   for (const lpId of sortedLpIds) {
     const lpAssocs = assocByLP.get(lpId) || [];
@@ -802,19 +842,61 @@ export function calculateFlightOperations(
       });
     }
 
-    // Estimate days for this LP
-    const lpEstimatedDays = lpBucketFlightTime / config.hoursPerDay;
+    // Per-trip overhead (loading/hovering time)
+    const tripOverheadTime = lpTrips * config.tripOverheadMinutes / 60;
+
+    // LP setup time (for all LPs except the first)
+    const lpSetupTime = lpIndex > 0 ? config.lpSetupMinutes / 60 : 0;
+
+    // Transit from previous LP using bottleneck logic
+    let transitDistance = 0;
+    let transitTime = 0;
+    let transitBottleneck: 'truck' | 'helicopter' | 'none' = 'none';
+
+    if (prevLp && lp.latitude && lp.longitude && prevLp.latitude && prevLp.longitude) {
+      const haversineDistance = calculateDistance(
+        prevLp.latitude,
+        prevLp.longitude,
+        lp.latitude,
+        lp.longitude
+      );
+      transitDistance = haversineDistance;
+
+      // Truck time: road distance / truck speed
+      const roadDistance = haversineDistance * config.roadDistanceMultiplier;
+      const truckTime = roadDistance / config.truckSpeedKmh; // hours
+
+      // Helicopter transit time
+      const helicopterTransitTime = haversineDistance / (config.transitSpeed * 1.852); // hours
+
+      // Bottleneck: whichever takes longer
+      transitTime = Math.max(truckTime, helicopterTransitTime);
+      transitBottleneck = truckTime >= helicopterTransitTime ? 'truck' : 'helicopter';
+    }
+
+    // Total time for this LP
+    const totalLpTime = lpBucketFlightTime + tripOverheadTime + lpSetupTime + transitTime;
+
+    // Estimate days for this LP (using total LP time including overhead)
+    const lpEstimatedDays = totalLpTime / config.hoursPerDay;
     const lpEstimatedWeeks = lpEstimatedDays / config.daysPerWeek;
 
     landingsplasserWorkload.push({
       lpId: lp.id,
       lpName: lp.lp,
       fylke: lp.fylke,
+      completedAt: lp.completed_at,
       totalTonnage: lpTonnage,
       totalTrips: lpTrips,
       vannCount: lpAssocs.length,
       totalBucketDistance: lpBucketDistance,
       totalBucketFlightTime: lpBucketFlightTime,
+      tripOverheadTime,
+      lpSetupTime,
+      transitTime,
+      transitDistance,
+      transitBottleneck,
+      totalLpTime,
       estimatedDays: lpEstimatedDays,
       estimatedWeeks: lpEstimatedWeeks,
       vann: lpVannDetails,
@@ -824,29 +906,17 @@ export function calculateFlightOperations(
     totalTrips += lpTrips;
     totalBucketDistance += lpBucketDistance;
     totalBucketFlightTime += lpBucketFlightTime;
+    totalTripOverheadTime += tripOverheadTime;
+    totalLpSetupTime += lpSetupTime;
+    totalTransitDistance += transitDistance;
+    totalTransitFlightTime += transitTime;
+
+    prevLp = lp;
+    lpIndex++;
   }
 
-  // Calculate transit between LPs
-  // Assumption: Helicopter visits LPs in order, flies between consecutive ones
-  let totalTransitDistance = 0;
-  const activeLPs = landingsplasserWorkload.map(w => lpMap.get(w.lpId)!).filter(lp => lp);
-
-  for (let i = 0; i < activeLPs.length - 1; i++) {
-    const lp1 = activeLPs[i];
-    const lp2 = activeLPs[i + 1];
-    if (lp1.latitude && lp1.longitude && lp2.latitude && lp2.longitude) {
-      const transitDist = calculateDistance(
-        lp1.latitude,
-        lp1.longitude,
-        lp2.latitude,
-        lp2.longitude
-      );
-      totalTransitDistance += transitDist;
-    }
-  }
-
-  const totalTransitFlightTime = totalTransitDistance / (config.transitSpeed * 1.852);
-  const totalFlightTime = totalBucketFlightTime + totalTransitFlightTime;
+  const totalOperationalTime = totalBucketFlightTime + totalTripOverheadTime + totalLpSetupTime + totalTransitFlightTime;
+  const totalFlightTime = totalOperationalTime; // now includes all components
   const estimatedDays = totalFlightTime / config.hoursPerDay;
   const estimatedWeeks = estimatedDays / config.daysPerWeek;
 
@@ -856,8 +926,11 @@ export function calculateFlightOperations(
     totalTrips,
     totalBucketDistance,
     totalBucketFlightTime,
+    totalTripOverheadTime,
+    totalLpSetupTime,
     totalTransitDistance,
     totalTransitFlightTime,
+    totalOperationalTime,
     totalFlightTime,
     estimatedDays,
     estimatedWeeks,

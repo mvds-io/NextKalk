@@ -2,22 +2,7 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
-const inputBaseStyle = {
-  width: '100%',
-  padding: '0.5rem 0.75rem',
-  fontSize: '0.875rem',
-  border: '1px solid #d1d5db',
-  borderRadius: '0.375rem',
-  backgroundColor: 'white',
-  transition: 'border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out',
-};
-
 const Input = React.memo(function Input({ className, type, style, ...props }: React.ComponentProps<"input">) {
-  const finalStyle = React.useMemo(() => ({
-    ...inputBaseStyle,
-    ...style
-  }), [style]);
-
   return (
     <input
       type={type}
@@ -28,7 +13,7 @@ const Input = React.memo(function Input({ className, type, style, ...props }: Re
         "aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive",
         className
       )}
-      style={finalStyle}
+      style={style}
       {...props}
     />
   )

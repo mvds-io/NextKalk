@@ -256,12 +256,14 @@ export function YearComparisonTab({ availableYears, currentYear }: YearCompariso
             <div className="bg-blue-50/50 border border-blue-100 rounded-lg p-4 mb-6 flex items-start gap-3">
               <Info className="w-5 h-5 text-blue-600 mt-0.5 shrink-0" />
               <p className="text-sm text-blue-800 leading-relaxed">
-                Adjust these parameters to update operational estimates. 
-                Calculations assume round trips (LP → Vann → LP) for each required load.
+                Adjust these parameters to update operational estimates.
+                Calculations include round trips (LP → Vann → LP), per-trip overhead, LP setup time,
+                and transit between LPs (bottleneck of truck driving vs helicopter transit).
+                LPs are ordered by completion date when available.
               </p>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-4">
               <div className="space-y-2">
                 <Label htmlFor="bucketCapacity" className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">
                   Bucket Capacity
@@ -306,7 +308,7 @@ export function YearComparisonTab({ availableYears, currentYear }: YearCompariso
 
               <div className="space-y-2">
                 <Label htmlFor="transitSpeed" className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">
-                  Transit Speed
+                  Heli Transit Speed
                 </Label>
                 <div className="relative">
                   <Input
@@ -366,6 +368,93 @@ export function YearComparisonTab({ availableYears, currentYear }: YearCompariso
                     className="pr-12"
                   />
                   <span className="absolute right-3 top-2.5 text-sm text-gray-400 pointer-events-none">days</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="tripOverhead" className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">
+                  Trip Overhead
+                </Label>
+                <div className="relative">
+                  <Input
+                    id="tripOverhead"
+                    type="number"
+                    value={flightConfig.tripOverheadMinutes}
+                    onChange={(e) => handleFlightConfigChange({
+                      ...flightConfig,
+                      tripOverheadMinutes: parseFloat(e.target.value) || 0
+                    })}
+                    step="1"
+                    min="0"
+                    className="pr-16"
+                  />
+                  <span className="absolute right-3 top-2.5 text-sm text-gray-400 pointer-events-none">min/trip</span>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="lpSetup" className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">
+                  LP Setup Time
+                </Label>
+                <div className="relative">
+                  <Input
+                    id="lpSetup"
+                    type="number"
+                    value={flightConfig.lpSetupMinutes}
+                    onChange={(e) => handleFlightConfigChange({
+                      ...flightConfig,
+                      lpSetupMinutes: parseFloat(e.target.value) || 0
+                    })}
+                    step="5"
+                    min="0"
+                    className="pr-10"
+                  />
+                  <span className="absolute right-3 top-2.5 text-sm text-gray-400 pointer-events-none">min</span>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="truckSpeed" className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">
+                  Truck Speed
+                </Label>
+                <div className="relative">
+                  <Input
+                    id="truckSpeed"
+                    type="number"
+                    value={flightConfig.truckSpeedKmh}
+                    onChange={(e) => handleFlightConfigChange({
+                      ...flightConfig,
+                      truckSpeedKmh: parseFloat(e.target.value) || 50
+                    })}
+                    step="5"
+                    min="5"
+                    className="pr-12"
+                  />
+                  <span className="absolute right-3 top-2.5 text-sm text-gray-400 pointer-events-none">km/h</span>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="roadMultiplier" className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">
+                  Road Distance
+                </Label>
+                <div className="relative">
+                  <Input
+                    id="roadMultiplier"
+                    type="number"
+                    value={flightConfig.roadDistanceMultiplier}
+                    onChange={(e) => handleFlightConfigChange({
+                      ...flightConfig,
+                      roadDistanceMultiplier: parseFloat(e.target.value) || 1.4
+                    })}
+                    step="0.1"
+                    min="1"
+                    max="3"
+                    className="pr-6"
+                  />
+                  <span className="absolute right-3 top-2.5 text-sm text-gray-400 pointer-events-none">&times;</span>
                 </div>
               </div>
             </div>
@@ -615,8 +704,24 @@ export function YearComparisonTab({ availableYears, currentYear }: YearCompariso
                           <span className="font-semibold">{flightOps1.totalTrips}</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-gray-600">Total Flight Time</span>
-                          <span className="font-semibold text-blue-700">{flightOps1.totalFlightTime.toFixed(1)} hrs</span>
+                          <span className="text-gray-600">Bucket Flight Time</span>
+                          <span className="font-semibold">{flightOps1.totalBucketFlightTime.toFixed(1)} hrs</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Trip Overhead</span>
+                          <span className="font-semibold">{flightOps1.totalTripOverheadTime.toFixed(1)} hrs</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">LP Setup Time</span>
+                          <span className="font-semibold">{flightOps1.totalLpSetupTime.toFixed(1)} hrs</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Transit Time</span>
+                          <span className="font-semibold">{flightOps1.totalTransitFlightTime.toFixed(1)} hrs</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Total Operational Time</span>
+                          <span className="font-semibold text-blue-700">{flightOps1.totalOperationalTime.toFixed(1)} hrs</span>
                         </div>
                         <div className="flex justify-between pt-2 border-t border-blue-200">
                           <span className="text-gray-600 font-medium">Estimated Days</span>
@@ -642,8 +747,24 @@ export function YearComparisonTab({ availableYears, currentYear }: YearCompariso
                           <span className="font-semibold">{flightOps2.totalTrips}</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-gray-600">Total Flight Time</span>
-                          <span className="font-semibold text-indigo-700">{flightOps2.totalFlightTime.toFixed(1)} hrs</span>
+                          <span className="text-gray-600">Bucket Flight Time</span>
+                          <span className="font-semibold">{flightOps2.totalBucketFlightTime.toFixed(1)} hrs</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Trip Overhead</span>
+                          <span className="font-semibold">{flightOps2.totalTripOverheadTime.toFixed(1)} hrs</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">LP Setup Time</span>
+                          <span className="font-semibold">{flightOps2.totalLpSetupTime.toFixed(1)} hrs</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Transit Time</span>
+                          <span className="font-semibold">{flightOps2.totalTransitFlightTime.toFixed(1)} hrs</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Total Operational Time</span>
+                          <span className="font-semibold text-indigo-700">{flightOps2.totalOperationalTime.toFixed(1)} hrs</span>
                         </div>
                         <div className="flex justify-between pt-2 border-t border-indigo-200">
                           <span className="text-gray-600 font-medium">Estimated Days</span>

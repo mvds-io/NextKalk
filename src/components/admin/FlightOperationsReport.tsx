@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { ChevronDown, ChevronUp, Clock, Calendar, Plane, Weight, Route } from 'lucide-react';
+import { ChevronDown, ChevronUp, Clock, Calendar, Plane, Weight, Route, Truck } from 'lucide-react';
 import type {
   FlightOperationsStats,
   FlightOperationsConfig,
@@ -92,14 +92,14 @@ export function FlightOperationsReport({
           <Card className="bg-orange-50/50 border-orange-100 shadow-sm">
             <CardContent className="p-4">
               <div className="flex items-center gap-2 text-orange-700 mb-2">
-                <Route className="w-4 h-4" />
+                <Truck className="w-4 h-4" />
                 <span className="text-xs font-medium uppercase">Transit Dist</span>
               </div>
               <div className="text-2xl font-bold text-orange-900">
                 {operations.totalTransitDistance.toFixed(0)} <span className="text-base font-normal text-orange-700">km</span>
               </div>
               <div className="text-xs text-orange-600 mt-1">
-                @ {operations.config.transitSpeed} kts
+                Truck @ {operations.config.truckSpeedKmh} km/h ({operations.config.roadDistanceMultiplier}&times; road)
               </div>
             </CardContent>
           </Card>
@@ -109,27 +109,41 @@ export function FlightOperationsReport({
       {/* Time Estimates */}
       <div>
         <h4 className="font-semibold mb-4 text-sm uppercase tracking-wider text-muted-foreground">Time Estimates</h4>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-4">
           <div className="border-l-4 border-blue-500 pl-4 py-1">
-            <div className="text-sm text-gray-500 mb-1">Bucket Flight Time</div>
+            <div className="text-sm text-gray-500 mb-1">Bucket Flight</div>
             <div className="text-xl font-bold text-gray-900">
               {formatHours(operations.totalBucketFlightTime)}
             </div>
             <div className="text-xs text-gray-400">Flying with buckets</div>
           </div>
+          <div className="border-l-4 border-yellow-500 pl-4 py-1">
+            <div className="text-sm text-gray-500 mb-1">Trip Overhead</div>
+            <div className="text-xl font-bold text-gray-900">
+              {formatHours(operations.totalTripOverheadTime)}
+            </div>
+            <div className="text-xs text-gray-400">{operations.config.tripOverheadMinutes} min/trip</div>
+          </div>
+          <div className="border-l-4 border-purple-500 pl-4 py-1">
+            <div className="text-sm text-gray-500 mb-1">LP Setup</div>
+            <div className="text-xl font-bold text-gray-900">
+              {formatHours(operations.totalLpSetupTime)}
+            </div>
+            <div className="text-xs text-gray-400">{operations.config.lpSetupMinutes} min/LP</div>
+          </div>
           <div className="border-l-4 border-orange-500 pl-4 py-1">
-            <div className="text-sm text-gray-500 mb-1">Transit Time</div>
+            <div className="text-sm text-gray-500 mb-1">Transit</div>
             <div className="text-xl font-bold text-gray-900">
               {formatHours(operations.totalTransitFlightTime)}
             </div>
-            <div className="text-xs text-gray-400">Between landingsplasser</div>
+            <div className="text-xs text-gray-400">Between LPs (bottleneck)</div>
           </div>
           <div className="border-l-4 border-green-500 pl-4 py-1">
-            <div className="text-sm text-gray-500 mb-1">Total Flight Time</div>
+            <div className="text-sm text-gray-500 mb-1">Total Operational</div>
             <div className="text-xl font-bold text-gray-900">
-              {formatHours(operations.totalFlightTime)}
+              {formatHours(operations.totalOperationalTime)}
             </div>
-            <div className="text-xs text-gray-400">All flying</div>
+            <div className="text-xs text-gray-400">All components</div>
           </div>
         </div>
 
@@ -189,34 +203,53 @@ export function FlightOperationsReport({
             <Table>
               <TableHeader>
                 <TableRow className="bg-gray-50/50">
+                  <TableHead>#</TableHead>
                   <TableHead>LP</TableHead>
                   <TableHead>Fylke</TableHead>
-                  <TableHead className="text-right">Vann</TableHead>
-                  <TableHead className="text-right">Tonnage</TableHead>
+                  <TableHead className="text-right">Tonn</TableHead>
                   <TableHead className="text-right">Trips</TableHead>
-                  <TableHead className="text-right">Flight Time</TableHead>
-                  <TableHead className="text-right">Est. Days</TableHead>
-                  <TableHead className="text-right">Est. Weeks</TableHead>
+                  <TableHead className="text-right">Bucket</TableHead>
+                  <TableHead className="text-right">Overhead</TableHead>
+                  <TableHead className="text-right">Setup</TableHead>
+                  <TableHead className="text-right">Transit</TableHead>
+                  <TableHead className="text-right">Total</TableHead>
+                  <TableHead className="text-right">Days</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {operations.landingsplasserWorkload
-                  .sort((a, b) => b.totalBucketFlightTime - a.totalBucketFlightTime)
-                  .map((lp) => (
+                  .map((lp, index) => (
                     <React.Fragment key={lp.lpId}>
                       <TableRow className="hover:bg-gray-50">
-                        <TableCell className="font-medium">{lp.lpName}</TableCell>
+                        <TableCell className="text-muted-foreground text-xs">{index + 1}</TableCell>
+                        <TableCell className="font-medium">
+                          {lp.lpName}
+                          {lp.completedAt && (
+                            <span className="text-xs text-gray-400 ml-1" title={lp.completedAt}>
+                              ({new Date(lp.completedAt).toLocaleDateString('nb-NO', { day: 'numeric', month: 'short' })})
+                            </span>
+                          )}
+                        </TableCell>
                         <TableCell className="text-muted-foreground">{lp.fylke || '-'}</TableCell>
-                        <TableCell className="text-right">{lp.vannCount}</TableCell>
-                        <TableCell className="text-right">{lp.totalTonnage.toFixed(1)} t</TableCell>
+                        <TableCell className="text-right">{lp.totalTonnage.toFixed(1)}</TableCell>
                         <TableCell className="text-right">{lp.totalTrips}</TableCell>
-                        <TableCell className="text-right font-medium text-blue-600">{formatHours(lp.totalBucketFlightTime)}</TableCell>
+                        <TableCell className="text-right text-blue-600">{formatHours(lp.totalBucketFlightTime)}</TableCell>
+                        <TableCell className="text-right text-yellow-600">{formatHours(lp.tripOverheadTime)}</TableCell>
+                        <TableCell className="text-right text-purple-600">{lp.lpSetupTime > 0 ? formatHours(lp.lpSetupTime) : '-'}</TableCell>
+                        <TableCell className="text-right text-orange-600">
+                          {lp.transitTime > 0 ? (
+                            <span title={`${lp.transitDistance.toFixed(1)} km — ${lp.transitBottleneck === 'truck' ? 'truck bottleneck' : 'heli bottleneck'}`}>
+                              {formatHours(lp.transitTime)}
+                              <span className="text-xs ml-0.5">{lp.transitBottleneck === 'truck' ? '(T)' : '(H)'}</span>
+                            </span>
+                          ) : '-'}
+                        </TableCell>
+                        <TableCell className="text-right font-medium">{formatHours(lp.totalLpTime)}</TableCell>
                         <TableCell className="text-right">{lp.estimatedDays.toFixed(1)}</TableCell>
-                        <TableCell className="text-right">{lp.estimatedWeeks.toFixed(1)}</TableCell>
                       </TableRow>
                       {showLPDetails && lp.vann.length > 0 && (
                         <TableRow className="bg-gray-50/50 hover:bg-gray-50/50">
-                          <TableCell colSpan={8} className="p-4">
+                          <TableCell colSpan={11} className="p-4">
                             <div className="rounded-lg border bg-white p-4">
                               <div className="text-xs font-semibold text-muted-foreground mb-3 uppercase tracking-wide">
                                 Vann Details for {lp.lpName}
@@ -247,13 +280,15 @@ export function FlightOperationsReport({
               </TableBody>
               <TableBody>
                 <TableRow className="bg-gray-100 hover:bg-gray-100 font-semibold border-t-2 border-gray-200">
-                  <TableCell colSpan={2}>TOTAL</TableCell>
-                  <TableCell className="text-right">{operations.landingsplasserWorkload.reduce((sum, lp) => sum + lp.vannCount, 0)}</TableCell>
-                  <TableCell className="text-right">{operations.totalTonnage.toFixed(1)} t</TableCell>
+                  <TableCell colSpan={3}>TOTAL ({operations.landingsplasserWorkload.length} LPs)</TableCell>
+                  <TableCell className="text-right">{operations.totalTonnage.toFixed(1)}</TableCell>
                   <TableCell className="text-right">{operations.totalTrips}</TableCell>
                   <TableCell className="text-right">{formatHours(operations.totalBucketFlightTime)}</TableCell>
+                  <TableCell className="text-right">{formatHours(operations.totalTripOverheadTime)}</TableCell>
+                  <TableCell className="text-right">{formatHours(operations.totalLpSetupTime)}</TableCell>
+                  <TableCell className="text-right">{formatHours(operations.totalTransitFlightTime)}</TableCell>
+                  <TableCell className="text-right">{formatHours(operations.totalOperationalTime)}</TableCell>
                   <TableCell className="text-right">{operations.estimatedDays.toFixed(1)}</TableCell>
-                  <TableCell className="text-right">{operations.estimatedWeeks.toFixed(1)}</TableCell>
                 </TableRow>
               </TableBody>
             </Table>
@@ -267,36 +302,32 @@ export function FlightOperationsReport({
           <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Flight Time Breakdown</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div>
-            <div className="flex justify-between text-sm mb-2">
-              <span className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-                Bucket Flying ({((operations.totalBucketFlightTime / operations.totalFlightTime) * 100).toFixed(1)}%)
-              </span>
-              <span className="font-medium">{formatHours(operations.totalBucketFlightTime)}</span>
-            </div>
-            <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden">
-              <div
-                className="bg-blue-500 h-full rounded-full transition-all duration-500"
-                style={{ width: `${(operations.totalBucketFlightTime / operations.totalFlightTime) * 100}%` }}
-              ></div>
-            </div>
-          </div>
-          <div>
-            <div className="flex justify-between text-sm mb-2">
-              <span className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-orange-500"></div>
-                Transit Between LPs ({((operations.totalTransitFlightTime / operations.totalFlightTime) * 100).toFixed(1)}%)
-              </span>
-              <span className="font-medium">{formatHours(operations.totalTransitFlightTime)}</span>
-            </div>
-            <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden">
-              <div
-                className="bg-orange-500 h-full rounded-full transition-all duration-500"
-                style={{ width: `${(operations.totalTransitFlightTime / operations.totalFlightTime) * 100}%` }}
-              ></div>
-            </div>
-          </div>
+          {[
+            { label: 'Bucket Flying', color: 'bg-blue-500', time: operations.totalBucketFlightTime },
+            { label: 'Trip Overhead', color: 'bg-yellow-500', time: operations.totalTripOverheadTime },
+            { label: 'LP Setup', color: 'bg-purple-500', time: operations.totalLpSetupTime },
+            { label: 'Transit (Bottleneck)', color: 'bg-orange-500', time: operations.totalTransitFlightTime },
+          ].map(({ label, color, time }) => {
+            const total = operations.totalOperationalTime;
+            const pct = total > 0 ? (time / total) * 100 : 0;
+            return (
+              <div key={label}>
+                <div className="flex justify-between text-sm mb-2">
+                  <span className="flex items-center gap-2">
+                    <div className={`w-3 h-3 rounded-full ${color}`}></div>
+                    {label} ({pct.toFixed(1)}%)
+                  </span>
+                  <span className="font-medium">{formatHours(time)}</span>
+                </div>
+                <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden">
+                  <div
+                    className={`${color} h-full rounded-full transition-all duration-500`}
+                    style={{ width: `${pct}%` }}
+                  ></div>
+                </div>
+              </div>
+            );
+          })}
         </CardContent>
       </Card>
     </div>

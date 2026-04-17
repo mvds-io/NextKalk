@@ -364,6 +364,11 @@ export const getSessionDirectly = (): { session: any; error: any } => {
 
     const parsed = JSON.parse(authData);
 
+    // Check if token is expired
+    if (parsed.expires_at && parsed.expires_at * 1000 < Date.now()) {
+      return { session: null, error: { message: 'Session expired' } };
+    }
+
     return { session: parsed, error: null };
   } catch (error) {
     console.error('getSessionDirectly error:', error);
@@ -417,7 +422,17 @@ export const cleanStaleSession = async (): Promise<boolean> => {
     const expiresAt = await checkAndRefreshSession();
 
     if (!expiresAt) {
-      // No valid session, clear storage
+      // checkAndRefreshSession returned null — but check if we still have a locally valid token
+      // before aggressively clearing storage (network blip could cause refresh to fail)
+      const { session } = getSessionDirectly();
+      if (session?.expires_at && session.expires_at * 1000 > Date.now()) {
+        // Token not yet expired — keep it rather than destroying a valid session
+        console.warn('Session refresh failed but token still valid, keeping session');
+        updateSessionHealth(true);
+        return true;
+      }
+
+      // No session or genuinely expired — clear storage
       console.warn('No valid session found, clearing storage');
       const keys = Object.keys(localStorage);
       keys.filter(key => key.includes('supabase')).forEach(key => localStorage.removeItem(key));
@@ -435,7 +450,14 @@ export const cleanStaleSession = async (): Promise<boolean> => {
   } catch (error) {
     console.error('Error cleaning stale session:', error);
 
-    // On any error, clear Supabase storage
+    // Don't aggressively clear storage on errors — check if token is still valid first
+    const { session } = getSessionDirectly();
+    if (session?.expires_at && session.expires_at * 1000 > Date.now()) {
+      console.warn('cleanStaleSession error but token still valid, keeping session');
+      return true;
+    }
+
+    // Token expired or no session — safe to clear
     const keys = Object.keys(localStorage);
     keys.filter(key => key.includes('supabase')).forEach(key => localStorage.removeItem(key));
 

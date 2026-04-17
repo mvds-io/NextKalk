@@ -17,12 +17,15 @@
 import { useState, useEffect, useCallback } from 'react';
 import { User } from '@/types';
 import { supabase, completeLogout, cleanStaleSession, getConnectionStatus, validateSession, getSessionStatus, updateSessionHealth, getSessionDirectly } from '@/lib/supabase';
+import { useTableNames } from '@/contexts/TableNamesContext';
+import { clearTableNamesCache } from '@/lib/tableNames';
 
 interface AuthGuardProps {
   children: (user: User, onLogout: () => void) => React.ReactNode;
 }
 
 export default function AuthGuard({ children }: AuthGuardProps) {
+  const { refetch: refetchTableNames } = useTableNames();
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [email, setEmail] = useState('');
@@ -33,13 +36,10 @@ export default function AuthGuard({ children }: AuthGuardProps) {
   const [connectionIssue, setConnectionIssue] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const [sessionExpired, setSessionExpired] = useState(false);
-  const [timeoutCountdown, setTimeoutCountdown] = useState(5);
+  const [timeoutCountdown, setTimeoutCountdown] = useState(10);
 
   const loadUserData = useCallback(async (email: string) => {
     try {
-      // Check current auth state using direct localStorage read
-      getSessionDirectly();
-
       // Try direct query first to bypass retry logic
       const result = await supabase
         .from('users')
@@ -147,7 +147,7 @@ export default function AuthGuard({ children }: AuthGuardProps) {
       }
 
       // Reset countdown
-      setTimeoutCountdown(5);
+      setTimeoutCountdown(10);
 
       // Check session health first
       const sessionStatus = getSessionStatus();
@@ -167,7 +167,7 @@ export default function AuthGuard({ children }: AuthGuardProps) {
       }
 
       // Countdown timer for timeout indicator
-      let countdown = 5;
+      let countdown = 10;
       countdownIntervalId = setInterval(() => {
         countdown--;
         setTimeoutCountdown(countdown);
@@ -176,30 +176,23 @@ export default function AuthGuard({ children }: AuthGuardProps) {
         }
       }, 1000);
 
-      // Reduced timeout - fail after 5 seconds with specific error
+      // Safety timeout for entire auth check including loadUserData
+      // Uses 10s to allow for slow DB queries on cold start
       timeoutId = setTimeout(() => {
-        console.warn('Authentication check timed out after 5s');
+        console.warn('Authentication check timed out after 10s');
         setAuthTimeout(true);
         setIsLoading(false);
         if (countdownIntervalId) clearInterval(countdownIntervalId);
-      }, 5000);
+      }, 10000);
 
       // Get session - it's already been validated by cleanStaleSession
       // Use getSessionDirectly to avoid hanging on Vercel production
       const { session, error } = getSessionDirectly();
 
-      // Clear timeout and countdown since we got a response
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-        timeoutId = null;
-      }
-      if (countdownIntervalId) {
-        clearInterval(countdownIntervalId);
-        countdownIntervalId = null;
-      }
-
       if (error) {
         console.error('Session error:', error);
+        if (timeoutId) { clearTimeout(timeoutId); timeoutId = null; }
+        if (countdownIntervalId) { clearInterval(countdownIntervalId); countdownIntervalId = null; }
         if (error.message?.includes('expired') || error.message?.includes('JWT')) {
           setSessionExpired(true);
         } else {
@@ -211,6 +204,8 @@ export default function AuthGuard({ children }: AuthGuardProps) {
 
       if (!session?.user?.email) {
         console.log('No session found');
+        if (timeoutId) { clearTimeout(timeoutId); timeoutId = null; }
+        if (countdownIntervalId) { clearInterval(countdownIntervalId); countdownIntervalId = null; }
         setIsLoading(false);
         return;
       }
@@ -222,6 +217,15 @@ export default function AuthGuard({ children }: AuthGuardProps) {
       setRetryCount(0);
 
       await loadUserData(session.user.email);
+
+      // Re-fetch table names now that we're authenticated
+      // (initial fetch before auth may have failed due to RLS policies)
+      clearTableNamesCache();
+      await refetchTableNames();
+
+      // Only clear timeout AFTER loadUserData completes successfully
+      if (timeoutId) { clearTimeout(timeoutId); timeoutId = null; }
+      if (countdownIntervalId) { clearInterval(countdownIntervalId); countdownIntervalId = null; }
 
     } catch (error) {
       // Clear timeout and countdown on error
@@ -244,7 +248,7 @@ export default function AuthGuard({ children }: AuthGuardProps) {
 
       setIsLoading(false);
     }
-  }, [loadUserData]);
+  }, [loadUserData, refetchTableNames]);
 
   const handleManualRetry = useCallback(() => {
     setIsLoading(true);
@@ -295,7 +299,8 @@ export default function AuthGuard({ children }: AuthGuardProps) {
     // Listen for visibility changes (user returns to tab after idle)
     // Check if session might be expired without calling validateSession
     const handleVisibilityChange = async () => {
-      if (document.visibilityState === 'visible') {
+      // Only check session on tab focus if auth is not currently in progress
+      if (document.visibilityState === 'visible' && !isLoading) {
         // Use direct localStorage read to avoid hanging
         const { session, error } = getSessionDirectly();
 
@@ -341,8 +346,13 @@ export default function AuthGuard({ children }: AuthGuardProps) {
 
         // Manually trigger user data load
         await loadUserData(data.session.user.email!);
+
+        // Re-fetch table names now that we're authenticated
+        clearTableNamesCache();
+        await refetchTableNames();
       }
 
+      setIsLoggingIn(false);
       setEmail('');
       setPassword('');
     } catch (error: unknown) {
@@ -354,6 +364,7 @@ export default function AuthGuard({ children }: AuthGuardProps) {
 
   const handleLogout = async () => {
     setUser(null);
+    clearTableNamesCache();
     await completeLogout();
   };
 
@@ -426,7 +437,7 @@ export default function AuthGuard({ children }: AuthGuardProps) {
             <div className="mt-3">
               <div className="alert alert-warning d-inline-block" style={{ fontSize: '0.9rem' }}>
                 <i className="fas fa-clock me-2"></i>
-                Autentisering tok for lang tid (&gt;5s). Dette kan være et midlertidig nettverksproblem.
+                Autentisering tok for lang tid (&gt;10s). Dette kan være et midlertidig nettverksproblem.
               </div>
               <div className="mt-2">
                 <button
