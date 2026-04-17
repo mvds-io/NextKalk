@@ -2000,7 +2000,7 @@ export default function MapContainer({
           .getPublicUrl(filePath);
 
         // Save reference to database
-        const documentTable = type === 'airport' ? 'vass_vann_documents' : 'vass_lasteplass_documents';
+        const documentTable = type === 'airport' ? tableNames.vass_vann_documents : tableNames.vass_lasteplass_documents;
         const { error: dbError } = await supabase
           .from(documentTable)
           .insert({
@@ -2065,8 +2065,8 @@ export default function MapContainer({
       }
 
       try {
-        const documentTable = type === 'airport' ? 'vass_vann_documents' : 'vass_lasteplass_documents';
-        
+        const documentTable = type === 'airport' ? tableNames.vass_vann_documents : tableNames.vass_lasteplass_documents;
+
         // Get document info first for storage deletion
         const { data: docData, error: fetchError } = await supabase
           .from(documentTable)
@@ -2493,7 +2493,7 @@ ${waypointElements}
       // Create AbortController for this request
       const abortController = createAbortController(loadingId);
 
-      const documentTable = type === 'airport' ? 'vass_vann_documents' : 'vass_lasteplass_documents';
+      const documentTable = type === 'airport' ? tableNames.vass_vann_documents : tableNames.vass_lasteplass_documents;
       const { data: documents, error } = await supabase
         .from(documentTable)
         .select('*')
