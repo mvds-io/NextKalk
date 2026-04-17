@@ -364,11 +364,6 @@ export const getSessionDirectly = (): { session: any; error: any } => {
 
     const parsed = JSON.parse(authData);
 
-    // Check if token is expired
-    if (parsed.expires_at && parsed.expires_at * 1000 < Date.now()) {
-      return { session: null, error: { message: 'Session expired' } };
-    }
-
     return { session: parsed, error: null };
   } catch (error) {
     console.error('getSessionDirectly error:', error);

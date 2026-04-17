@@ -121,4 +121,6 @@ export interface FilterState {
 export interface CounterData {
   remaining: number;
   done: number;
-} 
+  totalTonn: number;
+  doneTonn: number;
+}

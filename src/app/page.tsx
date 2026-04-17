@@ -43,7 +43,7 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
   const [airports, setAirports] = useState<Airport[]>([]);
   const [landingsplasser, setLandingsplasser] = useState<Landingsplass[]>([]);
   const [kalkMarkers, setKalkMarkers] = useState<KalkInfo[]>([]);
-  const [counterData, setCounterData] = useState<CounterData>({ remaining: 0, done: 0 });
+  const [counterData, setCounterData] = useState<CounterData>({ remaining: 0, done: 0, totalTonn: 0, doneTonn: 0 });
   const [filterState, setFilterState] = useState<FilterState>({ county: '', showConnections: false });
   const [counties, setCounties] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -486,8 +486,10 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
     
     const remaining = visibleAirports.filter(a => !a.done).length;
     const done = visibleAirports.filter(a => a.done).length;
-    
-    setCounterData({ remaining, done });
+    const totalTonn = visibleAirports.reduce((sum, a) => sum + (Number(a.tonn) || 0), 0);
+    const doneTonn = visibleAirports.filter(a => a.done).reduce((sum, a) => sum + (Number(a.tonn) || 0), 0);
+
+    setCounterData({ remaining, done, totalTonn, doneTonn });
   }, [airports, filterState.county]);
 
   useEffect(() => {

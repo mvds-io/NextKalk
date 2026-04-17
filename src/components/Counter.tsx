@@ -212,31 +212,6 @@ export default function Counter({
     }
   };
 
-  // Create legend icon element like the original
-  const createLegendIcon = (color: string, iconClass: string) => (
-    <div
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        width: '16px',
-        height: '16px',
-        borderRadius: '50%',
-        color: 'white',
-        fontSize: '10px',
-        lineHeight: '16px',
-        textAlign: 'center',
-        backgroundColor: 
-          color === 'blue' ? '#2A81CB' :
-          color === 'red' ? '#CB2B3E' :
-          color === 'green' ? '#2AAD27' :
-          color === 'orange' ? '#FFA500' : color
-      }}
-    >
-      <i className={`fa ${iconClass}`}></i>
-    </div>
-  );
-
   const getRoleBadgeClass = (role: string) => {
     switch (role) {
       case 'admin': return 'bg-danger';
@@ -297,31 +272,25 @@ export default function Counter({
             </div>
           </div>
 
-          {/* Row 3: Legend items - All items on one line */}
-          <div className="d-flex justify-content-center mb-2" style={{ flexWrap: 'wrap', gap: '4px' }}>
-            <div className="legend-item" style={{ display: 'flex !important', alignItems: 'center', gap: '2px', fontSize: '0.5rem', whiteSpace: 'nowrap', flex: '0 0 auto' }}>
-              <div className="legend-icon">
-                {createLegendIcon('red', 'fa-water')}
+          {/* Row 3: Tonnage summary */}
+          <div className="d-flex justify-content-center mb-2">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '4px 10px', background: '#f8f9fa', borderRadius: '6px', border: '1px solid #e9ecef' }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
+                <span style={{ fontSize: '0.6rem', color: '#6c757d', textTransform: 'uppercase', letterSpacing: '0.03em', fontWeight: 500 }}>Totalt</span>
+                <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#212529' }}>{counterData.totalTonn.toLocaleString('nb-NO', { maximumFractionDigits: 0 })}</span>
+                <span style={{ fontSize: '0.6rem', color: '#6c757d' }}>t</span>
               </div>
-              <span>Vann</span>
-            </div>
-            <div className="legend-item" style={{ display: 'flex !important', alignItems: 'center', gap: '2px', fontSize: '0.5rem', whiteSpace: 'nowrap', flex: '0 0 auto' }}>
-              <div className="legend-icon">
-                {createLegendIcon('green', 'fa-check')}
+              <div style={{ width: 1, height: 16, background: '#dee2e6' }} />
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
+                <span style={{ fontSize: '0.6rem', color: '#6c757d', textTransform: 'uppercase', letterSpacing: '0.03em', fontWeight: 500 }}>Fullført</span>
+                <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#2AAD27' }}>{counterData.doneTonn.toLocaleString('nb-NO', { maximumFractionDigits: 0 })}</span>
+                <span style={{ fontSize: '0.6rem', color: '#6c757d' }}>t</span>
+                {counterData.totalTonn > 0 && (
+                  <span style={{ fontSize: '0.6rem', color: '#6c757d', fontWeight: 500, marginLeft: '2px' }}>
+                    · {Math.round((counterData.doneTonn / counterData.totalTonn) * 100)}%
+                  </span>
+                )}
               </div>
-              <span>Utført</span>
-            </div>
-            <div className="legend-item" style={{ display: 'flex !important', alignItems: 'center', gap: '2px', fontSize: '0.5rem', whiteSpace: 'nowrap', flex: '0 0 auto' }}>
-              <div className="legend-icon">
-                {createLegendIcon('blue', 'fa-helicopter-symbol')}
-              </div>
-              <span>LP</span>
-            </div>
-            <div className="legend-item" style={{ display: 'flex !important', alignItems: 'center', gap: '2px', fontSize: '0.5rem', whiteSpace: 'nowrap', flex: '0 0 auto' }}>
-              <div className="legend-icon">
-                {createLegendIcon('orange', 'fa-comment')}
-              </div>
-              <span>Info</span>
             </div>
           </div>
 
@@ -514,32 +483,30 @@ export default function Counter({
               </div>
             </div>
           </div>
-          <div className="legend" style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap', flex: 1, justifyContent: 'center' }}>
-            <div className="legend-item" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem' }}>
-              <div className="legend-icon">
-                {createLegendIcon('red', 'fa-water')}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '24px', flex: 1, justifyContent: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '24px', padding: '6px 16px', background: '#f8f9fa', borderRadius: '6px', border: '1px solid #e9ecef' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.15 }}>
+                <span style={{ fontSize: '0.7rem', color: '#6c757d', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 500 }}>Totalt i år</span>
+                <span style={{ fontSize: '1rem', fontWeight: 700, color: '#212529' }}>
+                  {counterData.totalTonn.toLocaleString('nb-NO', { maximumFractionDigits: 0 })}
+                  <span style={{ fontSize: '0.75rem', color: '#6c757d', fontWeight: 500, marginLeft: '3px' }}>t</span>
+                </span>
               </div>
-              <span>Vann</span>
-            </div>
-            <div className="legend-item" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem' }}>
-              <div className="legend-icon">
-                {createLegendIcon('green', 'fa-check')}
+              <div style={{ width: 1, height: 28, background: '#dee2e6' }} />
+              <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.15 }}>
+                <span style={{ fontSize: '0.7rem', color: '#6c757d', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 500 }}>Fullført</span>
+                <span style={{ fontSize: '1rem', fontWeight: 700, color: '#2AAD27' }}>
+                  {counterData.doneTonn.toLocaleString('nb-NO', { maximumFractionDigits: 0 })}
+                  <span style={{ fontSize: '0.75rem', color: '#6c757d', fontWeight: 500, marginLeft: '3px' }}>t</span>
+                  {counterData.totalTonn > 0 && (
+                    <span style={{ fontSize: '0.75rem', color: '#6c757d', fontWeight: 500, marginLeft: '6px' }}>
+                      · {Math.round((counterData.doneTonn / counterData.totalTonn) * 100)}%
+                    </span>
+                  )}
+                </span>
               </div>
-              <span>Utført</span>
             </div>
-            <div className="legend-item" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem' }}>
-              <div className="legend-icon">
-                {createLegendIcon('blue', 'fa-helicopter-symbol')}
-              </div>
-              <span>LP</span>
-            </div>
-            <div className="legend-item" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem' }}>
-              <div className="legend-icon">
-                {createLegendIcon('orange', 'fa-comment')}
-              </div>
-              <span>Kommentar</span>
-            </div>
-            <div className="legend-item" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <button 
                 className="btn btn-outline-primary btn-sm"
                 style={{ 

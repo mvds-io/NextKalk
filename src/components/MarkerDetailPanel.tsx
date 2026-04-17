@@ -485,7 +485,9 @@ export default function MarkerDetailPanel({
       const tableName =
         markerType === 'airport' ? tableNames.vass_vann : tableNames.vass_lasteplass;
       const updates: any = { is_done: newDoneStatus };
-      updates.completed_at = newDoneStatus ? new Date().toISOString() : null;
+      if (markerType === 'landingsplass') {
+        updates.completed_at = newDoneStatus ? new Date().toISOString() : null;
+      }
       const { error } = await supabase.from(tableName).update(updates).eq('id', markerId);
       if (error) throw error;
       if (user) {
@@ -881,9 +883,7 @@ ${waypointsXml}
           borderBottom: `1px solid ${COLORS.border}`,
           borderLeft: `3px solid ${accentColor}`,
           padding: '10px 12px 8px',
-          position: 'sticky',
-          top: 0,
-          zIndex: 10,
+          flexShrink: 0,
         }}
       >
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
@@ -1049,9 +1049,7 @@ ${waypointsXml}
           display: 'flex',
           background: 'white',
           borderBottom: `1px solid ${COLORS.border}`,
-          position: 'sticky',
-          top: 0,
-          zIndex: 9,
+          flexShrink: 0,
         }}
       >
         <TabButton
