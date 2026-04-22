@@ -13,22 +13,7 @@ import SkeletonSidePanel from '@/components/SkeletonSidePanel';
 import { supabase, queryWithRetry } from '@/lib/supabase';
 import { Airport, Landingsplass, KalkInfo, User, CounterData, FilterState } from '@/types';
 import { useTableNames } from '@/contexts/TableNamesContext';
-
-// Utility function to parse European decimal numbers (handles both "1.0" and "1,0" formats)
-function parseEuropeanDecimal(value: string | number): number {
-  if (typeof value === 'number') {
-    return isNaN(value) ? 0 : value;
-  }
-  
-  if (typeof value === 'string') {
-    // Replace comma with dot for European decimal format
-    const normalizedValue = value.replace(',', '.');
-    const parsed = parseFloat(normalizedValue);
-    return isNaN(parsed) ? 0 : parsed;
-  }
-  
-  return 0;
-}
+import { parseEuropeanDecimal } from '@/lib/utils';
 
 interface AuthenticatedAppProps {
   user: User;
@@ -486,8 +471,8 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
     
     const remaining = visibleAirports.filter(a => !a.done).length;
     const done = visibleAirports.filter(a => a.done).length;
-    const totalTonn = visibleAirports.reduce((sum, a) => sum + (Number(a.tonn) || 0), 0);
-    const doneTonn = visibleAirports.filter(a => a.done).reduce((sum, a) => sum + (Number(a.tonn) || 0), 0);
+    const totalTonn = visibleAirports.reduce((sum, a) => sum + parseEuropeanDecimal(a.tonn as unknown as string | number), 0);
+    const doneTonn = visibleAirports.filter(a => a.done).reduce((sum, a) => sum + parseEuropeanDecimal(a.tonn as unknown as string | number), 0);
 
     setCounterData({ remaining, done, totalTonn, doneTonn });
   }, [airports, filterState.county]);
@@ -761,6 +746,7 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
           ) : (
             <ProgressPlan
               landingsplasser={landingsplasser}
+              airports={airports}
               filterState={filterState}
               user={user}
               isLoading={loadingStates.landingsplasser}

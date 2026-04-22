@@ -2,12 +2,14 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { Reorder } from 'framer-motion';
-import { Landingsplass, User } from '@/types';
+import { Landingsplass, Airport, User } from '@/types';
 import { supabase } from '@/lib/supabase';
 import { useTableNames } from '@/contexts/TableNamesContext';
+import { parseEuropeanDecimal } from '@/lib/utils';
 
 interface ProgressPlanProps {
   landingsplasser: Landingsplass[];
+  airports?: Airport[];
   filterState: { county: string; showConnections: boolean };
   user: User | null;
   onDataUpdate?: () => void;
@@ -217,6 +219,7 @@ function RowContent({
 
 export default function ProgressPlan({
   landingsplasser,
+  airports,
   filterState,
   user,
   onDataUpdate,
@@ -266,14 +269,21 @@ export default function ProgressPlan({
   const pending = useMemo(() => sorted.filter((l) => !l.done), [sorted]);
   const done = useMemo(() => sorted.filter((l) => l.done), [sorted]);
 
-  const totalTonn = useMemo(
-    () => sorted.reduce((s, l) => s + (l.calculated_tonn || 0), 0),
-    [sorted]
-  );
-  const doneTonn = useMemo(
-    () => done.reduce((s, l) => s + (l.calculated_tonn || 0), 0),
-    [done]
-  );
+  // Sum unique waters (each counted once) filtered by the same county as the LP list.
+  // Matches the "Totalt i år" counter so the two numbers agree.
+  const { totalTonn, doneTonn } = useMemo(() => {
+    const list = (airports || []).filter(
+      (a) => !filterState.county || a.fylke === filterState.county
+    );
+    let total = 0;
+    let doneSum = 0;
+    for (const a of list) {
+      const t = parseEuropeanDecimal(a.tonn as unknown as string | number);
+      total += t;
+      if (a.done) doneSum += t;
+    }
+    return { totalTonn: total, doneTonn: doneSum };
+  }, [airports, filterState.county]);
   const pendingTonn = Math.max(0, totalTonn - doneTonn);
   const progressPct = sorted.length ? Math.round((done.length / sorted.length) * 100) : 0;
 

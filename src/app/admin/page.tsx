@@ -23,7 +23,7 @@ import { useTableNames } from '@/contexts/TableNamesContext';
 import { PlanningTab } from '@/components/admin/PlanningTab';
 import { YearComparisonTab } from '@/components/admin/YearComparisonTab';
 import { ChangelogTab } from '@/components/admin/ChangelogTab';
-import { ArrowLeft, Plus, MapPin, Trash2, Edit, CheckCircle, XCircle, Database, RefreshCw, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Plus, MapPin, Trash2, Edit, CheckCircle, XCircle, Database, RefreshCw, AlertTriangle, Info } from 'lucide-react';
 
 interface Landingsplass {
   id: number;
@@ -73,7 +73,7 @@ export default function AdminPage() {
   const [lpDeleteDialogOpen, setLpDeleteDialogOpen] = useState(false);
   const [currentLp, setCurrentLp] = useState<Partial<Landingsplass> | null>(null);
   const [lpToDelete, setLpToDelete] = useState<number | null>(null);
-  const [lpSortField, setLpSortField] = useState<keyof Landingsplass>('id');
+  const [lpSortField, setLpSortField] = useState<keyof Landingsplass | 'calculated_tonn'>('id');
   const [lpSortDirection, setLpSortDirection] = useState<'asc' | 'desc'>('asc');
   const [associatedVannMarkers, setAssociatedVannMarkers] = useState<VassVann[]>([]);
   const [lpTonnMap, setLpTonnMap] = useState<Record<number, number>>({});
@@ -907,7 +907,7 @@ export default function AdminPage() {
   };
 
   // Sorting functions
-  const handleLpSort = (field: keyof Landingsplass) => {
+  const handleLpSort = (field: keyof Landingsplass | 'calculated_tonn') => {
     if (lpSortField === field) {
       setLpSortDirection(lpSortDirection === 'asc' ? 'desc' : 'asc');
     } else {
@@ -929,12 +929,15 @@ export default function AdminPage() {
   const sortedLandingsplasser = useMemo(() => {
     return [...landingsplasser].sort((a, b) => {
       let aVal: any, bVal: any;
-      if (lpSortField === 'tonn_lp') {
+      if (lpSortField === 'calculated_tonn') {
         aVal = lpTonnMap[a.id] || 0;
         bVal = lpTonnMap[b.id] || 0;
       } else if (lpSortField === 'priority') {
         aVal = lpVannCountMap[a.id] || 0;
         bVal = lpVannCountMap[b.id] || 0;
+      } else if (lpSortField === 'tonn_lp') {
+        aVal = a.tonn_lp ?? 0;
+        bVal = b.tonn_lp ?? 0;
       } else {
         aVal = a[lpSortField];
         bVal = b[lpSortField];
@@ -1084,7 +1087,23 @@ export default function AdminPage() {
                     </TableHead>
                     <TableHead className="font-semibold">Coordinates</TableHead>
                     <TableHead onClick={() => handleLpSort('tonn_lp')} className="cursor-pointer font-semibold">
-                      Tonn {lpSortField === 'tonn_lp' && (lpSortDirection === 'asc' ? '↑' : '↓')}
+                      <span className="inline-flex items-center gap-1">
+                        Tonn (dok)
+                        <Info
+                          className="w-3.5 h-3.5 text-gray-400"
+                          onClick={(e) => e.stopPropagation()}
+                          aria-label="Forklaring"
+                          title={
+                            'Tonn (dok): manuelt registrert fra dokumentene for denne landingsplassen (feltet tonn_lp).\n' +
+                            'Tonn (beregnet): sum av tonn fra alle tilknyttede vann.\n\n' +
+                            'Disse bør stemme overens. Avvik (markert med ⚠) betyr at vannenes tonn-verdier ikke summerer til det som står i dokumentene — oppdater vannene eller tonn (dok) for å korrigere.'
+                          }
+                        />
+                      </span>
+                      {lpSortField === 'tonn_lp' && (lpSortDirection === 'asc' ? ' ↑' : ' ↓')}
+                    </TableHead>
+                    <TableHead onClick={() => handleLpSort('calculated_tonn')} className="cursor-pointer font-semibold">
+                      Tonn (beregnet) {lpSortField === 'calculated_tonn' && (lpSortDirection === 'asc' ? '↑' : '↓')}
                     </TableHead>
                     <TableHead onClick={() => handleLpSort('priority')} className="cursor-pointer font-semibold">
                       Vann {lpSortField === 'priority' && (lpSortDirection === 'asc' ? '↑' : '↓')}
@@ -1108,7 +1127,38 @@ export default function AdminPage() {
                       <TableCell className="text-xs text-muted-foreground font-mono">
                         {lp.latitude && lp.longitude ? `${lp.latitude.toFixed(4)}, ${lp.longitude.toFixed(4)}` : '-'}
                       </TableCell>
-                      <TableCell>{lpTonnMap[lp.id] ? lpTonnMap[lp.id].toFixed(1) : '-'}</TableCell>
+                      <TableCell>{lp.tonn_lp != null ? lp.tonn_lp.toFixed(1) : '-'}</TableCell>
+                      <TableCell>
+                        {(() => {
+                          const calc = lpTonnMap[lp.id];
+                          if (!calc) return '-';
+                          const doc = lp.tonn_lp;
+                          const diff = doc != null ? calc - doc : 0;
+                          const mismatch = doc != null && Math.abs(diff) > 0.1;
+                          const diffColor =
+                            diff > 0 ? 'text-red-600' : 'text-green-600';
+                          return (
+                            <span
+                              className="inline-flex items-center gap-1"
+                              title={
+                                mismatch
+                                  ? `Avvik: dokumentert ${doc!.toFixed(1)}t vs. beregnet ${calc.toFixed(1)}t (diff ${diff > 0 ? '+' : ''}${diff.toFixed(1)}t)`
+                                  : undefined
+                              }
+                            >
+                              {calc.toFixed(1)}
+                              {mismatch && (
+                                <>
+                                  <span className={`${diffColor} font-medium`}>
+                                    ({diff > 0 ? '+' : ''}{diff.toFixed(1)})
+                                  </span>
+                                  <AlertTriangle className={`w-3.5 h-3.5 ${diffColor}`} />
+                                </>
+                              )}
+                            </span>
+                          );
+                        })()}
+                      </TableCell>
                       <TableCell>{lpVannCountMap[lp.id] || 0}</TableCell>
                       <TableCell>
                         <Badge variant={lp.is_done ? 'default' : 'secondary'} className={lp.is_done ? 'bg-green-100 text-green-800 hover:bg-green-100' : 'bg-gray-100 text-gray-800 hover:bg-gray-100'}>
