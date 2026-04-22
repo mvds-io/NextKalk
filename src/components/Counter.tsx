@@ -274,23 +274,44 @@ export default function Counter({
 
           {/* Row 3: Tonnage summary */}
           <div className="d-flex justify-content-center mb-2">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '4px 10px', background: '#f8f9fa', borderRadius: '6px', border: '1px solid #e9ecef' }}>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
-                <span style={{ fontSize: '0.6rem', color: '#6c757d', textTransform: 'uppercase', letterSpacing: '0.03em', fontWeight: 500 }}>Totalt</span>
-                <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#212529' }}>{counterData.totalTonn.toLocaleString('nb-NO', { maximumFractionDigits: 0 })}</span>
-                <span style={{ fontSize: '0.6rem', color: '#6c757d' }}>t</span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', padding: '4px 10px', background: '#f8f9fa', borderRadius: '6px', border: '1px solid #e9ecef', minWidth: '180px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px', justifyContent: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
+                  <span style={{ fontSize: '0.6rem', color: '#6c757d', textTransform: 'uppercase', letterSpacing: '0.03em', fontWeight: 500 }}>Totalt</span>
+                  <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#212529' }}>{counterData.totalTonn.toLocaleString('nb-NO', { maximumFractionDigits: 0 })}</span>
+                  <span style={{ fontSize: '0.6rem', color: '#6c757d' }}>t</span>
+                </div>
+                <div style={{ width: 1, height: 16, background: '#dee2e6' }} />
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
+                  <span style={{ fontSize: '0.6rem', color: '#6c757d', textTransform: 'uppercase', letterSpacing: '0.03em', fontWeight: 500 }}>Fullført</span>
+                  <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#2AAD27' }}>{counterData.doneTonn.toLocaleString('nb-NO', { maximumFractionDigits: 0 })}</span>
+                  <span style={{ fontSize: '0.6rem', color: '#6c757d' }}>t</span>
+                  {counterData.totalTonn > 0 && (
+                    <span style={{ fontSize: '0.6rem', color: '#6c757d', fontWeight: 500, marginLeft: '2px' }}>
+                      · {Math.round((counterData.doneTonn / counterData.totalTonn) * 100)}%
+                    </span>
+                  )}
+                </div>
               </div>
-              <div style={{ width: 1, height: 16, background: '#dee2e6' }} />
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
-                <span style={{ fontSize: '0.6rem', color: '#6c757d', textTransform: 'uppercase', letterSpacing: '0.03em', fontWeight: 500 }}>Fullført</span>
-                <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#2AAD27' }}>{counterData.doneTonn.toLocaleString('nb-NO', { maximumFractionDigits: 0 })}</span>
-                <span style={{ fontSize: '0.6rem', color: '#6c757d' }}>t</span>
-                {counterData.totalTonn > 0 && (
-                  <span style={{ fontSize: '0.6rem', color: '#6c757d', fontWeight: 500, marginLeft: '2px' }}>
-                    · {Math.round((counterData.doneTonn / counterData.totalTonn) * 100)}%
-                  </span>
-                )}
-              </div>
+              {counterData.totalTonn > 0 && (
+                <div
+                  role="progressbar"
+                  aria-valuenow={Math.round((counterData.doneTonn / counterData.totalTonn) * 100)}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  style={{ height: 3, width: '100%', background: '#e9ecef', borderRadius: 999, overflow: 'hidden' }}
+                >
+                  <div
+                    style={{
+                      width: `${Math.min(100, (counterData.doneTonn / counterData.totalTonn) * 100)}%`,
+                      height: '100%',
+                      background: '#2AAD27',
+                      borderRadius: 999,
+                      transition: 'width 300ms ease',
+                    }}
+                  />
+                </div>
+              )}
             </div>
           </div>
 
@@ -484,27 +505,49 @@ export default function Counter({
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '24px', flex: 1, justifyContent: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '24px', padding: '6px 16px', background: '#f8f9fa', borderRadius: '6px', border: '1px solid #e9ecef' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.15 }}>
-                <span style={{ fontSize: '0.7rem', color: '#6c757d', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 500 }}>Totalt i år</span>
-                <span style={{ fontSize: '1rem', fontWeight: 700, color: '#212529' }}>
-                  {counterData.totalTonn.toLocaleString('nb-NO', { maximumFractionDigits: 0 })}
-                  <span style={{ fontSize: '0.75rem', color: '#6c757d', fontWeight: 500, marginLeft: '3px' }}>t</span>
-                </span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', padding: '6px 16px', background: '#f8f9fa', borderRadius: '6px', border: '1px solid #e9ecef', minWidth: '240px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.15 }}>
+                  <span style={{ fontSize: '0.7rem', color: '#6c757d', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 500 }}>Totalt i år</span>
+                  <span style={{ fontSize: '1rem', fontWeight: 700, color: '#212529' }}>
+                    {counterData.totalTonn.toLocaleString('nb-NO', { maximumFractionDigits: 0 })}
+                    <span style={{ fontSize: '0.75rem', color: '#6c757d', fontWeight: 500, marginLeft: '3px' }}>t</span>
+                  </span>
+                </div>
+                <div style={{ width: 1, height: 28, background: '#dee2e6' }} />
+                <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.15 }}>
+                  <span style={{ fontSize: '0.7rem', color: '#6c757d', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 500 }}>Fullført</span>
+                  <span style={{ fontSize: '1rem', fontWeight: 700, color: '#2AAD27' }}>
+                    {counterData.doneTonn.toLocaleString('nb-NO', { maximumFractionDigits: 0 })}
+                    <span style={{ fontSize: '0.75rem', color: '#6c757d', fontWeight: 500, marginLeft: '3px' }}>t</span>
+                    {counterData.totalTonn > 0 && (
+                      <span style={{ fontSize: '0.75rem', color: '#6c757d', fontWeight: 500, marginLeft: '6px' }}>
+                        · {Math.round((counterData.doneTonn / counterData.totalTonn) * 100)}%
+                      </span>
+                    )}
+                  </span>
+                </div>
               </div>
-              <div style={{ width: 1, height: 28, background: '#dee2e6' }} />
-              <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.15 }}>
-                <span style={{ fontSize: '0.7rem', color: '#6c757d', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 500 }}>Fullført</span>
-                <span style={{ fontSize: '1rem', fontWeight: 700, color: '#2AAD27' }}>
-                  {counterData.doneTonn.toLocaleString('nb-NO', { maximumFractionDigits: 0 })}
-                  <span style={{ fontSize: '0.75rem', color: '#6c757d', fontWeight: 500, marginLeft: '3px' }}>t</span>
-                  {counterData.totalTonn > 0 && (
-                    <span style={{ fontSize: '0.75rem', color: '#6c757d', fontWeight: 500, marginLeft: '6px' }}>
-                      · {Math.round((counterData.doneTonn / counterData.totalTonn) * 100)}%
-                    </span>
-                  )}
-                </span>
-              </div>
+              {counterData.totalTonn > 0 && (
+                <div
+                  role="progressbar"
+                  aria-valuenow={Math.round((counterData.doneTonn / counterData.totalTonn) * 100)}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  title={`${counterData.doneTonn.toLocaleString('nb-NO', { maximumFractionDigits: 0 })}t av ${counterData.totalTonn.toLocaleString('nb-NO', { maximumFractionDigits: 0 })}t fullført`}
+                  style={{ height: 4, width: '100%', background: '#e9ecef', borderRadius: 999, overflow: 'hidden' }}
+                >
+                  <div
+                    style={{
+                      width: `${Math.min(100, (counterData.doneTonn / counterData.totalTonn) * 100)}%`,
+                      height: '100%',
+                      background: '#2AAD27',
+                      borderRadius: 999,
+                      transition: 'width 300ms ease',
+                    }}
+                  />
+                </div>
+              )}
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <button 

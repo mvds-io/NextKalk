@@ -360,6 +360,23 @@ export default function AdminPage() {
           .eq('id', currentLp.id);
 
         if (error) throw error;
+
+        // Cascade done status to associated waters so tonnage totals stay consistent
+        try {
+          const { data: assocs } = await supabase
+            .from(tableNames.vass_associations)
+            .select('airport_id')
+            .eq('landingsplass_id', currentLp.id);
+          if (assocs && assocs.length > 0) {
+            await supabase
+              .from(tableNames.vass_vann)
+              .update({ is_done: !!currentLp.is_done })
+              .in('id', assocs.map((a: any) => a.airport_id));
+          }
+        } catch (cascadeErr) {
+          console.warn('Could not cascade done to waters:', cascadeErr);
+        }
+
         alert('Landingsplass updated successfully!');
       } else {
         // Insert

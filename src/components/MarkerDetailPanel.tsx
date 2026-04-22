@@ -490,6 +490,27 @@ export default function MarkerDetailPanel({
       }
       const { error } = await supabase.from(tableName).update(updates).eq('id', markerId);
       if (error) throw error;
+
+      // Cascade: when marking an LP, mirror the status onto all its associated waters
+      if (markerType === 'landingsplass') {
+        try {
+          const { data: assocs, error: assocError } = await supabase
+            .from(tableNames.vass_associations)
+            .select('airport_id')
+            .eq('landingsplass_id', markerId);
+          if (!assocError && assocs && assocs.length > 0) {
+            const airportIds = assocs.map((a: any) => a.airport_id);
+            const { error: cascadeError } = await supabase
+              .from(tableNames.vass_vann)
+              .update({ is_done: newDoneStatus })
+              .in('id', airportIds);
+            if (cascadeError) console.warn('Could not cascade done to waters:', cascadeError);
+          }
+        } catch (cascadeErr) {
+          console.warn('Error cascading done to waters:', cascadeErr);
+        }
+      }
+
       if (user) {
         await supabase.from('user_action_logs').insert({
           user_email: user.email,
