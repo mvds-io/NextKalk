@@ -478,7 +478,7 @@ export default function AuthGuard({ children }: AuthGuardProps) {
           <div className="card-body">
             <div className="text-center mb-4">
               <i className="fas fa-lock fa-3x text-primary mb-3"></i>
-              <h3 className="card-title">Kalk Planner 2025</h3>
+              <h3 className="card-title">Kalk Planner 2026</h3>
               <p className="text-muted">Du må logge inn for å få tilgang til applikasjonen</p>
             </div>
 

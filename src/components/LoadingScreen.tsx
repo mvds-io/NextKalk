@@ -86,7 +86,7 @@ export default function LoadingScreen({
             animate={{ rotate: [0, -10, 10, 0] }}
             transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
           />
-          <h2 style={{ color: '#333', marginBottom: '2rem' }}>Kalk Planner 2025</h2>
+          <h2 style={{ color: '#333', marginBottom: '2rem' }}>Kalk Planner 2026</h2>
         </motion.div>
         <div className="progress-container">
           <div className="progress" style={{ height: '8px', borderRadius: '4px', backgroundColor: '#e9ecef' }}>

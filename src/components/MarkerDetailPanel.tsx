@@ -662,11 +662,11 @@ export default function MarkerDetailPanel({
       const fileName = `${markerId}_${Date.now()}.${fileExt}`;
       const folderPath = markerType === 'airport' ? 'airport_images' : 'landingsplass_images';
       const filePath = `${folderPath}/${fileName}`;
-      const { error: uploadError } = await supabase.storage.from('images').upload(filePath, file);
+      const { error: uploadError } = await supabase.storage.from('vass-images').upload(filePath, file);
       if (uploadError) throw uploadError;
       const {
         data: { publicUrl },
-      } = supabase.storage.from('images').getPublicUrl(filePath);
+      } = supabase.storage.from('vass-images').getPublicUrl(filePath);
       const tableName =
         markerType === 'airport' ? tableNames.vass_vann_images : tableNames.vass_lasteplass_images;
       const { error: dbError } = await supabase.from(tableName).insert({
@@ -727,11 +727,11 @@ export default function MarkerDetailPanel({
       const fileName = `${markerId}_${Date.now()}.${fileExt}`;
       const folderPath = markerType === 'airport' ? 'airport_documents' : 'landingsplass_documents';
       const filePath = `${folderPath}/${fileName}`;
-      const { error: uploadError } = await supabase.storage.from('documents').upload(filePath, file);
+      const { error: uploadError } = await supabase.storage.from('vass-images').upload(filePath, file);
       if (uploadError) throw uploadError;
       const {
         data: { publicUrl },
-      } = supabase.storage.from('documents').getPublicUrl(filePath);
+      } = supabase.storage.from('vass-images').getPublicUrl(filePath);
       const tableName =
         markerType === 'airport' ? tableNames.vass_vann_documents : tableNames.vass_lasteplass_documents;
       const { error: dbError } = await supabase.from(tableName).insert({
@@ -887,6 +887,7 @@ ${waypointsXml}
       className="marker-detail-panel"
       style={{
         height: '100%',
+        minHeight: 0,
         background: '#f8f9fa',
         display: 'flex',
         flexDirection: 'column',
@@ -1087,7 +1088,17 @@ ${waypointsXml}
       </div>
 
       {/* ---------- Scrollable content ---------- */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: 10 }}>
+      <div
+        style={{
+          flex: 1,
+          minHeight: 0,
+          overflowY: 'auto',
+          WebkitOverflowScrolling: 'touch',
+          padding: 10,
+          paddingBottom: 'calc(40px + env(safe-area-inset-bottom, 0px))',
+          overscrollBehavior: 'contain',
+        }}
+      >
         {activeTab === 'info' && (
           <>
             {/* Completion banner */}

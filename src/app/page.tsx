@@ -717,7 +717,7 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
           />
         </div>
         {!isFullScreen && (
-          <div className={`right-panel ${isMobile && isMobileUIMinimized ? 'panel-minimized' : ''} ${!isMobile && isProgressPlanMinimized ? 'panel-minimized' : ''}`} style={{
+          <div className={`right-panel ${selectedMarker ? 'detail-mode' : ''} ${isMobile && isMobileUIMinimized ? 'panel-minimized' : ''} ${!isMobile && isProgressPlanMinimized ? 'panel-minimized' : ''}`} style={{
             flex: !isMobile && isProgressPlanMinimized ? '0 0 40px' : '0 0 30%',
             height: '100%',
             borderLeft: '1px solid #dee2e6',

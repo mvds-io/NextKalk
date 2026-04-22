@@ -954,8 +954,10 @@ body:not(:has(.min-h-screen)) {
 
   .main-split-container {
     flex-direction: column !important;
-    height: calc(100vh - 60px) !important; /* Reduced top bar height on mobile */
+    height: calc(100vh - 60px) !important; /* Fallback for older browsers */
+    height: calc(100dvh - 60px) !important; /* Dynamic viewport — shrinks with iOS Safari toolbar */
     max-height: calc(100vh - 60px) !important;
+    max-height: calc(100dvh - 60px) !important;
     overflow: hidden !important;
   }
 
@@ -979,6 +981,11 @@ body:not(:has(.min-h-screen)) {
     flex-direction: column !important;
     overflow: hidden !important;
     background: #f8f9fa !important;
+  }
+
+  /* When a marker's details are open, give the panel more room than the Fremdriftsplan */
+  .right-panel.detail-mode {
+    flex: 0 0 65% !important;
   }
 
   /* Mobile-only header styling */
@@ -1017,12 +1024,21 @@ body:not(:has(.min-h-screen)) {
     padding: 0px 0 8px 8px !important; /* Mobile override */
   }
 
-  .right-panel > div:not(h4) {
+  .right-panel > div:not(h4):not(.marker-detail-panel) {
     flex: 1;
     overflow-y: auto;
     overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
     padding: 2px 0 8px 8px !important;
+  }
+
+  /* MarkerDetailPanel manages its own scroll region internally — don't wrap it
+     in the generic right-panel scroll shell or padding. */
+  .right-panel > .marker-detail-panel {
+    flex: 1 !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+    padding: 0 !important;
   }
 
   /* Mobile cards margin reduction */
@@ -1150,7 +1166,9 @@ body:not(:has(.min-h-screen)) {
   /* Adjust main container height when counter is collapsed */
   .counter.collapsed ~ .main-split-container {
     height: calc(100vh - 40px) !important;
+    height: calc(100dvh - 40px) !important;
     max-height: calc(100vh - 40px) !important;
+    max-height: calc(100dvh - 40px) !important;
   }
 
   /* When collapsed, both panels still share 50/50 but in expanded container */
@@ -1206,11 +1224,18 @@ body:not(:has(.min-h-screen)) {
   }
 
   /* Fallback for any other content in right panel */
-  .right-panel > div:not(h4) {
+  .right-panel > div:not(h4):not(.marker-detail-panel) {
     flex: 1;
     overflow-y: auto;
     overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
+  }
+
+  /* MarkerDetailPanel owns its own scroll region */
+  .right-panel > .marker-detail-panel {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
   }
 }
 

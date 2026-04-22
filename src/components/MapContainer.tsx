@@ -1683,7 +1683,7 @@ export default function MapContainer({
                 lat: item.latitude,
                 lng: item.longitude,
                 name: formattedLpName,
-                desc: 'Landingsplass - Exported from Kalk Planner 2025'
+                desc: 'Landingsplass - Exported from Kalk Planner 2026'
               }
             ];
 
@@ -1700,7 +1700,7 @@ export default function MapContainer({
                     lat: water.latitude,
                     lng: water.longitude,
                     name: formattedName,
-                    desc: 'Associated Water - Exported from Kalk Planner 2025'
+                    desc: 'Associated Water - Exported from Kalk Planner 2026'
                   });
                 }
               });
@@ -2248,10 +2248,10 @@ export default function MapContainer({
   // Export to GPX function (single waypoint)
   const exportToGPX = (lat: number, lng: number, name: string) => {
     const gpxContent = `<?xml version="1.0" encoding="UTF-8"?>
-<gpx version="1.1" creator="Kalk Planner 2025" xmlns="http://www.topografix.com/GPX/1/1">
+<gpx version="1.1" creator="Kalk Planner 2026" xmlns="http://www.topografix.com/GPX/1/1">
   <wpt lat="${lat}" lon="${lng}">
     <name>${name}</name>
-    <desc>Exported from Kalk Planner 2025</desc>
+    <desc>Exported from Kalk Planner 2026</desc>
   </wpt>
 </gpx>`;
 
@@ -2283,7 +2283,7 @@ export default function MapContainer({
     ).join('\n');
 
     const gpxContent = `<?xml version="1.0" encoding="UTF-8"?>
-<gpx version="1.1" creator="Kalk Planner 2025" xmlns="http://www.topografix.com/GPX/1/1">
+<gpx version="1.1" creator="Kalk Planner 2026" xmlns="http://www.topografix.com/GPX/1/1">
 ${waypointElements}
 </gpx>`;
 

@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Kalk Planner 2025",
+  title: "Kalk Planner 2026",
   description: "Map application for helicopter operations and lake management",
 };
 
