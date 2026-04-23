@@ -71,6 +71,25 @@ export interface User {
   display_name?: string;
 }
 
+export interface VektseddelEntry {
+  id: number;
+  lp_id: number;
+  dato: string | null;
+  prosjekt: string | null;
+  lp_nr: string | null;
+  lp_tonn: number | null;
+  rest_lp: number | null;
+  vektseddel_nr: string | null;
+  tonn_inn: number | null;
+  tonn_ut: number | null;
+  tonn_akk: number | null;
+  rest_lp2: number | null;
+  rest_vekts: number | null;
+  merknader: string | null;
+  sign_teamleder: string | null;
+  created_at?: string;
+}
+
 export interface UserActionLog {
   id: number;
   user_email: string;

@@ -6,6 +6,7 @@ import { CounterData, FilterState, User, Airport, Landingsplass } from '@/types'
 import { supabase, completeLogout } from '@/lib/supabase';
 import { exportCompletedLandingsplassToPDF } from '@/lib/pdfExport';
 import UserLogsModal from './UserLogsModal';
+import VektseddelModal from './VektseddelModal';
 import { SkeletonCounter } from './SkeletonLoader';
 import SearchModal from './SearchModal';
 import SearchResultModal from './SearchResultModal';
@@ -39,6 +40,7 @@ export default function Counter({
   const [isLoadingConnections, setIsLoadingConnections] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showUserLogsModal, setShowUserLogsModal] = useState(false);
+  const [showVektseddelModal, setShowVektseddelModal] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
@@ -424,6 +426,16 @@ export default function Counter({
                     <i className="fas fa-file-pdf"></i>
                   )}
                 </button>
+                {userPermissions.canEditMarkers && (
+                  <button
+                    className="btn btn-sm btn-outline-warning"
+                    style={{ fontSize: '0.6rem', padding: '0.2rem 0.4rem', borderColor: '#f0ad4e', color: '#d48806' }}
+                    title="Vektseddelkontroll"
+                    onClick={() => setShowVektseddelModal(true)}
+                  >
+                    <i className="fas fa-scale-balanced"></i>
+                  </button>
+                )}
                 {userPermissions.canViewLogs && (
                   <button
                     className="btn btn-sm btn-outline-info"
@@ -659,6 +671,16 @@ export default function Counter({
                   <i className="fas fa-file-pdf"></i>
                 )}
               </button>
+              {userPermissions.canEditMarkers && (
+                <button
+                  className="btn btn-sm btn-outline-warning"
+                  style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem', borderColor: '#f0ad4e', color: '#d48806' }}
+                  title="Vektseddelkontroll"
+                  onClick={() => setShowVektseddelModal(true)}
+                >
+                  <i className="fas fa-scale-balanced"></i>
+                </button>
+              )}
               {userPermissions.canViewLogs && (
                 <button
                   className="btn btn-sm btn-outline-info logs-btn"
@@ -781,9 +803,16 @@ export default function Counter({
       )}
 
       {/* User Logs Modal */}
-      <UserLogsModal 
+      <UserLogsModal
         isOpen={showUserLogsModal}
         onClose={() => setShowUserLogsModal(false)}
+      />
+
+      {/* Vektseddelkontroll Modal */}
+      <VektseddelModal
+        isOpen={showVektseddelModal}
+        onClose={() => setShowVektseddelModal(false)}
+        user={user ?? null}
       />
 
       {/* Search Modal */}
