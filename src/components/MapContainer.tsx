@@ -289,10 +289,9 @@ export default function MapContainer({
 
                          const L = (window as any).L;
              const line = L.polyline([landingsplassPos, airportPos], {
-              color: '#007bff',
-              weight: 1,
-              opacity: 0.6,
-              dashArray: '4,4',
+              color: '#ff0000',
+              weight: 2,
+              opacity: 0.8,
               className: 'all-connection-line'
             }).addTo(leafletMapRef.current);
 
