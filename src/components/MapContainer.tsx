@@ -1667,7 +1667,7 @@ export default function MapContainer({
               // Use landingsplass code (kode field) for the name
               const lpCode = (item as any).kode || (item as any).lp || name;
               const lpTonnage = (item as any).tonn_lp;
-              const formattedLpName = lpTonnage ? `(${lpTonnage}t) ${lpCode}` : lpCode;
+              const formattedLpName = `🚁 ${lpTonnage ? `(${lpTonnage}t) ${lpCode}` : lpCode}`;
               exportToGPX(item.latitude, item.longitude, formattedLpName, 'Heliport');
               return;
             }
@@ -1694,7 +1694,7 @@ export default function MapContainer({
                 if (water && water.latitude && water.longitude) {
                   const waterName = water.name || 'Unknown Water';
                   const tonnage = water.tonn;
-                  const formattedName = tonnage ? `(${tonnage}t) ${waterName}` : waterName;
+                  const formattedName = `💧 ${tonnage ? `(${tonnage}t) ${waterName}` : waterName}`;
 
                   waypoints.push({
                     lat: water.latitude,
@@ -1742,7 +1742,7 @@ export default function MapContainer({
           // For airports (vann), export single waypoint with Lake symbol
           const waterTonn = (item as any).tonn;
           const waterName = item.name || (item as any).navn || 'Vann';
-          const formattedWaterName = waterTonn ? `(${waterTonn}t) ${waterName}` : waterName;
+          const formattedWaterName = `💧 ${waterTonn ? `(${waterTonn}t) ${waterName}` : waterName}`;
           exportToGPX(item.latitude, item.longitude, formattedWaterName, 'Lake');
           
           // Log the GPX export action
@@ -2264,7 +2264,7 @@ export default function MapContainer({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.gpx`;
+    a.download = `${name.replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '').toLowerCase() || 'waypoint'}.gpx`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -2298,7 +2298,7 @@ ${waypointElements}
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${fileName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.gpx`;
+    a.download = `${fileName.replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '').toLowerCase() || 'waypoints'}.gpx`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

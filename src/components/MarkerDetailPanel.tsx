@@ -824,12 +824,14 @@ export default function MarkerDetailPanel({
     if (markerType === 'airport') {
       const waterName = markerData.name || (markerData as any).navn || 'Vann';
       const waterTonn = (markerData as any).tonn;
-      mainName = waterTonn ? `(${waterTonn}t) ${waterName}` : waterName;
+      const base = waterTonn ? `(${waterTonn}t) ${waterName}` : waterName;
+      mainName = `💧 ${base}`;
       mainSym = 'Lake';
     } else {
       const lpCode = (markerData as any).kode || (markerData as any).lp;
       const lpTonn = (markerData as any).tonn_lp;
-      mainName = lpTonn ? `(${lpTonn}t) ${lpCode}` : lpCode;
+      const base = lpTonn ? `(${lpTonn}t) ${lpCode}` : lpCode;
+      mainName = `🚁 ${base}`;
       mainSym = 'Heliport';
     }
     let waypointsXml = `  <wpt lat="${markerData.latitude}" lon="${markerData.longitude}">
@@ -840,7 +842,8 @@ export default function MarkerDetailPanel({
     if (markerType === 'landingsplass' && associations.length > 0) {
       associations.forEach((assoc) => {
         if (assoc.latitude && assoc.longitude) {
-          const wptName = assoc.tonn ? `(${assoc.tonn}t) ${assoc.name}` : assoc.name;
+          const base = assoc.tonn ? `(${assoc.tonn}t) ${assoc.name}` : assoc.name;
+          const wptName = `💧 ${base}`;
           waypointsXml += `
   <wpt lat="${assoc.latitude}" lon="${assoc.longitude}">
     <name>${wptName}</name>
@@ -858,7 +861,11 @@ ${waypointsXml}
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${markerType === 'airport' ? mainName : ((markerData as any).kode || (markerData as any).lp)}.gpx`;
+    const rawFileBase = markerType === 'airport'
+      ? (markerData.name || (markerData as any).navn || 'vann')
+      : ((markerData as any).kode || (markerData as any).lp || 'lp');
+    const fileBase = String(rawFileBase).replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '').toLowerCase() || 'waypoint';
+    a.download = `${fileBase}.gpx`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
