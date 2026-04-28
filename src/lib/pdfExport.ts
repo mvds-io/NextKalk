@@ -308,12 +308,12 @@ export async function exportVektseddelToPDF(
       { key: 'rest_lp', label: 'Rest LP', w: 16, align: 'right' },
       { key: 'vektseddel_nr', label: 'Vektseddel nr', w: 26 },
       { key: 'tonn_inn', label: 'Tonn inn', w: 16, align: 'right' },
-      { key: 'tonn_ut', label: 'Tonn spredt ut', w: 16, align: 'right' },
+      { key: 'tonn_ut', label: 'Tonn spredt ut', w: 22, align: 'right' },
       { key: 'tonn_akk', label: 'Tonn Akk', w: 18, align: 'right' },
       { key: 'rest_lp2', label: 'Rest LP', w: 16, align: 'right' },
       { key: 'rest_vekts', label: 'Rest Vekts.', w: 20, align: 'right' },
-      { key: 'merknader', label: 'Merknader', w: 55 },
-      { key: 'sign_teamleder', label: 'Sign Pilot', w: 14 },
+      { key: 'merknader', label: 'Merknader', w: 41 },
+      { key: 'sign_teamleder', label: 'Sign Pilot', w: 22 },
     ];
 
     const startX = 14;
