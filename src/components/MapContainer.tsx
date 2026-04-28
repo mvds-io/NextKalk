@@ -1693,7 +1693,7 @@ export default function MapContainer({
                 if (water && water.latitude && water.longitude) {
                   const waterName = water.name || 'Unknown Water';
                   const tonnage = water.tonn;
-                  const formattedName = tonnage ? `(${tonnage}) ${waterName}` : waterName;
+                  const formattedName = tonnage ? `(${tonnage}t) ${waterName}` : waterName;
 
                   waypoints.push({
                     lat: water.latitude,

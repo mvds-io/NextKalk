@@ -819,10 +819,16 @@ export default function MarkerDetailPanel({
 
   const handleExportGpx = () => {
     if (!markerData || !markerData.latitude || !markerData.longitude) return;
-    const mainName =
-      markerType === 'airport'
-        ? markerData.name || (markerData as any).navn
-        : `LP ${(markerData as any).lp}`;
+    let mainName: string;
+    if (markerType === 'airport') {
+      const waterName = markerData.name || (markerData as any).navn || 'Vann';
+      const waterTonn = (markerData as any).tonn;
+      mainName = waterTonn ? `(${waterTonn}t) ${waterName}` : waterName;
+    } else {
+      const lpCode = (markerData as any).lp;
+      const lpTonn = (markerData as any).tonn_lp;
+      mainName = lpTonn ? `(${lpTonn}t) LP ${lpCode}` : `LP ${lpCode}`;
+    }
     let waypointsXml = `  <wpt lat="${markerData.latitude}" lon="${markerData.longitude}">
     <name>${mainName}</name>
     <desc>${markerType === 'airport' ? 'Vann' : 'Landingsplass'}</desc>
@@ -830,10 +836,11 @@ export default function MarkerDetailPanel({
     if (markerType === 'landingsplass' && associations.length > 0) {
       associations.forEach((assoc) => {
         if (assoc.latitude && assoc.longitude) {
+          const wptName = assoc.tonn ? `(${assoc.tonn}t) ${assoc.name}` : assoc.name;
           waypointsXml += `
   <wpt lat="${assoc.latitude}" lon="${assoc.longitude}">
-    <name>${assoc.name}</name>
-    <desc>Vann (${assoc.tonn}t)</desc>
+    <name>${wptName}</name>
+    <desc>Vann</desc>
   </wpt>`;
         }
       });
