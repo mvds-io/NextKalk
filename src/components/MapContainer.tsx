@@ -1668,7 +1668,7 @@ export default function MapContainer({
               const lpCode = (item as any).kode || (item as any).lp || name;
               const lpTonnage = (item as any).tonn_lp;
               const formattedLpName = lpTonnage ? `(${lpTonnage}t) ${lpCode}` : lpCode;
-              exportToGPX(item.latitude, item.longitude, formattedLpName);
+              exportToGPX(item.latitude, item.longitude, formattedLpName, 'Heliport');
               return;
             }
 
@@ -1676,13 +1676,14 @@ export default function MapContainer({
             const lpCode = (item as any).kode || (item as any).lp || name;
             const lpTonnage = (item as any).tonn_lp;
             const formattedLpName = lpTonnage ? `(${lpTonnage}t) ${lpCode}` : lpCode;
-            
+
             const waypoints: Waypoint[] = [
               {
                 lat: item.latitude,
                 lng: item.longitude,
                 name: formattedLpName,
-                desc: 'Landingsplass - Exported from Kalk Planner 2026'
+                desc: 'Landingsplass - Exported from Kalk Planner 2026',
+                sym: 'Heliport',
               }
             ];
 
@@ -1699,7 +1700,8 @@ export default function MapContainer({
                     lat: water.latitude,
                     lng: water.longitude,
                     name: formattedName,
-                    desc: 'Associated Water - Exported from Kalk Planner 2026'
+                    desc: 'Associated Water - Exported from Kalk Planner 2026',
+                    sym: 'Lake',
                   });
                 }
               });
@@ -1709,7 +1711,7 @@ export default function MapContainer({
             if (waypoints.length > 1) {
               exportMultipleToGPX(waypoints, `${lpCode}_with_waters`);
             } else {
-              exportToGPX(item.latitude, item.longitude, formattedLpName);
+              exportToGPX(item.latitude, item.longitude, formattedLpName, 'Heliport');
             }
 
             // Log the GPX export action
@@ -1734,11 +1736,14 @@ export default function MapContainer({
             const lpCode = (item as any).kode || (item as any).lp || name;
             const lpTonnage = (item as any).tonn_lp;
             const formattedLpName = lpTonnage ? `(${lpTonnage}t) ${lpCode}` : lpCode;
-            exportToGPX(item.latitude, item.longitude, formattedLpName);
+            exportToGPX(item.latitude, item.longitude, formattedLpName, 'Heliport');
           }
         } else {
-          // For airports, export single waypoint as before
-          exportToGPX(item.latitude, item.longitude, name);
+          // For airports (vann), export single waypoint with Lake symbol
+          const waterTonn = (item as any).tonn;
+          const waterName = item.name || (item as any).navn || 'Vann';
+          const formattedWaterName = waterTonn ? `(${waterTonn}t) ${waterName}` : waterName;
+          exportToGPX(item.latitude, item.longitude, formattedWaterName, 'Lake');
           
           // Log the GPX export action
           if (user) {
@@ -1749,7 +1754,7 @@ export default function MapContainer({
                 action_type: 'export_gpx',
                 target_type: 'airport',
                 target_id: id,
-                target_name: name,
+                target_name: formattedWaterName,
                 action_details: { waypoints_count: 1 }
               });
           }
@@ -2245,11 +2250,12 @@ export default function MapContainer({
   }, [isMapReady, user, airports, landingsplasser, onDataUpdate, setupGlobalFunctions, tableNames]);
 
   // Export to GPX function (single waypoint)
-  const exportToGPX = (lat: number, lng: number, name: string) => {
+  const exportToGPX = (lat: number, lng: number, name: string, sym: string = 'Waypoint') => {
     const gpxContent = `<?xml version="1.0" encoding="UTF-8"?>
 <gpx version="1.1" creator="Kalk Planner 2026" xmlns="http://www.topografix.com/GPX/1/1">
   <wpt lat="${lat}" lon="${lng}">
     <name>${name}</name>
+    <sym>${sym}</sym>
     <desc>Exported from Kalk Planner 2026</desc>
   </wpt>
 </gpx>`;
@@ -2271,12 +2277,14 @@ export default function MapContainer({
     lng: number;
     name: string;
     desc: string;
+    sym?: string;
   }
 
   const exportMultipleToGPX = (waypoints: Waypoint[], fileName: string) => {
-    const waypointElements = waypoints.map(waypoint => 
+    const waypointElements = waypoints.map(waypoint =>
       `  <wpt lat="${waypoint.lat}" lon="${waypoint.lng}">
     <name>${waypoint.name}</name>
+    <sym>${waypoint.sym || 'Waypoint'}</sym>
     <desc>${waypoint.desc}</desc>
   </wpt>`
     ).join('\n');

@@ -820,17 +820,21 @@ export default function MarkerDetailPanel({
   const handleExportGpx = () => {
     if (!markerData || !markerData.latitude || !markerData.longitude) return;
     let mainName: string;
+    let mainSym: string;
     if (markerType === 'airport') {
       const waterName = markerData.name || (markerData as any).navn || 'Vann';
       const waterTonn = (markerData as any).tonn;
       mainName = waterTonn ? `(${waterTonn}t) ${waterName}` : waterName;
+      mainSym = 'Lake';
     } else {
-      const lpCode = (markerData as any).lp;
+      const lpCode = (markerData as any).kode || (markerData as any).lp;
       const lpTonn = (markerData as any).tonn_lp;
-      mainName = lpTonn ? `(${lpTonn}t) LP ${lpCode}` : `LP ${lpCode}`;
+      mainName = lpTonn ? `(${lpTonn}t) ${lpCode}` : lpCode;
+      mainSym = 'Heliport';
     }
     let waypointsXml = `  <wpt lat="${markerData.latitude}" lon="${markerData.longitude}">
     <name>${mainName}</name>
+    <sym>${mainSym}</sym>
     <desc>${markerType === 'airport' ? 'Vann' : 'Landingsplass'}</desc>
   </wpt>`;
     if (markerType === 'landingsplass' && associations.length > 0) {
@@ -840,6 +844,7 @@ export default function MarkerDetailPanel({
           waypointsXml += `
   <wpt lat="${assoc.latitude}" lon="${assoc.longitude}">
     <name>${wptName}</name>
+    <sym>Lake</sym>
     <desc>Vann</desc>
   </wpt>`;
         }
@@ -853,7 +858,7 @@ ${waypointsXml}
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${markerType === 'airport' ? mainName : `LP_${(markerData as any).lp}`}.gpx`;
+    a.download = `${markerType === 'airport' ? mainName : ((markerData as any).kode || (markerData as any).lp)}.gpx`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
