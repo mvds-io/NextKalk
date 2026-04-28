@@ -15,6 +15,7 @@ export interface Airport {
   marker_color?: string;
   done: boolean;
   is_done?: boolean; // Database field name
+  is_hazard?: boolean;
   priority: number;
   comment?: string;
   comment_timestamp?: string;

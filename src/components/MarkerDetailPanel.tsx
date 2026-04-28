@@ -533,6 +533,32 @@ export default function MarkerDetailPanel({
     }
   };
 
+  const handleToggleHazard = async () => {
+    if (!user?.can_edit_markers || markerType !== 'airport' || !markerData || !tableNames) return;
+    try {
+      const newHazard = !((markerData as any).is_hazard ?? false);
+      const { error } = await supabase
+        .from(tableNames.vass_vann)
+        .update({ is_hazard: newHazard })
+        .eq('id', markerId);
+      if (error) throw error;
+      if (user) {
+        await supabase.from('user_action_logs').insert({
+          user_email: user.email,
+          action_type: 'toggle_hazard',
+          target_type: 'airport',
+          target_id: markerId,
+          target_name: markerData.name || (markerData as any).navn || 'Unknown',
+          action_details: { is_hazard: newHazard },
+        });
+      }
+      onDataUpdate();
+    } catch (err) {
+      console.error('Error toggling hazard:', err);
+      alert('Kunne ikke oppdatere farevann-status');
+    }
+  };
+
   const handleColorChange = async (color: string) => {
     if (!user?.can_edit_markers || markerType !== 'airport' || !markerData || !tableNames) return;
     try {
@@ -1428,6 +1454,45 @@ ${waypointsXml}
                 </ul>
               )}
             </Section>
+
+            {/* Hazard toggle (airport only) */}
+            {markerType === 'airport' && (
+              <Section title="Farevann" icon="triangle-exclamation">
+                {(() => {
+                  const isHazard = !!(markerData as any).is_hazard;
+                  const canEdit = !!user?.can_edit_markers;
+                  return (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.85rem', color: '#495057' }}>
+                        <i
+                          className="fas fa-triangle-exclamation"
+                          style={{ color: isHazard ? '#dc3545' : COLORS.muted, fontSize: '1rem' }}
+                        />
+                        <span>{isHazard ? 'Markert som farevann' : 'Ikke markert som farevann'}</span>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={!canEdit}
+                        onClick={handleToggleHazard}
+                        style={{
+                          background: isHazard ? '#dc3545' : 'white',
+                          color: isHazard ? 'white' : '#495057',
+                          border: `1px solid ${isHazard ? '#dc3545' : COLORS.border}`,
+                          borderRadius: 6,
+                          padding: '4px 10px',
+                          fontSize: '0.78rem',
+                          fontWeight: 600,
+                          cursor: canEdit ? 'pointer' : 'not-allowed',
+                          opacity: canEdit ? 1 : 0.6,
+                        }}
+                      >
+                        {isHazard ? 'Fjern' : 'Marker'}
+                      </button>
+                    </div>
+                  );
+                })()}
+              </Section>
+            )}
 
             {/* Color picker (airport only) */}
             {markerType === 'airport' && user?.can_edit_markers && !isDone && (

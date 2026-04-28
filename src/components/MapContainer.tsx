@@ -3026,6 +3026,23 @@ ${waypointElements}
         });
 
         clusterGroupRef.current.addLayer(marker);
+
+        // Hazard badge — shown next to vann markers flagged as farevann
+        if ((airport as any).is_hazard) {
+          const hazardIcon = L.divIcon({
+            html: '<i class="fas fa-triangle-exclamation"></i>',
+            className: 'vann-hazard-badge',
+            iconSize: [16, 16],
+            iconAnchor: [-4, 18],
+          });
+          const hazardMarker = L.marker([airport.latitude, airport.longitude], {
+            icon: hazardIcon,
+            interactive: false,
+            keyboard: false,
+            zIndexOffset: 1000,
+          });
+          clusterGroupRef.current.addLayer(hazardMarker);
+        }
       } catch (error) {
         console.error('Error creating airport marker:', error);
       }
