@@ -628,7 +628,7 @@ export default function VektseddelModal({ isOpen, onClose, user }: VektseddelMod
                 </div>
 
                 <div className="row g-2" style={{ fontSize: '0.8rem' }}>
-                  <div className="col-6 col-md-2">
+                  <div className="col-6 col-sm-4 col-md-2">
                     <label className="form-label mb-1" style={{ fontSize: '0.7rem', fontWeight: 600 }}>
                       Dato
                     </label>
@@ -639,7 +639,7 @@ export default function VektseddelModal({ isOpen, onClose, user }: VektseddelMod
                       onChange={(e) => setDraft({ ...draft, dato: e.target.value })}
                     />
                   </div>
-                  <div className="col-12 col-md-4 position-relative">
+                  <div className="col-12 col-sm-8 col-md-4 position-relative">
                     <label className="form-label mb-1" style={{ fontSize: '0.7rem', fontWeight: 600 }}>
                       Landingsplass (søk)
                     </label>
@@ -1151,13 +1151,28 @@ export default function VektseddelModal({ isOpen, onClose, user }: VektseddelMod
                             <div className="d-flex gap-1 align-items-center">
                               {imageCounts[e.id] ? (
                                 <button
-                                  className="btn btn-sm btn-outline-secondary"
+                                  className="btn btn-sm btn-outline-secondary position-relative"
                                   style={{ fontSize: '0.65rem', padding: '0.1rem 0.35rem' }}
                                   title={`${imageCounts[e.id]} bilde(r)`}
                                   onClick={() => openPreviewForEntry(e.id)}
                                 >
                                   <i className="fas fa-image"></i>
-                                  <span className="ms-1">{imageCounts[e.id]}</span>
+                                  <span
+                                    className="position-absolute"
+                                    style={{
+                                      top: '-5px',
+                                      right: '-5px',
+                                      fontSize: '0.55rem',
+                                      lineHeight: 1,
+                                      padding: '2px 4px',
+                                      borderRadius: 999,
+                                      background: '#0d6efd',
+                                      color: 'white',
+                                      fontWeight: 600,
+                                    }}
+                                  >
+                                    {imageCounts[e.id]}
+                                  </span>
                                 </button>
                               ) : null}
                               <button

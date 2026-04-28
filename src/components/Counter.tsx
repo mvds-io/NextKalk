@@ -253,16 +253,16 @@ export default function Counter({
             </div>
           </div>
 
-          {/* Row 2: Fylke filter */}
-          <div className="d-flex justify-content-center mb-2">
-            <div className="counter-item">
+          {/* Row 2+3: Fylke filter + Tonnage summary (side-by-side on tablets, stacked on phones) */}
+          <div className="d-flex justify-content-center align-items-center mb-2 gap-2 flex-wrap">
+            <div className="counter-item counter-item--no-grow">
               <div className="d-flex align-items-center gap-2 px-2 py-1 rounded" style={{ background: '#f8f9fa', border: '1px solid #e9ecef', color: '#495057', fontSize: '0.7rem', fontWeight: 500 }}>
                 <i className="fas fa-map-marker-alt" style={{ fontSize: '0.6rem', color: '#6c757d' }}></i>
                 <span>Fylke:</span>
-                <select 
-                  value={filterState.county} 
+                <select
+                  value={filterState.county}
                   onChange={handleCountyChange}
-                  className="form-select form-select-sm" 
+                  className="form-select form-select-sm"
                   style={{ fontSize: '0.65rem', minWidth: '100px', maxWidth: '140px', border: '1px solid #dee2e6', padding: '0.2rem 0.4rem' }}
                 >
                   <option value="">Alle fylker</option>
@@ -272,10 +272,6 @@ export default function Counter({
                 </select>
               </div>
             </div>
-          </div>
-
-          {/* Row 3: Tonnage summary */}
-          <div className="d-flex justify-content-center mb-2">
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', padding: '4px 10px', background: '#f8f9fa', borderRadius: '6px', border: '1px solid #e9ecef', minWidth: '180px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '14px', justifyContent: 'center' }}>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>

@@ -1073,6 +1073,10 @@ body:not(:has(.min-h-screen)) {
     min-width: 0 !important;
   }
 
+  .counter-item.counter-item--no-grow {
+    flex: 0 0 auto !important;
+  }
+
   .counter-item > div {
     font-size: 0.7rem !important;
     padding: 6px 8px !important;
