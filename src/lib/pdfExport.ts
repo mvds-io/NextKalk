@@ -308,7 +308,7 @@ export async function exportVektseddelToPDF(
       { key: 'rest_lp', label: 'Rest LP', w: 16, align: 'right' },
       { key: 'vektseddel_nr', label: 'Vektseddel nr', w: 26 },
       { key: 'tonn_inn', label: 'Tonn inn', w: 16, align: 'right' },
-      { key: 'tonn_ut', label: 'Tonn ut', w: 16, align: 'right' },
+      { key: 'tonn_ut', label: 'Tonn spredt ut', w: 16, align: 'right' },
       { key: 'tonn_akk', label: 'Tonn Akk', w: 18, align: 'right' },
       { key: 'rest_lp2', label: 'Rest LP', w: 16, align: 'right' },
       { key: 'rest_vekts', label: 'Rest Vekts.', w: 20, align: 'right' },
@@ -405,7 +405,7 @@ export async function exportVektseddelToPDF(
     y += 6;
     doc.setFont(undefined, 'bold');
     doc.text(`Sum Tonn inn: ${totalInn.toFixed(2)}`, startX, y);
-    doc.text(`Sum Tonn ut: ${totalUt.toFixed(2)}`, startX + 60, y);
+    doc.text(`Sum Tonn spredt ut: ${totalUt.toFixed(2)}`, startX + 60, y);
 
     const totalPages = doc.internal.getNumberOfPages();
     for (let i = 1; i <= totalPages; i++) {

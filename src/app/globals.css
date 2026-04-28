@@ -928,7 +928,7 @@ body:not(:has(.min-h-screen)) {
 .right-panel > .fremdriftsplan-content {
   overflow-y: auto !important;
   overflow-x: hidden !important;
-  padding: 4px 0 16px 16px !important;
+  padding: 0 0 16px 16px !important;
   -webkit-overflow-scrolling: touch !important;
 }
 
@@ -1639,15 +1639,15 @@ body:not(:has(.min-h-screen)) {
     border-bottom: 1px solid #dee2e6 !important;
   }
 
-  /* Desktop content padding - minimal top spacing */
+  /* Desktop content padding - heading sticks flush with panel top */
   .right-panel .fremdriftsplan-content {
-    padding: 4px 0 16px 16px !important; /* Minimal top padding */
+    padding: 0 0 16px 16px !important;
     margin-top: 0px !important;
   }
 
   /* Desktop override for general right-panel rule */
   .right-panel > .fremdriftsplan-content {
-    padding: 4px 0 16px 16px !important; /* Minimal top padding */
+    padding: 0 0 16px 16px !important;
   }
 }
 

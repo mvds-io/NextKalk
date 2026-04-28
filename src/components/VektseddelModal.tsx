@@ -188,11 +188,13 @@ export default function VektseddelModal({ isOpen, onClose, user }: VektseddelMod
   }, [entries, currentYear]);
 
   const selectLp = (lp: Landingsplass) => {
+    const prosjektPrefix = lp.kode ? lp.kode.split('-')[0].trim() : '';
     setDraft((d) => ({
       ...d,
       lp_id: lp.id,
       lp_nr: lp.lp || '',
       lp_tonn: lp.tonn_lp !== null && lp.tonn_lp !== undefined ? String(lp.tonn_lp) : d.lp_tonn,
+      prosjekt: prosjektPrefix || d.prosjekt,
     }));
     setLpSearch(lp.kode ? `${lp.kode} — LP ${lp.lp || ''}` : `LP ${lp.lp || ''}`);
     setLpSuggestOpen(false);
@@ -407,17 +409,6 @@ export default function VektseddelModal({ isOpen, onClose, user }: VektseddelMod
                       onChange={(e) => setDraft({ ...draft, dato: e.target.value })}
                     />
                   </div>
-                  <div className="col-6 col-md-2">
-                    <label className="form-label mb-1" style={{ fontSize: '0.7rem', fontWeight: 600 }}>
-                      Prosjekt
-                    </label>
-                    <input
-                      type="text"
-                      className="form-control form-control-sm"
-                      value={draft.prosjekt}
-                      onChange={(e) => setDraft({ ...draft, prosjekt: e.target.value })}
-                    />
-                  </div>
                   <div className="col-12 col-md-4 position-relative">
                     <label className="form-label mb-1" style={{ fontSize: '0.7rem', fontWeight: 600 }}>
                       Landingsplass (søk)
@@ -462,6 +453,17 @@ export default function VektseddelModal({ isOpen, onClose, user }: VektseddelMod
                   </div>
                   <div className="col-6 col-md-2">
                     <label className="form-label mb-1" style={{ fontSize: '0.7rem', fontWeight: 600 }}>
+                      Prosjekt
+                    </label>
+                    <input
+                      type="text"
+                      className="form-control form-control-sm"
+                      value={draft.prosjekt}
+                      onChange={(e) => setDraft({ ...draft, prosjekt: e.target.value })}
+                    />
+                  </div>
+                  <div className="col-6 col-md-2">
+                    <label className="form-label mb-1" style={{ fontSize: '0.7rem', fontWeight: 600 }}>
                       LP nr
                     </label>
                     <input
@@ -495,32 +497,45 @@ export default function VektseddelModal({ isOpen, onClose, user }: VektseddelMod
                       onChange={(e) => setDraft({ ...draft, rest_lp: e.target.value })}
                     />
                   </div>
-                  <div className="col-6 col-md-2">
-                    <label className="form-label mb-1" style={{ fontSize: '0.7rem', fontWeight: 600 }}>
-                      Vektseddel nr
-                    </label>
-                    <input
-                      type="text"
-                      className="form-control form-control-sm"
-                      value={draft.vektseddel_nr}
-                      onChange={(e) => setDraft({ ...draft, vektseddel_nr: e.target.value })}
-                    />
+                  <div className="col-12 col-md-4">
+                    <div
+                      className="row g-2"
+                      style={{
+                        border: '1px solid #dee2e6',
+                        borderRadius: 6,
+                        padding: '6px 8px',
+                        margin: 0,
+                        background: '#fafbfc',
+                      }}
+                    >
+                      <div className="col-6" style={{ paddingLeft: 4, paddingRight: 4 }}>
+                        <label className="form-label mb-1" style={{ fontSize: '0.7rem', fontWeight: 600 }}>
+                          Vektseddel nr
+                        </label>
+                        <input
+                          type="text"
+                          className="form-control form-control-sm"
+                          value={draft.vektseddel_nr}
+                          onChange={(e) => setDraft({ ...draft, vektseddel_nr: e.target.value })}
+                        />
+                      </div>
+                      <div className="col-6" style={{ paddingLeft: 4, paddingRight: 4 }}>
+                        <label className="form-label mb-1" style={{ fontSize: '0.7rem', fontWeight: 600 }}>
+                          Tonn inn
+                        </label>
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          className="form-control form-control-sm"
+                          value={draft.tonn_inn}
+                          onChange={(e) => setDraft({ ...draft, tonn_inn: e.target.value })}
+                        />
+                      </div>
+                    </div>
                   </div>
                   <div className="col-6 col-md-2">
                     <label className="form-label mb-1" style={{ fontSize: '0.7rem', fontWeight: 600 }}>
-                      Tonn inn
-                    </label>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      className="form-control form-control-sm"
-                      value={draft.tonn_inn}
-                      onChange={(e) => setDraft({ ...draft, tonn_inn: e.target.value })}
-                    />
-                  </div>
-                  <div className="col-6 col-md-2">
-                    <label className="form-label mb-1" style={{ fontSize: '0.7rem', fontWeight: 600 }}>
-                      Tonn ut
+                      Tonn spredt ut
                     </label>
                     <input
                       type="text"
@@ -618,7 +633,7 @@ export default function VektseddelModal({ isOpen, onClose, user }: VektseddelMod
                     <th className="text-end">Rest LP</th>
                     <th>Vektseddel nr</th>
                     <th className="text-end">Tonn inn</th>
-                    <th className="text-end">Tonn ut</th>
+                    <th className="text-end">Tonn spredt ut</th>
                     <th className="text-end">Tonn Akk</th>
                     <th className="text-end">Rest LP</th>
                     <th className="text-end">Rest Vekts.</th>
@@ -653,8 +668,24 @@ export default function VektseddelModal({ isOpen, onClose, user }: VektseddelMod
                       const sameAsPrev = !!num && num === prevNum;
                       const sameAsNext = !!num && num === nextNum;
                       const grouped = sameAsPrev || sameAsNext;
+                      const handleRowClick = () => {
+                        if (editingId === e.id) return;
+                        setDraft((d) => ({
+                          ...d,
+                          vektseddel_nr: e.vektseddel_nr || '',
+                          tonn_inn:
+                            e.rest_vekts !== null && e.rest_vekts !== undefined
+                              ? String(e.rest_vekts)
+                              : d.tonn_inn,
+                        }));
+                      };
                       return (
-                      <tr key={e.id} className={editingId === e.id ? 'table-warning' : ''}>
+                      <tr
+                        key={e.id}
+                        className={editingId === e.id ? 'table-warning' : ''}
+                        style={{ cursor: editingId === e.id ? 'default' : 'pointer' }}
+                        onClick={handleRowClick}
+                      >
                         <td style={{ width: '14px', padding: 0, position: 'relative' }}>
                           {grouped && (
                             <div
@@ -688,7 +719,7 @@ export default function VektseddelModal({ isOpen, onClose, user }: VektseddelMod
                         </td>
                         <td>{e.sign_teamleder || ''}</td>
                         {canEdit && (
-                          <td>
+                          <td onClick={(ev) => ev.stopPropagation()}>
                             <div className="d-flex gap-1">
                               <button
                                 className="btn btn-sm btn-outline-primary"
