@@ -16,6 +16,8 @@ interface MarkerDetailPanelProps {
   onClose: () => void;
   onDataUpdate: () => void;
   completionUsers?: Record<number, string>;
+  onMarkerSelect?: (marker: { type: 'airport' | 'landingsplass'; id: number }) => void;
+  onZoomToLocation?: ((lat: number, lng: number, zoom?: number) => void) | null;
 }
 
 interface Association {
@@ -262,6 +264,8 @@ export default function MarkerDetailPanel({
   onClose,
   onDataUpdate,
   completionUsers = {},
+  onMarkerSelect,
+  onZoomToLocation,
 }: MarkerDetailPanelProps) {
   const { tableNames } = useTableNames();
   const [activeTab, setActiveTab] = useState<TabKey>('info');
@@ -1440,36 +1444,76 @@ ${waypointsXml}
                 </p>
               ) : (
                 <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-                  {associations.map((assoc, idx) => (
-                    <li
-                      key={assoc.id}
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        padding: '6px 0',
-                        borderBottom:
-                          idx < associations.length - 1 ? `1px solid ${COLORS.border}` : 'none',
-                        fontSize: '0.82rem',
-                      }}
-                    >
-                      <span style={{ flex: 1, minWidth: 0, wordBreak: 'break-word' }}>
-                        <i
-                          className={`fas fa-${
-                            markerType === 'airport' ? 'helicopter-symbol' : 'water'
-                          } me-1`}
-                          style={{ color: COLORS.muted, fontSize: '0.7rem' }}
-                        />
-                        {assoc.name}
-                      </span>
-                      <span
-                        className="badge bg-primary"
-                        style={{ fontSize: '0.65rem', flexShrink: 0 }}
+                  {associations.map((assoc, idx) => {
+                    const targetType: 'airport' | 'landingsplass' =
+                      markerType === 'airport' ? 'landingsplass' : 'airport';
+                    const isClickable =
+                      typeof assoc.latitude === 'number' &&
+                      typeof assoc.longitude === 'number' &&
+                      (!!onZoomToLocation || !!onMarkerSelect);
+                    const handleClick = () => {
+                      if (
+                        typeof assoc.latitude === 'number' &&
+                        typeof assoc.longitude === 'number'
+                      ) {
+                        onZoomToLocation?.(assoc.latitude, assoc.longitude, 15);
+                      }
+                      onMarkerSelect?.({ type: targetType, id: assoc.id });
+                    };
+                    return (
+                      <li
+                        key={assoc.id}
+                        onClick={isClickable ? handleClick : undefined}
+                        role={isClickable ? 'button' : undefined}
+                        tabIndex={isClickable ? 0 : undefined}
+                        onKeyDown={
+                          isClickable
+                            ? (e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault();
+                                  handleClick();
+                                }
+                              }
+                            : undefined
+                        }
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          padding: '6px 8px',
+                          margin: '0 -8px',
+                          borderRadius: 4,
+                          borderBottom:
+                            idx < associations.length - 1 ? `1px solid ${COLORS.border}` : 'none',
+                          fontSize: '0.82rem',
+                          cursor: isClickable ? 'pointer' : 'default',
+                          transition: 'background-color 0.15s ease',
+                        }}
+                        onMouseEnter={(e) => {
+                          if (isClickable) e.currentTarget.style.backgroundColor = '#f1f3f5';
+                        }}
+                        onMouseLeave={(e) => {
+                          if (isClickable) e.currentTarget.style.backgroundColor = 'transparent';
+                        }}
                       >
-                        {assoc.tonn ? `${assoc.tonn}t` : 'N/A'}
-                      </span>
-                    </li>
-                  ))}
+                        <span style={{ flex: 1, minWidth: 0, wordBreak: 'break-word' }}>
+                          <i
+                            className={`fas fa-${
+                              markerType === 'airport' ? 'helicopter-symbol' : 'water'
+                            } me-1`}
+                            style={{ color: COLORS.muted, fontSize: '0.7rem' }}
+                          />
+                          {assoc.name}
+                        </span>
+                        <span
+                          className="badge bg-primary"
+                          style={{ fontSize: '0.65rem', flexShrink: 0 }}
+                        >
+                          {assoc.tonn ? `${assoc.tonn}t` : 'N/A'}
+                        </span>
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </Section>

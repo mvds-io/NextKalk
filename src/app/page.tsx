@@ -736,6 +736,8 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
               user={user}
               completionUsers={completionUsers}
               onClose={() => setSelectedMarker(null)}
+              onMarkerSelect={setSelectedMarker}
+              onZoomToLocation={mapZoomFunction}
               onDataUpdate={async () => {
                 // Reload data (session validation removed to prevent rate limiting)
                 loadAirports();
