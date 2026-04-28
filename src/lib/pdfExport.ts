@@ -337,8 +337,13 @@ export async function exportVektseddelToPDF(
 
     drawHeader();
 
-    let totalInn = 0;
     let totalUt = 0;
+    // Tonn inn repeats across rows that share a vektseddel_nr (each row's
+    // tonn_inn is the previous row's rest_vekts), so summing every row would
+    // double-count. Take max(tonn_inn) per vektseddel_nr; rows with no
+    // vektseddel_nr count individually.
+    const innByVekts = new Map<string, number>();
+    let totalInnUngrouped = 0;
 
     for (let i = 0; i < entries.length; i++) {
       const e = entries[i];
@@ -391,10 +396,20 @@ export async function exportVektseddelToPDF(
         doc.setDrawColor(0, 0, 0);
       }
 
-      totalInn += parseEuropeanDecimal(e.tonn_inn ?? 0);
+      const innVal = parseEuropeanDecimal(e.tonn_inn ?? 0);
+      const vNum = (e.vektseddel_nr || '').trim();
+      if (vNum) {
+        const prev = innByVekts.get(vNum) ?? 0;
+        if (innVal > prev) innByVekts.set(vNum, innVal);
+      } else {
+        totalInnUngrouped += innVal;
+      }
       totalUt += parseEuropeanDecimal(e.tonn_ut ?? 0);
       y += rowH;
     }
+
+    let totalInn = totalInnUngrouped;
+    for (const v of innByVekts.values()) totalInn += v;
 
     if (y > 190) {
       doc.addPage();
