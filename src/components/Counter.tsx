@@ -45,6 +45,8 @@ export default function Counter({
   const [password, setPassword] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [loginError, setLoginError] = useState('');
+  const [resetSent, setResetSent] = useState(false);
+  const [isSendingReset, setIsSendingReset] = useState(false);
   const [userPermissions, setUserPermissions] = useState<Record<string, boolean>>({});
   const [isExportingPDF, setIsExportingPDF] = useState(false);
   const [showSearchModal, setShowSearchModal] = useState(false);
@@ -159,6 +161,26 @@ export default function Counter({
       setLoginError(error instanceof Error ? error.message : 'An unknown error occurred');
     } finally {
       setIsLoggingIn(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    setLoginError('');
+    if (!email) {
+      setLoginError('Skriv inn e-postadressen din først.');
+      return;
+    }
+    setIsSendingReset(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth/reset-password`,
+      });
+      if (error) throw error;
+      setResetSent(true);
+    } catch (error: unknown) {
+      setLoginError(error instanceof Error ? error.message : 'Kunne ikke sende e-post');
+    } finally {
+      setIsSendingReset(false);
     }
   };
 
@@ -728,7 +750,7 @@ export default function Counter({
                 <button 
                   type="button" 
                   className="btn-close"
-                  onClick={() => setShowLoginModal(false)}
+                  onClick={() => { setShowLoginModal(false); setResetSent(false); setLoginError(''); }}
                 ></button>
               </div>
               <div className="modal-body">
@@ -768,8 +790,8 @@ export default function Counter({
                   </div>
                   
                   <div className="d-grid gap-2">
-                    <button 
-                      type="submit" 
+                    <button
+                      type="submit"
                       className="btn btn-primary btn-sm"
                       disabled={isLoggingIn}
                     >
@@ -782,14 +804,32 @@ export default function Counter({
                         'Logg inn'
                       )}
                     </button>
-                    
-                    <button 
-                      type="button" 
+
+                    <button
+                      type="button"
                       className="btn btn-outline-secondary btn-sm"
-                      onClick={() => setShowLoginModal(false)}
+                      onClick={() => { setShowLoginModal(false); setResetSent(false); setLoginError(''); }}
                     >
                       Avbryt
                     </button>
+                  </div>
+
+                  <div className="text-center mt-3">
+                    {resetSent ? (
+                      <span className="text-success" style={{ fontSize: '0.75rem' }}>
+                        E-post sendt. Sjekk innboksen din.
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        className="btn btn-link btn-sm p-0"
+                        style={{ fontSize: '0.75rem' }}
+                        onClick={handleForgotPassword}
+                        disabled={isSendingReset}
+                      >
+                        {isSendingReset ? 'Sender…' : 'Glemt passord?'}
+                      </button>
+                    )}
                   </div>
                 </form>
               </div>

@@ -32,6 +32,8 @@ export default function AuthGuard({ children }: AuthGuardProps) {
   const [password, setPassword] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [loginError, setLoginError] = useState('');
+  const [resetSent, setResetSent] = useState(false);
+  const [isSendingReset, setIsSendingReset] = useState(false);
   const [authTimeout, setAuthTimeout] = useState(false);
   const [connectionIssue, setConnectionIssue] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
@@ -362,6 +364,26 @@ export default function AuthGuard({ children }: AuthGuardProps) {
     }
   };
 
+  const handleForgotPassword = async () => {
+    setLoginError('');
+    if (!email.trim()) {
+      setLoginError('Skriv inn e-postadressen din først.');
+      return;
+    }
+    setIsSendingReset(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: `${window.location.origin}/auth/reset-password`,
+      });
+      if (error) throw error;
+      setResetSent(true);
+    } catch (error: unknown) {
+      setLoginError(error instanceof Error ? error.message : 'Kunne ikke sende e-post');
+    } finally {
+      setIsSendingReset(false);
+    }
+  };
+
   const handleLogout = async () => {
     setUser(null);
     clearTableNamesCache();
@@ -543,7 +565,26 @@ export default function AuthGuard({ children }: AuthGuardProps) {
               </div>
             </form>
 
-            <div className="text-center mt-4">
+            <div className="text-center mt-3">
+              {resetSent ? (
+                <small className="text-success">
+                  <i className="fas fa-check me-1"></i>
+                  E-post sendt. Sjekk innboksen din.
+                </small>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn-link btn-sm p-0"
+                  style={{ fontSize: '0.85rem' }}
+                  onClick={handleForgotPassword}
+                  disabled={isSendingReset}
+                >
+                  {isSendingReset ? 'Sender…' : 'Glemt passord?'}
+                </button>
+              )}
+            </div>
+
+            <div className="text-center mt-3">
               <small className="text-muted">
                 <i className="fas fa-shield-alt me-1"></i>
                 Sikker innlogging påkrevd
