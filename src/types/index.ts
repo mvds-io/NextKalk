@@ -55,6 +55,33 @@ export interface KalkInfo {
   comment_updated_at?: string;
 }
 
+export interface HazardCircleGeometry {
+  lat: number;
+  lng: number;
+  radius_m: number;
+}
+
+export interface HazardPolylineGeometry {
+  points: { lat: number; lng: number }[];
+}
+
+export type HazardGeometry =
+  | ({ type: 'circle' } & HazardCircleGeometry)
+  | ({ type: 'polyline' } & HazardPolylineGeometry);
+
+export interface Hazard {
+  id: number;
+  geometry_type: 'circle' | 'polyline';
+  geometry: Partial<HazardCircleGeometry> & Partial<HazardPolylineGeometry>;
+  description: string;
+  center_lat: number | null;
+  center_lng: number | null;
+  created_by?: string | null;
+  updated_by?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface Association {
   id: number;
   airport_id: number;

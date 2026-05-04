@@ -23,6 +23,7 @@ import { useTableNames } from '@/contexts/TableNamesContext';
 import { PlanningTab } from '@/components/admin/PlanningTab';
 import { YearComparisonTab } from '@/components/admin/YearComparisonTab';
 import { ChangelogTab } from '@/components/admin/ChangelogTab';
+import HazardsTab from '@/components/admin/HazardsTab';
 import { ArrowLeft, Plus, MapPin, Trash2, Edit, CheckCircle, XCircle, Database, RefreshCw, AlertTriangle, Info } from 'lucide-react';
 
 interface Landingsplass {
@@ -1067,9 +1068,10 @@ export default function AdminPage() {
       )}
 
       <Tabs defaultValue="landingsplass" className="w-full">
-        <TabsList className="w-full grid grid-cols-3 lg:grid-cols-6 mb-8 bg-gray-100/80 p-1">
+        <TabsList className="w-full grid grid-cols-4 lg:grid-cols-7 mb-8 bg-gray-100/80 p-1">
           <TabsTrigger value="landingsplass" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">Landingsplasser</TabsTrigger>
           <TabsTrigger value="vann" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">Vann Markers</TabsTrigger>
+          <TabsTrigger value="hazards" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">Farer</TabsTrigger>
           <TabsTrigger value="planning" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">Planning & Optimization</TabsTrigger>
           <TabsTrigger value="comparison" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">Year Comparison</TabsTrigger>
           <TabsTrigger value="changelog" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">Endringslogg</TabsTrigger>
@@ -1337,6 +1339,11 @@ export default function AdminPage() {
               </Table>
             </div>
           </Card>
+        </TabsContent>
+
+        {/* Hazards Tab */}
+        <TabsContent value="hazards" className="space-y-6">
+          <HazardsTab user={user} />
         </TabsContent>
 
         {/* Archive Tab */}

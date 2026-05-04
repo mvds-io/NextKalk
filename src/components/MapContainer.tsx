@@ -1,17 +1,23 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
-import { Airport, Landingsplass, KalkInfo, User, FilterState } from '@/types';
+import { Airport, Landingsplass, KalkInfo, User, FilterState, Hazard } from '@/types';
 import { supabase, getConnectionStatus } from '@/lib/supabase';
 import { useTableNames } from '@/contexts/TableNamesContext';
+import { createHazard, updateHazard, deleteHazard as deleteHazardRow } from '@/lib/hazards';
+import HazardContextMenu from './HazardContextMenu';
+import HazardDescriptionModal from './HazardDescriptionModal';
 
 interface MapContainerProps {
   airports: Airport[];
   landingsplasser: Landingsplass[];
   kalkMarkers: KalkInfo[];
+  hazards?: Hazard[];
+  focusHazardId?: number | null;
   filterState: FilterState;
   user: User | null;
   onDataUpdate: () => void;
+  onHazardsChanged?: () => void;
   onMarkerSelect?: (marker: { type: 'airport' | 'landingsplass'; id: number }) => void;
   onMapReady?: (zoomToLocation: (lat: number, lng: number, zoom?: number) => void) => void;
 }
@@ -20,9 +26,12 @@ export default function MapContainer({
   airports,
   landingsplasser,
   kalkMarkers,
+  hazards = [],
+  focusHazardId = null,
   filterState,
   user,
   onDataUpdate,
+  onHazardsChanged,
   onMarkerSelect,
   onMapReady
 }: MapContainerProps) {
@@ -46,6 +55,29 @@ export default function MapContainer({
 
   // Powerlines state
   const [powerlinesVisible, setPowerlinesVisible] = useState(false);
+
+  // Hazards state
+  const hazardsLayerRef = useRef<any>(null);
+  const hazardLayersByIdRef = useRef<Map<number, any>>(new Map());
+  const drawPreviewLayerRef = useRef<any>(null);
+  const [hazardContextMenu, setHazardContextMenu] = useState<{ latlng: any; x: number; y: number } | null>(null);
+  const [drawingMode, setDrawingMode] = useState<'idle' | 'circle' | 'polyline'>('idle');
+  const drawingModeRef = useRef<'idle' | 'circle' | 'polyline'>('idle');
+  const drawingCenterRef = useRef<{ lat: number; lng: number } | null>(null);
+  const drawingPointsRef = useRef<{ lat: number; lng: number }[]>([]);
+  const [drawingPointCount, setDrawingPointCount] = useState(0);
+  const [drawingRadius, setDrawingRadius] = useState(100);
+  const drawingRadiusRef = useRef(100);
+  const [hazardModal, setHazardModal] = useState<{
+    open: boolean;
+    mode: 'create' | 'edit';
+    geometryKind?: 'circle' | 'polyline';
+    initialDescription: string;
+    pendingCreate?:
+      | { kind: 'circle'; lat: number; lng: number; radius_m: number }
+      | { kind: 'polyline'; points: { lat: number; lng: number }[] };
+    editingId?: number;
+  }>({ open: false, mode: 'create', initialDescription: '' });
 
   // Helper function: Calculate distance between two points using Haversine formula
   const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
@@ -1394,6 +1426,17 @@ export default function MapContainer({
           powerlinesLayerRef.current = null;
         }
 
+        // Clean up hazards layer
+        if (hazardsLayerRef.current) {
+          try { leafletMapRef.current.removeLayer(hazardsLayerRef.current); } catch {}
+          hazardsLayerRef.current = null;
+        }
+        if (drawPreviewLayerRef.current) {
+          try { leafletMapRef.current.removeLayer(drawPreviewLayerRef.current); } catch {}
+          drawPreviewLayerRef.current = null;
+        }
+        hazardLayersByIdRef.current.clear();
+
         // Clean up GPS tracking
         if (gpsWatchIdRef.current !== null) {
           navigator.geolocation.clearWatch(gpsWatchIdRef.current);
@@ -2248,6 +2291,438 @@ export default function MapContainer({
       }
     }
   }, [isMapReady, user, airports, landingsplasser, onDataUpdate, setupGlobalFunctions, tableNames]);
+
+  // ===== HAZARDS (Farer) =====
+
+  const clearDrawingPreview = useCallback(() => {
+    if (drawPreviewLayerRef.current && leafletMapRef.current) {
+      try { leafletMapRef.current.removeLayer(drawPreviewLayerRef.current); } catch {}
+      drawPreviewLayerRef.current = null;
+    }
+  }, []);
+
+  const cancelDrawing = useCallback(() => {
+    drawingModeRef.current = 'idle';
+    drawingCenterRef.current = null;
+    drawingPointsRef.current = [];
+    drawingRadiusRef.current = 100;
+    setDrawingPointCount(0);
+    setDrawingRadius(100);
+    setDrawingMode('idle');
+    clearDrawingPreview();
+    if (leafletMapRef.current) {
+      const c = leafletMapRef.current.getContainer();
+      if (c) c.style.cursor = '';
+      try { leafletMapRef.current.doubleClickZoom?.enable(); } catch {}
+      try { leafletMapRef.current.dragging?.enable(); } catch {}
+      try { leafletMapRef.current.touchZoom?.enable(); } catch {}
+    }
+  }, [clearDrawingPreview]);
+
+  const startDrawingFromContextMenu = useCallback((kind: 'circle' | 'polyline') => {
+    if (!hazardContextMenu) return;
+    const center = { lat: hazardContextMenu.latlng.lat, lng: hazardContextMenu.latlng.lng };
+    setHazardContextMenu(null);
+    drawingModeRef.current = kind;
+    setDrawingMode(kind);
+    if (kind === 'circle') {
+      drawingCenterRef.current = center;
+      drawingRadiusRef.current = 100;
+      setDrawingRadius(100);
+      const L = (window as any).L;
+      if (L && leafletMapRef.current) {
+        clearDrawingPreview();
+        const preview = L.circle([center.lat, center.lng], {
+          radius: 100,
+          color: '#dc2626',
+          fillColor: '#dc2626',
+          fillOpacity: 0.15,
+          weight: 2,
+          dashArray: '4,4',
+        }).addTo(leafletMapRef.current);
+        drawPreviewLayerRef.current = preview;
+        leafletMapRef.current.getContainer().style.cursor = 'crosshair';
+        // Free up gestures so finger-drag can adjust the radius instead of panning the map
+        try { leafletMapRef.current.dragging?.disable(); } catch {}
+      }
+    } else {
+      drawingPointsRef.current = [center];
+      setDrawingPointCount(1);
+      const L = (window as any).L;
+      if (L && leafletMapRef.current) {
+        clearDrawingPreview();
+        const preview = L.polyline([[center.lat, center.lng]], {
+          color: '#dc2626',
+          weight: 4,
+          opacity: 0.85,
+          dashArray: '6,6',
+        }).addTo(leafletMapRef.current);
+        drawPreviewLayerRef.current = preview;
+        leafletMapRef.current.getContainer().style.cursor = 'crosshair';
+        try { leafletMapRef.current.doubleClickZoom?.disable(); } catch {}
+      }
+    }
+  }, [hazardContextMenu, clearDrawingPreview]);
+
+  const finalizeCircleDraw = useCallback((radiusLatLng: { lat: number; lng: number }) => {
+    const center = drawingCenterRef.current;
+    if (!center || !leafletMapRef.current) return;
+    const radius_m = leafletMapRef.current.distance([center.lat, center.lng], [radiusLatLng.lat, radiusLatLng.lng]);
+    if (radius_m < 5) {
+      cancelDrawing();
+      return;
+    }
+    setHazardModal({
+      open: true,
+      mode: 'create',
+      geometryKind: 'circle',
+      initialDescription: '',
+      pendingCreate: { kind: 'circle', lat: center.lat, lng: center.lng, radius_m },
+    });
+  }, [cancelDrawing]);
+
+  const setCircleRadius = useCallback((r: number) => {
+    const clamped = Math.max(5, Math.min(20000, Math.round(r)));
+    drawingRadiusRef.current = clamped;
+    setDrawingRadius(clamped);
+    if (drawPreviewLayerRef.current) {
+      try { drawPreviewLayerRef.current.setRadius(clamped); } catch {}
+    }
+  }, []);
+
+  const commitCircleFromState = useCallback(() => {
+    const center = drawingCenterRef.current;
+    if (!center) return;
+    setHazardModal({
+      open: true,
+      mode: 'create',
+      geometryKind: 'circle',
+      initialDescription: '',
+      pendingCreate: { kind: 'circle', lat: center.lat, lng: center.lng, radius_m: drawingRadiusRef.current },
+    });
+  }, []);
+
+  const finalizePolylineDraw = useCallback(() => {
+    const pts = drawingPointsRef.current;
+    if (pts.length < 2) return;
+    setHazardModal({
+      open: true,
+      mode: 'create',
+      geometryKind: 'polyline',
+      initialDescription: '',
+      pendingCreate: { kind: 'polyline', points: [...pts] },
+    });
+  }, []);
+
+  // Map click handler for drawing — separate effect that re-registers when drawingMode changes
+  useEffect(() => {
+    if (!isMapReady || !leafletMapRef.current) return;
+    const map = leafletMapRef.current;
+    const L = (window as any).L;
+    if (!L) return;
+
+    const updateCircleRadiusFromLatLng = (latlng: { lat: number; lng: number }) => {
+      const center = drawingCenterRef.current;
+      if (!center || !drawPreviewLayerRef.current) return;
+      const r = map.distance([center.lat, center.lng], [latlng.lat, latlng.lng]);
+      const clamped = Math.max(5, Math.min(20000, Math.round(r)));
+      drawingRadiusRef.current = clamped;
+      setDrawingRadius(clamped);
+      try { drawPreviewLayerRef.current.setRadius(clamped); } catch {}
+    };
+
+    const handleMapClick = (e: any) => {
+      const mode = drawingModeRef.current;
+      if (mode === 'idle') return;
+      if (mode === 'circle') {
+        // Snap radius to the click position, then commit (opens description modal).
+        // Touch-drag doesn't fire `click` on Leaflet, so the iPad flow keeps using
+        // the slider/Lagre button — only desktop clicks (and quick taps) land here.
+        updateCircleRadiusFromLatLng(e.latlng);
+        commitCircleFromState();
+      } else if (mode === 'polyline') {
+        drawingPointsRef.current.push({ lat: e.latlng.lat, lng: e.latlng.lng });
+        setDrawingPointCount(drawingPointsRef.current.length);
+        if (drawPreviewLayerRef.current) {
+          drawPreviewLayerRef.current.setLatLngs(drawingPointsRef.current.map(p => [p.lat, p.lng]));
+        }
+      }
+    };
+
+    const handleMouseMove = (e: any) => {
+      if (drawingModeRef.current === 'circle') {
+        updateCircleRadiusFromLatLng(e.latlng);
+      }
+    };
+
+    // Touch radius drag: dragging is disabled in circle mode, so touchmove on the
+    // map container is free to update the radius from the finger's current position.
+    const containerEl = map.getContainer();
+    const handleTouchMoveContainer = (ev: TouchEvent) => {
+      if (drawingModeRef.current !== 'circle') return;
+      if (!ev.touches || ev.touches.length !== 1) return;
+      const t = ev.touches[0];
+      const rect = containerEl.getBoundingClientRect();
+      const point = L.point(t.clientX - rect.left, t.clientY - rect.top);
+      const latlng = map.containerPointToLatLng(point);
+      updateCircleRadiusFromLatLng({ lat: latlng.lat, lng: latlng.lng });
+    };
+
+    const handleDoubleClick = (e: any) => {
+      if (drawingModeRef.current === 'polyline' && drawingPointsRef.current.length >= 2) {
+        try { L.DomEvent.stopPropagation(e); } catch {}
+        finalizePolylineDraw();
+      }
+    };
+
+    map.on('click', handleMapClick);
+    map.on('mousemove', handleMouseMove);
+    map.on('dblclick', handleDoubleClick);
+    containerEl.addEventListener('touchmove', handleTouchMoveContainer, { passive: true });
+
+    return () => {
+      map.off('click', handleMapClick);
+      map.off('mousemove', handleMouseMove);
+      map.off('dblclick', handleDoubleClick);
+      containerEl.removeEventListener('touchmove', handleTouchMoveContainer);
+    };
+  }, [isMapReady, finalizeCircleDraw, finalizePolylineDraw, commitCircleFromState]);
+
+  // Right-click contextmenu + long-press handlers
+  useEffect(() => {
+    if (!isMapReady || !leafletMapRef.current || !mapRef.current) return;
+    const map = leafletMapRef.current;
+    const container = mapRef.current;
+
+    const openMenuAt = (latlng: any, x: number, y: number) => {
+      if (!userPermissions.canEditMarkers) return;
+      if (drawingModeRef.current !== 'idle') return;
+      setHazardContextMenu({ latlng, x, y });
+    };
+
+    const handleContextMenu = (e: any) => {
+      if (e.originalEvent && typeof e.originalEvent.preventDefault === 'function') {
+        e.originalEvent.preventDefault();
+      }
+      const oe = e.originalEvent as MouseEvent | TouchEvent | undefined;
+      let x = 0;
+      let y = 0;
+      if (oe && 'clientX' in oe) {
+        x = (oe as MouseEvent).clientX;
+        y = (oe as MouseEvent).clientY;
+      } else if (oe && 'touches' in oe && (oe as TouchEvent).touches.length) {
+        x = (oe as TouchEvent).touches[0].clientX;
+        y = (oe as TouchEvent).touches[0].clientY;
+      }
+      openMenuAt(e.latlng, x, y);
+    };
+
+    map.on('contextmenu', handleContextMenu);
+
+    // Long-press for touch devices
+    let pressTimer: ReturnType<typeof setTimeout> | null = null;
+    let startX = 0;
+    let startY = 0;
+    const LONG_PRESS_MS = 600;
+    const MOVE_THRESHOLD = 10;
+
+    const clearTimer = () => {
+      if (pressTimer) {
+        clearTimeout(pressTimer);
+        pressTimer = null;
+      }
+    };
+
+    const handleTouchStart = (e: TouchEvent) => {
+      if (!userPermissions.canEditMarkers) return;
+      if (drawingModeRef.current !== 'idle') return;
+      if (e.touches.length !== 1) return;
+      const t = e.touches[0];
+      startX = t.clientX;
+      startY = t.clientY;
+      clearTimer();
+      pressTimer = setTimeout(() => {
+        const rect = container.getBoundingClientRect();
+        const point = (window as any).L.point(startX - rect.left, startY - rect.top);
+        const latlng = map.containerPointToLatLng(point);
+        try { (navigator as any).vibrate?.(50); } catch {}
+        openMenuAt(latlng, startX, startY);
+      }, LONG_PRESS_MS);
+    };
+    const handleTouchMove = (e: TouchEvent) => {
+      if (!pressTimer) return;
+      const t = e.touches[0];
+      if (Math.hypot(t.clientX - startX, t.clientY - startY) > MOVE_THRESHOLD) clearTimer();
+    };
+    const handleTouchEnd = () => clearTimer();
+
+    container.addEventListener('touchstart', handleTouchStart, { passive: true });
+    container.addEventListener('touchmove', handleTouchMove, { passive: true });
+    container.addEventListener('touchend', handleTouchEnd, { passive: true });
+    container.addEventListener('touchcancel', handleTouchEnd, { passive: true });
+
+    return () => {
+      map.off('contextmenu', handleContextMenu);
+      container.removeEventListener('touchstart', handleTouchStart);
+      container.removeEventListener('touchmove', handleTouchMove);
+      container.removeEventListener('touchend', handleTouchEnd);
+      container.removeEventListener('touchcancel', handleTouchEnd);
+      clearTimer();
+    };
+  }, [isMapReady, userPermissions.canEditMarkers]);
+
+  // Escape key cancels drawing
+  useEffect(() => {
+    if (drawingMode === 'idle') return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') cancelDrawing();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [drawingMode, cancelDrawing]);
+
+  // Render existing hazards onto the map
+  useEffect(() => {
+    if (!isMapReady || !leafletMapRef.current) return;
+    const L = (window as any).L;
+    if (!L) return;
+
+    if (!hazardsLayerRef.current) {
+      hazardsLayerRef.current = L.layerGroup().addTo(leafletMapRef.current);
+    }
+    const layer = hazardsLayerRef.current;
+    layer.clearLayers();
+    hazardLayersByIdRef.current = new Map();
+
+    const canEdit = !!userPermissions.canEditMarkers;
+
+    hazards.forEach((hz) => {
+      let geom: any = null;
+      if (hz.geometry_type === 'circle' && hz.geometry?.lat != null && hz.geometry?.lng != null && hz.geometry?.radius_m != null) {
+        geom = L.circle([hz.geometry.lat, hz.geometry.lng], {
+          radius: hz.geometry.radius_m,
+          color: '#dc2626',
+          fillColor: '#dc2626',
+          fillOpacity: 0.2,
+          weight: 2,
+        });
+      } else if (hz.geometry_type === 'polyline' && Array.isArray(hz.geometry?.points) && hz.geometry.points.length >= 2) {
+        geom = L.polyline(
+          hz.geometry.points.map(p => [p.lat, p.lng]),
+          { color: '#dc2626', weight: 4, opacity: 0.85, dashArray: '6,6' }
+        );
+      }
+      if (!geom) return;
+
+      const sizeText = hz.geometry_type === 'circle'
+        ? `Radius: ${Math.round(hz.geometry.radius_m ?? 0)} m`
+        : `Punkter: ${hz.geometry.points?.length ?? 0}`;
+      const safeDesc = (hz.description || '').replace(/[<>]/g, (c) => (c === '<' ? '&lt;' : '&gt;'));
+      const popupHtml = `
+        <div class="hazard-popup" style="width: 220px; max-width: 100%; box-sizing: border-box;">
+          <div style="font-weight:600; color:#dc2626; margin-bottom:6px;">
+            <i class="fas fa-triangle-exclamation me-1"></i>
+            Fare ${hz.geometry_type === 'circle' ? '(sirkel)' : '(linje)'}
+          </div>
+          <div style="white-space:pre-wrap; font-size:13px; margin-bottom:8px;">${safeDesc || '<i style="color:#888">Ingen beskrivelse</i>'}</div>
+          <div style="font-size:11px; color:#666; margin-bottom:8px;">${sizeText}</div>
+          ${canEdit ? `
+            <div style="display:flex; flex-direction:column; gap:6px;">
+              <button class="hazard-edit-btn btn btn-sm btn-outline-secondary" data-hazard-id="${hz.id}" style="display:block; width:100%; box-sizing:border-box;">
+                <i class="fas fa-pen me-1"></i>Rediger
+              </button>
+              <button class="hazard-delete-btn btn btn-sm btn-outline-danger" data-hazard-id="${hz.id}" style="display:block; width:100%; box-sizing:border-box;">
+                <i class="fas fa-trash me-1"></i>Slett
+              </button>
+            </div>
+          ` : ''}
+        </div>
+      `;
+      geom.bindPopup(popupHtml, { maxWidth: 260, minWidth: 220, autoPan: true });
+      geom.on('popupopen', (ev: any) => {
+        const root: HTMLElement | null = ev.popup?.getElement?.() ?? null;
+        if (!root) return;
+        const editBtn = root.querySelector<HTMLButtonElement>('.hazard-edit-btn');
+        const delBtn = root.querySelector<HTMLButtonElement>('.hazard-delete-btn');
+        if (editBtn) {
+          editBtn.onclick = () => {
+            leafletMapRef.current?.closePopup();
+            setHazardModal({
+              open: true,
+              mode: 'edit',
+              geometryKind: hz.geometry_type,
+              initialDescription: hz.description || '',
+              editingId: hz.id,
+            });
+          };
+        }
+        if (delBtn) {
+          delBtn.onclick = async () => {
+            if (!window.confirm('Slett denne faren?')) return;
+            try {
+              await deleteHazardRow(hz, user);
+              leafletMapRef.current?.closePopup();
+              onHazardsChanged?.();
+            } catch (err) {
+              console.error('Failed to delete hazard:', err);
+              alert('Kunne ikke slette fare.');
+            }
+          };
+        }
+      });
+      geom.addTo(layer);
+      hazardLayersByIdRef.current.set(hz.id, geom);
+    });
+  }, [isMapReady, hazards, userPermissions.canEditMarkers, user, onHazardsChanged]);
+
+  // Focus a specific hazard (used for /admin "Vis på kart" deep-link)
+  useEffect(() => {
+    if (!isMapReady || focusHazardId == null) return;
+    const target = hazards.find(h => h.id === focusHazardId);
+    if (!target || target.center_lat == null || target.center_lng == null) return;
+    leafletMapRef.current?.setView([target.center_lat, target.center_lng], 13);
+    const layer = hazardLayersByIdRef.current.get(target.id);
+    if (layer && typeof layer.openPopup === 'function') {
+      setTimeout(() => layer.openPopup(), 250);
+    }
+  }, [isMapReady, focusHazardId, hazards]);
+
+  const handleModalSave = useCallback(async (description: string) => {
+    try {
+      if (hazardModal.mode === 'create' && hazardModal.pendingCreate) {
+        const pc = hazardModal.pendingCreate;
+        if (pc.kind === 'circle') {
+          await createHazard({
+            geometry_type: 'circle',
+            geometry: { lat: pc.lat, lng: pc.lng, radius_m: pc.radius_m },
+            description,
+          }, user);
+        } else {
+          await createHazard({
+            geometry_type: 'polyline',
+            geometry: { points: pc.points },
+            description,
+          }, user);
+        }
+      } else if (hazardModal.mode === 'edit' && hazardModal.editingId != null) {
+        const prev = hazards.find(h => h.id === hazardModal.editingId);
+        if (prev) {
+          await updateHazard(hazardModal.editingId, { description }, prev, user);
+        }
+      }
+      setHazardModal({ open: false, mode: 'create', initialDescription: '' });
+      cancelDrawing();
+      onHazardsChanged?.();
+    } catch (err) {
+      console.error('Failed to save hazard:', err);
+      alert('Kunne ikke lagre fare.');
+    }
+  }, [hazardModal, user, hazards, cancelDrawing, onHazardsChanged]);
+
+  const handleModalCancel = useCallback(() => {
+    setHazardModal({ open: false, mode: 'create', initialDescription: '' });
+    if (drawingModeRef.current !== 'idle') cancelDrawing();
+  }, [cancelDrawing]);
 
   // Export to GPX function (single waypoint)
   const exportToGPX = (lat: number, lng: number, name: string, sym: string = 'Waypoint') => {
@@ -3951,12 +4426,141 @@ ${waypointElements}
       <div
         id="map"
         ref={mapRef}
+        onContextMenu={(e) => e.preventDefault()}
         style={{
           width: '100%',
           height: '100%',
           minHeight: '400px'
         }}
       />
+
+      {/* Hazard context menu (right-click / long-press) */}
+      {hazardContextMenu && (
+        <HazardContextMenu
+          x={hazardContextMenu.x}
+          y={hazardContextMenu.y}
+          onPick={startDrawingFromContextMenu}
+          onClose={() => setHazardContextMenu(null)}
+        />
+      )}
+
+      {/* Drawing toolbar (visible while drawing) */}
+      {drawingMode === 'polyline' && (
+        <div
+          style={{
+            position: 'absolute',
+            bottom: 16,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 1500,
+            background: '#fff',
+            border: '1px solid #e5e7eb',
+            borderRadius: 10,
+            boxShadow: '0 4px 16px rgba(0,0,0,0.18)',
+            padding: '10px 14px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            fontSize: 14,
+          }}
+        >
+          <span style={{ color: '#dc2626', fontWeight: 600 }}>
+            <i className="fas fa-pen-ruler me-2" />
+            {`Linje: ${drawingPointCount} punkt${drawingPointCount === 1 ? '' : 'er'} — klikk for flere`}
+          </span>
+          <button
+            type="button"
+            onClick={finalizePolylineDraw}
+            disabled={drawingPointCount < 2}
+            className="btn btn-sm btn-success"
+          >
+            <i className="fas fa-check me-1" /> Fullfør
+          </button>
+          <button type="button" onClick={cancelDrawing} className="btn btn-sm btn-outline-secondary">
+            <i className="fas fa-xmark me-1" /> Avbryt
+          </button>
+        </div>
+      )}
+
+      {drawingMode === 'circle' && (
+        <div
+          style={{
+            position: 'absolute',
+            bottom: 16,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 1500,
+            background: '#fff',
+            border: '1px solid #e5e7eb',
+            borderRadius: 10,
+            boxShadow: '0 4px 16px rgba(0,0,0,0.18)',
+            padding: '12px 14px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 8,
+            fontSize: 14,
+            width: 'min(92vw, 380px)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+            <span style={{ color: '#dc2626', fontWeight: 600 }}>
+              <i className="fas fa-circle-notch me-2" />
+              Sirkel — radius: {drawingRadius < 1000 ? `${drawingRadius} m` : `${(drawingRadius / 1000).toFixed(2)} km`}
+            </span>
+            <span style={{ color: '#6b7280', fontSize: 12 }}>Dra fingeren på kartet</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <button
+              type="button"
+              onClick={() => setCircleRadius(drawingRadiusRef.current - 10)}
+              className="btn btn-sm btn-outline-secondary"
+              style={{ minWidth: 44 }}
+              title="−10 m"
+            >−10</button>
+            <input
+              type="range"
+              min={5}
+              max={2000}
+              step={5}
+              value={Math.min(drawingRadius, 2000)}
+              onChange={(e) => setCircleRadius(parseInt(e.target.value, 10))}
+              style={{ flex: 1 }}
+            />
+            <button
+              type="button"
+              onClick={() => setCircleRadius(drawingRadiusRef.current + 10)}
+              className="btn btn-sm btn-outline-secondary"
+              style={{ minWidth: 44 }}
+              title="+10 m"
+            >+10</button>
+            <button
+              type="button"
+              onClick={() => setCircleRadius(drawingRadiusRef.current + 100)}
+              className="btn btn-sm btn-outline-secondary"
+              style={{ minWidth: 56 }}
+              title="+100 m"
+            >+100</button>
+          </div>
+          <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+            <button type="button" onClick={cancelDrawing} className="btn btn-sm btn-outline-secondary">
+              <i className="fas fa-xmark me-1" /> Avbryt
+            </button>
+            <button type="button" onClick={commitCircleFromState} className="btn btn-sm btn-success">
+              <i className="fas fa-check me-1" /> Lagre
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Hazard description modal */}
+      <HazardDescriptionModal
+        open={hazardModal.open}
+        mode={hazardModal.mode}
+        geometryKind={hazardModal.geometryKind}
+        initialDescription={hazardModal.initialDescription}
+        onSave={handleModalSave}
+        onCancel={handleModalCancel}
+      />
     </div>
   );
-} 
+}

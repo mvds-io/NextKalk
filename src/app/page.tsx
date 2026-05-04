@@ -11,9 +11,10 @@ import SkeletonMap from '@/components/SkeletonMap';
 import SkeletonTopBar from '@/components/SkeletonTopBar';
 import SkeletonSidePanel from '@/components/SkeletonSidePanel';
 import { supabase, queryWithRetry } from '@/lib/supabase';
-import { Airport, Landingsplass, KalkInfo, User, CounterData, FilterState } from '@/types';
+import { Airport, Landingsplass, KalkInfo, User, CounterData, FilterState, Hazard } from '@/types';
 import { useTableNames } from '@/contexts/TableNamesContext';
 import { parseEuropeanDecimal } from '@/lib/utils';
+import { loadHazards as loadHazardsFromDb } from '@/lib/hazards';
 
 interface AuthenticatedAppProps {
   user: User;
@@ -28,6 +29,8 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
   const [airports, setAirports] = useState<Airport[]>([]);
   const [landingsplasser, setLandingsplasser] = useState<Landingsplass[]>([]);
   const [kalkMarkers, setKalkMarkers] = useState<KalkInfo[]>([]);
+  const [hazards, setHazards] = useState<Hazard[]>([]);
+  const [focusHazardId, setFocusHazardId] = useState<number | null>(null);
   const [counterData, setCounterData] = useState<CounterData>({ remaining: 0, done: 0, totalTonn: 0, doneTonn: 0 });
   const [filterState, setFilterState] = useState<FilterState>({ county: '', showConnections: false });
   const [counties, setCounties] = useState<string[]>([]);
@@ -155,6 +158,11 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
       setCurrentLoadingStep('Laster kommentar-data...');
       setStepStartTime(Date.now());
       await loadKalkMarkers();
+      setLoadingProgress(80);
+
+      setCurrentLoadingStep('Laster farer...');
+      setStepStartTime(Date.now());
+      await loadHazards();
       setLoadingProgress(85);
 
       setCurrentLoadingStep('Laster fylker...');
@@ -198,6 +206,17 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
       // Cleanup if needed
     };
   }, [initializeApp]);
+
+  // Read ?hazard=<id> on mount to drive the admin "Vis på kart" deep-link.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const raw = params.get('hazard');
+    if (raw) {
+      const n = parseInt(raw, 10);
+      if (!isNaN(n)) setFocusHazardId(n);
+    }
+  }, []);
 
   const loadAppConfig = async () => {
     try {
@@ -402,9 +421,9 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
       );
 
       // Validate data structure
-      const validKalkMarkers = (data || []).filter((kalk: Record<string, unknown>) => 
-        kalk && 
-        typeof kalk.latitude === 'number' && 
+      const validKalkMarkers = (data || []).filter((kalk: Record<string, unknown>) =>
+        kalk &&
+        typeof kalk.latitude === 'number' &&
         typeof kalk.longitude === 'number' &&
         !isNaN(kalk.latitude) &&
         !isNaN(kalk.longitude)
@@ -418,6 +437,16 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
       setLoadingStates(prev => ({ ...prev, kalkMarkers: false }));
     }
   };
+
+  const loadHazards = useCallback(async () => {
+    try {
+      const data = await loadHazardsFromDb();
+      setHazards(data);
+    } catch (error) {
+      console.error('Error loading hazards:', error);
+      setHazards([]);
+    }
+  }, []);
 
   const loadCounties = async () => {
     if (!tableNames) return; // Guard: wait for table names to load
@@ -704,6 +733,8 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
             airports={airports}
             landingsplasser={landingsplasser}
             kalkMarkers={kalkMarkers}
+            hazards={hazards}
+            focusHazardId={focusHazardId}
             filterState={filterState}
             user={user}
             onMarkerSelect={setSelectedMarker}
@@ -713,6 +744,7 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
               loadLandingsplasser();
               loadKalkMarkers();
             }}
+            onHazardsChanged={loadHazards}
             onMapReady={(zoomFn) => setMapZoomFunction(() => zoomFn)}
           />
         </div>
