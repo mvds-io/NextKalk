@@ -5,6 +5,7 @@ import { Airport, Landingsplass, KalkInfo, User, FilterState, Hazard } from '@/t
 import { supabase, getConnectionStatus } from '@/lib/supabase';
 import { useTableNames } from '@/contexts/TableNamesContext';
 import { createHazard, updateHazard, deleteHazard as deleteHazardRow } from '@/lib/hazards';
+import { parseEuropeanDecimal } from '@/lib/utils';
 import HazardContextMenu from './HazardContextMenu';
 import HazardDescriptionModal from './HazardDescriptionModal';
 
@@ -3455,16 +3456,19 @@ ${waypointElements}
       const fillColor = isDone ? '#10b981' : '#3b82f6'; // Green if done, blue if not
       const borderColor = isDone ? '#059669' : '#2563eb';
 
-      // Create small circle marker similar to admin map
+      // Tonnage label (rounded; "—" when unknown)
+      const tonnNum = parseEuropeanDecimal(airport.tonn as unknown as string | number);
+      const tonnLabel = tonnNum > 0 ? Math.round(tonnNum).toString() : '—';
+
+      // Create circular divIcon with tonnage number inside
       try {
-        const marker = L.circleMarker([airport.latitude, airport.longitude], {
-          radius: 4,
-          fillColor: fillColor,
-          color: borderColor,
-          weight: 1,
-          opacity: 0.8,
-          fillOpacity: 0.6
+        const vannIcon = L.divIcon({
+          html: `<div class="vann-marker-inner" style="background:${fillColor};border-color:${borderColor};">${tonnLabel}</div>`,
+          className: 'vann-marker',
+          iconSize: [28, 28],
+          iconAnchor: [14, 14],
         });
+        const marker = L.marker([airport.latitude, airport.longitude], { icon: vannIcon });
 
         const popupContent = createAirportPopupContent(airport);
         marker.bindPopup(popupContent, {

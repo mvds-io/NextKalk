@@ -1858,6 +1858,34 @@ body:not(:has(.min-h-screen)) {
   transition: all 0.2s ease;
 }
 
+/* Vann (water) marker — circular badge showing tonnage */
+.vann-marker {
+  background: transparent;
+  border: none;
+}
+
+.vann-marker .vann-marker-inner {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.vann-marker:hover .vann-marker-inner {
+  transform: scale(1.1);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.35);
+}
+
 /* Hazard badge shown next to vann markers marked as farevann */
 .vann-hazard-badge {
   background: transparent;

@@ -471,19 +471,17 @@ export default function Counter({
         {/* Desktop layout: Original horizontal layout */}
         <div className="d-none d-md-flex counter-container" style={{ alignItems: 'center', justifyContent: 'space-between', gap: '16px', width: '100%', flexWrap: 'wrap' }}>
           <div className="counters d-flex gap-3" style={{ flexShrink: 0 }}>
-            <div className="counter-item">
-              <div className="d-flex align-items-center gap-2 px-2 py-1 rounded-2" style={{ background: '#f8f9fa', border: '1px solid #e9ecef', color: '#495057', fontSize: '0.75rem', fontWeight: 500 }}>
+            <div className="counter-item d-flex align-items-center gap-2 px-2 py-1 rounded-2" style={{ background: '#f8f9fa', border: '1px solid #e9ecef', color: '#495057', fontSize: '0.75rem', fontWeight: 500 }}>
+              <span style={{ color: '#6c757d', textTransform: 'uppercase', fontSize: '0.65rem', letterSpacing: '0.04em' }}>Antall vann:</span>
+              <div className="d-flex align-items-center gap-1" title="Gjenstående">
                 <i className="fas fa-list-check" style={{ fontSize: '0.7rem', color: '#6c757d' }}></i>
-                <span>Gjenstående:</span>
                 <span className="badge bg-primary text-white" style={{ fontSize: '0.65rem', fontWeight: 500 }}>
                   {counterData.remaining}
                 </span>
               </div>
-            </div>
-            <div className="counter-item">
-              <div className="d-flex align-items-center gap-2 px-2 py-1 rounded-2" style={{ background: '#f8f9fa', border: '1px solid #e9ecef', color: '#495057', fontSize: '0.75rem', fontWeight: 500 }}>
+              <div style={{ width: 1, height: 16, background: '#dee2e6' }} />
+              <div className="d-flex align-items-center gap-1" title="Utført">
                 <i className="fas fa-check-circle" style={{ fontSize: '0.7rem', color: '#6c757d' }}></i>
-                <span>Utført:</span>
                 <span className="badge bg-success text-white" style={{ fontSize: '0.65rem', fontWeight: 500 }}>
                   {counterData.done}
                 </span>
