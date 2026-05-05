@@ -2125,6 +2125,9 @@ body:not(:has(.min-h-screen)) {
 
 .main-split-container.fullscreen {
   height: 100vh !important;
+  height: 100dvh !important;
+  max-height: 100vh !important;
+  max-height: 100dvh !important;
 }
 
 /* Admin page and shadcn dialog fixes */

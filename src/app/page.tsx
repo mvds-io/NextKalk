@@ -863,7 +863,7 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
           className="btn btn-danger"
           style={{
             position: 'fixed',
-            top: '20px',
+            bottom: '20px',
             right: '20px',
             zIndex: 1000,
             borderRadius: '8px',
