@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { CounterData, FilterState, User, Airport, Landingsplass } from '@/types';
 import { supabase, completeLogout } from '@/lib/supabase';
@@ -53,6 +53,37 @@ export default function Counter({
   const [showResultModal, setShowResultModal] = useState(false);
   const [selectedSearchResult, setSelectedSearchResult] = useState<Airport | Landingsplass | null>(null);
   const [activeDatabase, setActiveDatabase] = useState<{ year: string; prefix: string } | null>(null);
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const [userMenuPos, setUserMenuPos] = useState<{ top: number; right: number }>({ top: 0, right: 0 });
+  const userMenuRef = useRef<HTMLDivElement | null>(null);
+  const userMenuTriggerEl = useRef<HTMLButtonElement | null>(null);
+
+  const toggleUserMenu = (e: React.MouseEvent<HTMLButtonElement>) => {
+    if (showUserMenu) {
+      setShowUserMenu(false);
+      return;
+    }
+    const trigger = e.currentTarget;
+    userMenuTriggerEl.current = trigger;
+    const rect = trigger.getBoundingClientRect();
+    setUserMenuPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
+    setShowUserMenu(true);
+  };
+
+  useEffect(() => {
+    if (!showUserMenu) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (
+        userMenuRef.current && !userMenuRef.current.contains(target) &&
+        userMenuTriggerEl.current && !userMenuTriggerEl.current.contains(target)
+      ) {
+        setShowUserMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showUserMenu]);
 
   const getUserPermissions = useCallback(async () => {
     if (!user) return {};
@@ -251,41 +282,26 @@ export default function Counter({
   return (
     <>
       <div className="counter" style={{ padding: '8px 12px', background: 'white', borderBottom: '1px solid #dee2e6', width: '100%', position: 'relative' }}>
-        {/* Mobile layout: Stack everything vertically */}
+        {/* Mobile layout: 2 compact rows + overflow menu */}
         <div className="d-block d-md-none">
-          {/* Row 1: Counters */}
-          <div className="d-flex justify-content-center gap-2 mb-2" style={{ flexWrap: 'wrap' }}>
-            <div className="counter-item">
-              <div className="d-flex align-items-center gap-1 px-2 py-1 rounded" style={{ background: '#f8f9fa', border: '1px solid #e9ecef', color: '#495057', fontSize: '0.7rem', fontWeight: 500, minWidth: 0 }}>
-                <i className="fas fa-list-check" style={{ fontSize: '0.6rem', color: '#6c757d', flexShrink: 0 }}></i>
-                <span style={{ whiteSpace: 'nowrap' }}>Gjenstående:</span>
-                <span className="badge bg-primary text-white" style={{ fontSize: '0.6rem', fontWeight: 500, flexShrink: 0 }}>
-                  {counterData.remaining}
-                </span>
+          {/* Row 1: counter pills + Fylke + user/menu */}
+          <div className="d-flex justify-content-between align-items-center mb-2 gap-2" style={{ flexWrap: 'nowrap' }}>
+            <div className="d-flex align-items-center gap-1" style={{ flexWrap: 'nowrap', minWidth: 0 }}>
+              <div className="d-flex align-items-center gap-1 px-2 py-1 rounded" style={{ background: '#f8f9fa', border: '1px solid #e9ecef', color: '#495057', fontSize: '0.7rem', fontWeight: 500, flexShrink: 0 }} title="Gjenstående">
+                <i className="fas fa-list-check" style={{ fontSize: '0.6rem', color: '#6c757d' }}></i>
+                <span className="badge bg-primary text-white" style={{ fontSize: '0.6rem', fontWeight: 500 }}>{counterData.remaining}</span>
               </div>
-            </div>
-            <div className="counter-item">
-              <div className="d-flex align-items-center gap-1 px-2 py-1 rounded" style={{ background: '#f8f9fa', border: '1px solid #e9ecef', color: '#495057', fontSize: '0.7rem', fontWeight: 500, minWidth: 0 }}>
-                <i className="fas fa-check-circle" style={{ fontSize: '0.6rem', color: '#6c757d', flexShrink: 0 }}></i>
-                <span style={{ whiteSpace: 'nowrap' }}>Utført:</span>
-                <span className="badge bg-success text-white" style={{ fontSize: '0.6rem', fontWeight: 500, flexShrink: 0 }}>
-                  {counterData.done}
-                </span>
+              <div className="d-flex align-items-center gap-1 px-2 py-1 rounded" style={{ background: '#f8f9fa', border: '1px solid #e9ecef', color: '#495057', fontSize: '0.7rem', fontWeight: 500, flexShrink: 0 }} title="Utført">
+                <i className="fas fa-check-circle" style={{ fontSize: '0.6rem', color: '#6c757d' }}></i>
+                <span className="badge bg-success text-white" style={{ fontSize: '0.6rem', fontWeight: 500 }}>{counterData.done}</span>
               </div>
-            </div>
-          </div>
-
-          {/* Row 2+3: Fylke filter + Tonnage summary (side-by-side on tablets, stacked on phones) */}
-          <div className="d-flex justify-content-center align-items-center mb-2 gap-2 flex-wrap">
-            <div className="counter-item counter-item--no-grow">
-              <div className="d-flex align-items-center gap-2 px-2 py-1 rounded" style={{ background: '#f8f9fa', border: '1px solid #e9ecef', color: '#495057', fontSize: '0.7rem', fontWeight: 500 }}>
-                <i className="fas fa-map-marker-alt" style={{ fontSize: '0.6rem', color: '#6c757d' }}></i>
-                <span>Fylke:</span>
+              <div className="d-flex align-items-center gap-1 px-2 py-1 rounded" style={{ background: '#f8f9fa', border: '1px solid #e9ecef', color: '#495057', fontSize: '0.7rem', fontWeight: 500, minWidth: 0 }}>
+                <i className="fas fa-map-marker-alt" style={{ fontSize: '0.6rem', color: '#6c757d', flexShrink: 0 }}></i>
                 <select
                   value={filterState.county}
                   onChange={handleCountyChange}
                   className="form-select form-select-sm"
-                  style={{ fontSize: '0.65rem', minWidth: '100px', maxWidth: '140px', border: '1px solid #dee2e6', padding: '0.2rem 0.4rem' }}
+                  style={{ fontSize: '0.65rem', minWidth: 0, maxWidth: '110px', border: 'none', padding: '0 1.25rem 0 0.25rem', background: 'transparent', boxShadow: 'none' }}
                 >
                   <option value="">Alle fylker</option>
                   {counties.map(county => (
@@ -294,24 +310,56 @@ export default function Counter({
                 </select>
               </div>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', padding: '4px 10px', background: '#f8f9fa', borderRadius: '6px', border: '1px solid #e9ecef', minWidth: '180px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '14px', justifyContent: 'center' }}>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
-                  <span style={{ fontSize: '0.6rem', color: '#6c757d', textTransform: 'uppercase', letterSpacing: '0.03em', fontWeight: 500 }}>Totalt</span>
-                  <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#212529' }}>{counterData.totalTonn.toLocaleString('nb-NO', { maximumFractionDigits: 0 })}</span>
-                  <span style={{ fontSize: '0.6rem', color: '#6c757d' }}>t</span>
+
+            {user ? (
+              <div className="d-flex align-items-center gap-1" style={{ flexShrink: 0 }}>
+                <div className="d-flex align-items-center gap-1 px-2 py-1 rounded" style={{ background: 'rgba(255,255,255,0.1)', color: '#6c757d', fontSize: '0.65rem', maxWidth: '90px' }}>
+                  <i className="fas fa-user-circle" style={{ fontSize: '12px', flexShrink: 0 }}></i>
+                  <span className="text-truncate">{userPermissions.userRecord?.display_name || user.email?.split('@')[0]}</span>
+                  {userPermissions.role && (
+                    <span className={`badge ${getRoleBadgeClass(userPermissions.role)}`} style={{ fontSize: '0.55rem', flexShrink: 0 }}>
+                      {userPermissions.role.charAt(0).toUpperCase()}
+                    </span>
+                  )}
                 </div>
-                <div style={{ width: 1, height: 16, background: '#dee2e6' }} />
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
-                  <span style={{ fontSize: '0.6rem', color: '#6c757d', textTransform: 'uppercase', letterSpacing: '0.03em', fontWeight: 500 }}>Fullført</span>
-                  <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#2AAD27' }}>{counterData.doneTonn.toLocaleString('nb-NO', { maximumFractionDigits: 0 })}</span>
-                  <span style={{ fontSize: '0.6rem', color: '#6c757d' }}>t</span>
+                <button
+                  className="btn btn-sm btn-outline-secondary"
+                  style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem', borderColor: '#dee2e6', color: '#6c757d' }}
+                  title="Mer"
+                  onClick={toggleUserMenu}
+                  aria-expanded={showUserMenu}
+                >
+                  <i className="fas fa-ellipsis-v"></i>
+                </button>
+              </div>
+            ) : (
+              <button
+                className="btn btn-primary btn-sm"
+                style={{ fontSize: '0.65rem', padding: '0.3rem 0.6rem', flexShrink: 0 }}
+                onClick={() => setShowLoginModal(true)}
+              >
+                <i className="fas fa-sign-in-alt me-1"></i>Logg inn
+              </button>
+            )}
+          </div>
+
+          {/* Row 2: Tonnage progress + action buttons */}
+          <div className="d-flex align-items-center gap-2" style={{ flexWrap: 'nowrap' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', padding: '4px 8px', background: '#f8f9fa', borderRadius: '6px', border: '1px solid #e9ecef', minWidth: 0, flex: 1 }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '6px' }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px', minWidth: 0 }}>
+                  <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#212529' }}>
+                    {counterData.totalTonn.toLocaleString('nb-NO', { maximumFractionDigits: 0 })}t
+                  </span>
                   {counterData.totalTonn > 0 && (
-                    <span style={{ fontSize: '0.6rem', color: '#6c757d', fontWeight: 500, marginLeft: '2px' }}>
+                    <span style={{ fontSize: '0.6rem', color: '#2AAD27', fontWeight: 600 }}>
                       · {Math.round((counterData.doneTonn / counterData.totalTonn) * 100)}%
                     </span>
                   )}
                 </div>
+                <span style={{ fontSize: '0.6rem', color: '#6c757d', whiteSpace: 'nowrap' }}>
+                  {counterData.doneTonn.toLocaleString('nb-NO', { maximumFractionDigits: 0 })}t fullført
+                </span>
               </div>
               {counterData.totalTonn > 0 && (
                 <div
@@ -333,165 +381,48 @@ export default function Counter({
                 </div>
               )}
             </div>
-          </div>
 
-          {/* Row 4: Search and Connections buttons and user info */}
-          <div className="d-flex justify-content-between align-items-center">
-            <div className="d-flex gap-1">
-              <button 
+            <div className="d-flex gap-1" style={{ flexShrink: 0 }}>
+              <button
                 className="btn btn-outline-primary btn-sm"
-                style={{ 
-                  fontSize: '0.65rem', 
-                  padding: '0.2rem 0.4rem', 
-                  whiteSpace: 'nowrap',
-                  borderColor: '#007bff',
-                  color: '#007bff'
-                }}
+                style={{ fontSize: '0.65rem', padding: '0.2rem 0.5rem', borderColor: '#007bff', color: '#007bff' }}
                 onClick={() => setShowSearchModal(true)}
                 title="Søk i database"
               >
-                <i className="fas fa-search" style={{ fontSize: '0.6rem' }}></i>
+                <i className="fas fa-search"></i>
               </button>
-              <button 
+              <button
                 className={`btn btn-outline-secondary btn-sm ${filterState.showConnections ? 'active' : ''}`}
-              style={{ 
-                fontSize: '0.65rem', 
-                padding: '0.2rem 0.4rem', 
-                whiteSpace: 'nowrap', 
-                borderColor: '#dee2e6',
-                backgroundColor: filterState.showConnections ? '#007bff' : 'transparent',
-                color: filterState.showConnections ? 'white' : '#6c757d',
-                opacity: isLoadingConnections ? 0.7 : 1,
-                cursor: isLoadingConnections ? 'not-allowed' : 'pointer',
-                borderRadius: '4px'
-              }}
-              onClick={handleConnectionsToggle}
-              disabled={isLoadingConnections}
-            >
-              {isLoadingConnections ? (
-                <>
-                  <span className="spinner-border spinner-border-sm me-1" style={{ width: '0.5rem', height: '0.5rem' }}></span>
-                  Laster...
-                </>
-              ) : (
-                <>
-                  <i className="fas fa-project-diagram me-1" style={{ fontSize: '0.6rem' }}></i> 
-                  {filterState.showConnections ? 'Skjul' : 'Vis'} forbindelser
-                </>
-              )}
-            </button>
-            {onHideAll && (
-              <button 
-                className="btn btn-outline-danger btn-sm"
-                style={{ 
-                  fontSize: '0.65rem', 
-                  padding: '0.2rem 0.4rem', 
-                  whiteSpace: 'nowrap',
-                  borderColor: '#dc3545',
-                  color: '#dc3545'
+                style={{
+                  fontSize: '0.65rem',
+                  padding: '0.2rem 0.5rem',
+                  borderColor: '#dee2e6',
+                  backgroundColor: filterState.showConnections ? '#007bff' : 'transparent',
+                  color: filterState.showConnections ? 'white' : '#6c757d',
+                  opacity: isLoadingConnections ? 0.7 : 1,
+                  cursor: isLoadingConnections ? 'not-allowed' : 'pointer',
                 }}
-                onClick={onHideAll}
-                title="Skjul alt for fullskjerm kart"
+                onClick={handleConnectionsToggle}
+                disabled={isLoadingConnections}
+                title={filterState.showConnections ? 'Skjul forbindelser' : 'Vis forbindelser'}
               >
-                <i className="fas fa-expand-arrows-alt" style={{ fontSize: '0.6rem' }}></i>
+                {isLoadingConnections ? (
+                  <span className="spinner-border spinner-border-sm" style={{ width: '0.6rem', height: '0.6rem' }}></span>
+                ) : (
+                  <i className="fas fa-project-diagram"></i>
+                )}
               </button>
-            )}
-            </div>
-
-            {/* User authentication UI - mobile */}
-            {user ? (
-              <div className="user-info-mobile d-flex align-items-center gap-1">
-                {activeDatabase && (
-                  <span
-                    className="badge bg-secondary"
-                    style={{
-                      fontSize: '0.55rem',
-                      padding: '0.25rem 0.4rem',
-                      opacity: 0.7
-                    }}
-                    title={`Active database: ${activeDatabase.year === 'current' ? 'Current (no archive)' : activeDatabase.year}${activeDatabase.prefix ? ` - ${activeDatabase.prefix}` : ''}`}
-                  >
-                    <i className="fas fa-database me-1" style={{ fontSize: '0.5rem' }}></i>
-                    {activeDatabase.year === 'current' ? 'Current' : `${activeDatabase.year}${activeDatabase.prefix ? `-${activeDatabase.prefix}` : ''}`}
-                  </span>
-                )}
-                <div className="user-details d-flex align-items-center gap-1 px-2 py-1 rounded" style={{ background: 'rgba(255,255,255,0.1)', color: '#6c757d', fontSize: '0.65rem' }}>
-                  <i className="fas fa-user-circle" style={{ fontSize: '12px' }}></i>
-                  <span>{userPermissions.userRecord?.display_name || user.email?.split('@')[0]}</span>
-                  {userPermissions.role && (
-                    <span className={`badge ${getRoleBadgeClass(userPermissions.role)}`} style={{ fontSize: '0.55rem', marginLeft: '0.2rem' }}>
-                      {userPermissions.role.charAt(0).toUpperCase()}
-                    </span>
-                  )}
-                </div>
-                <button 
-                  className="btn btn-sm btn-outline-success" 
-                  style={{ 
-                    fontSize: '0.6rem', 
-                    padding: '0.2rem 0.4rem', 
-                    borderColor: '#28a745', 
-                    color: '#28a745',
-                    opacity: isExportingPDF ? 0.7 : 1,
-                    cursor: isExportingPDF ? 'not-allowed' : 'pointer'
-                  }}
-                  title="PDF"
-                  onClick={exportToPDF}
-                  disabled={isExportingPDF}
-                >
-                  {isExportingPDF ? (
-                    <span className="spinner-border spinner-border-sm" style={{ width: '0.5rem', height: '0.5rem' }}></span>
-                  ) : (
-                    <i className="fas fa-file-pdf"></i>
-                  )}
-                </button>
-                {userPermissions.canEditMarkers && (
-                  <button
-                    className="btn btn-sm btn-outline-warning"
-                    style={{ fontSize: '0.6rem', padding: '0.2rem 0.4rem', borderColor: '#f0ad4e', color: '#d48806' }}
-                    title="Vektseddelkontroll"
-                    onClick={() => setShowVektseddelModal(true)}
-                  >
-                    <i className="fas fa-scale-balanced"></i>
-                  </button>
-                )}
-                {userPermissions.canViewLogs && (
-                  <button
-                    className="btn btn-sm btn-outline-info"
-                    style={{ fontSize: '0.6rem', padding: '0.2rem 0.4rem', borderColor: '#17a2b8', color: '#17a2b8' }}
-                    title="Vis brukerlogger"
-                    onClick={showUserLogs}
-                  >
-                    <i className="fas fa-history"></i>
-                  </button>
-                )}
-                {userPermissions.canEditMarkers && (
-                  <Link href="/admin" className="btn btn-sm btn-outline-primary"
-                    style={{ fontSize: '0.6rem', padding: '0.2rem 0.4rem', borderColor: '#007bff', color: '#007bff', textDecoration: 'none' }}
-                    title="Admin Panel"
-                  >
-                    <i className="fas fa-cog"></i>
-                  </Link>
-                )}
+              {onHideAll && (
                 <button
-                  className="btn btn-sm btn-outline-secondary"
-                  style={{ fontSize: '0.6rem', padding: '0.2rem 0.4rem', borderColor: '#dee2e6', color: '#6c757d' }}
-                  title="Logg ut"
-                  onClick={handleLogout}
+                  className="btn btn-outline-danger btn-sm"
+                  style={{ fontSize: '0.65rem', padding: '0.2rem 0.5rem', borderColor: '#dc3545', color: '#dc3545' }}
+                  onClick={onHideAll}
+                  title="Skjul alt for fullskjerm kart"
                 >
-                  <i className="fas fa-sign-out-alt"></i>
+                  <i className="fas fa-expand-arrows-alt"></i>
                 </button>
-              </div>
-            ) : (
-              <div className="user-info-mobile">
-                <button 
-                  className="btn btn-primary btn-sm" 
-                  style={{ fontSize: '0.65rem', padding: '0.3rem 0.6rem' }}
-                  onClick={() => setShowLoginModal(true)}
-                >
-                  <i className="fas fa-sign-in-alt me-1"></i>Logg inn
-                </button>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
 
@@ -646,20 +577,6 @@ export default function Counter({
           {/* User authentication UI - desktop */}
           {user ? (
             <div className="user-info-top d-flex align-items-center gap-2" style={{ flexShrink: 0 }}>
-              {activeDatabase && (
-                <span
-                  className="badge bg-secondary"
-                  style={{
-                    fontSize: '0.65rem',
-                    padding: '0.3rem 0.5rem',
-                    opacity: 0.7
-                  }}
-                  title={`Active database: ${activeDatabase.year === 'current' ? 'Current (no archive)' : activeDatabase.year}${activeDatabase.prefix ? ` - ${activeDatabase.prefix}` : ''}`}
-                >
-                  <i className="fas fa-database me-1" style={{ fontSize: '0.6rem' }}></i>
-                  {activeDatabase.year === 'current' ? 'Current' : `${activeDatabase.year}${activeDatabase.prefix ? `-${activeDatabase.prefix}` : ''}`}
-                </span>
-              )}
               <div className="user-details d-flex align-items-center gap-2 px-2 py-1 rounded-2" style={{ background: 'rgba(255,255,255,0.1)', color: '#6c757d', fontSize: '0.75rem' }}>
                 <i className="fas fa-user-circle" style={{ fontSize: '16px' }}></i>
                 <span>{userPermissions.userRecord?.display_name || user.email?.split('@')[0]}</span>
@@ -669,67 +586,20 @@ export default function Counter({
                   </span>
                 )}
               </div>
-              <button 
-                className="btn btn-sm btn-outline-success pdf-export-btn" 
-                style={{ 
-                  fontSize: '0.7rem', 
-                  padding: '0.2rem 0.5rem', 
-                  borderColor: '#28a745', 
-                  color: '#28a745',
-                  opacity: isExportingPDF ? 0.7 : 1,
-                  cursor: isExportingPDF ? 'not-allowed' : 'pointer'
-                }}
-                title="Eksporter utførte lasteplasser til PDF"
-                onClick={exportToPDF}
-                disabled={isExportingPDF}
-              >
-                {isExportingPDF ? (
-                  <span className="spinner-border spinner-border-sm" style={{ width: '0.6rem', height: '0.6rem' }}></span>
-                ) : (
-                  <i className="fas fa-file-pdf"></i>
-                )}
-              </button>
-              {userPermissions.canEditMarkers && (
-                <button
-                  className="btn btn-sm btn-outline-warning"
-                  style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem', borderColor: '#f0ad4e', color: '#d48806' }}
-                  title="Vektseddelkontroll"
-                  onClick={() => setShowVektseddelModal(true)}
-                >
-                  <i className="fas fa-scale-balanced"></i>
-                </button>
-              )}
-              {userPermissions.canViewLogs && (
-                <button
-                  className="btn btn-sm btn-outline-info logs-btn"
-                  style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem', borderColor: '#17a2b8', color: '#17a2b8' }}
-                  title="Vis brukerlogger"
-                  onClick={showUserLogs}
-                >
-                  <i className="fas fa-history"></i>
-                </button>
-              )}
-              {userPermissions.canEditMarkers && (
-                <Link href="/admin" className="btn btn-sm btn-outline-primary"
-                  style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem', borderColor: '#007bff', color: '#007bff', textDecoration: 'none' }}
-                  title="Admin Panel"
-                >
-                  <i className="fas fa-cog"></i>
-                </Link>
-              )}
               <button
-                className="btn btn-sm btn-outline-secondary logout-btn"
-                style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem', borderColor: '#dee2e6', color: '#6c757d' }}
-                title="Logg ut"
-                onClick={handleLogout}
+                className="btn btn-sm btn-outline-secondary"
+                style={{ fontSize: '0.75rem', padding: '0.25rem 0.55rem', borderColor: '#dee2e6', color: '#6c757d' }}
+                title="Mer"
+                onClick={toggleUserMenu}
+                aria-expanded={showUserMenu}
               >
-                <i className="fas fa-sign-out-alt"></i>
+                <i className="fas fa-ellipsis-v"></i>
               </button>
             </div>
           ) : (
             <div className="user-info-top d-flex align-items-center gap-2" style={{ flexShrink: 0 }}>
-              <button 
-                className="btn btn-primary btn-sm" 
+              <button
+                className="btn btn-primary btn-sm"
                 style={{ fontSize: '0.75rem', padding: '0.4rem 0.8rem' }}
                 onClick={() => setShowLoginModal(true)}
               >
@@ -738,6 +608,65 @@ export default function Counter({
             </div>
           )}
         </div>
+
+        {/* Shared user menu dropdown (mobile + desktop) */}
+        {showUserMenu && user && (
+          <div ref={userMenuRef} style={{ position: 'fixed', top: userMenuPos.top, right: userMenuPos.right, background: 'white', border: '1px solid #dee2e6', borderRadius: '6px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 2000, minWidth: '180px', padding: '4px 0' }}>
+            {activeDatabase && (
+              <div style={{ padding: '6px 12px', fontSize: '0.65rem', color: '#6c757d', borderBottom: '1px solid #f1f3f5' }}>
+                <i className="fas fa-database me-2"></i>
+                {activeDatabase.year === 'current' ? 'Current' : `${activeDatabase.year}${activeDatabase.prefix ? `-${activeDatabase.prefix}` : ''}`}
+              </div>
+            )}
+            <button
+              onClick={() => { exportToPDF(); setShowUserMenu(false); }}
+              disabled={isExportingPDF}
+              style={{ display: 'flex', alignItems: 'center', width: '100%', padding: '8px 12px', fontSize: '0.75rem', background: 'transparent', border: 'none', textAlign: 'left', color: '#212529', cursor: isExportingPDF ? 'not-allowed' : 'pointer', opacity: isExportingPDF ? 0.6 : 1 }}
+            >
+              {isExportingPDF ? (
+                <span className="spinner-border spinner-border-sm me-2" style={{ width: '0.7rem', height: '0.7rem' }}></span>
+              ) : (
+                <i className="fas fa-file-pdf me-2" style={{ color: '#28a745', width: '14px' }}></i>
+              )}
+              PDF eksport
+            </button>
+            {userPermissions.canEditMarkers && (
+              <button
+                onClick={() => { setShowVektseddelModal(true); setShowUserMenu(false); }}
+                style={{ display: 'flex', alignItems: 'center', width: '100%', padding: '8px 12px', fontSize: '0.75rem', background: 'transparent', border: 'none', textAlign: 'left', color: '#212529', cursor: 'pointer' }}
+              >
+                <i className="fas fa-scale-balanced me-2" style={{ color: '#d48806', width: '14px' }}></i>
+                Vektseddel
+              </button>
+            )}
+            {userPermissions.canViewLogs && (
+              <button
+                onClick={() => { showUserLogs(); setShowUserMenu(false); }}
+                style={{ display: 'flex', alignItems: 'center', width: '100%', padding: '8px 12px', fontSize: '0.75rem', background: 'transparent', border: 'none', textAlign: 'left', color: '#212529', cursor: 'pointer' }}
+              >
+                <i className="fas fa-history me-2" style={{ color: '#17a2b8', width: '14px' }}></i>
+                Logger
+              </button>
+            )}
+            {userPermissions.canEditMarkers && (
+              <Link
+                href="/admin"
+                onClick={() => setShowUserMenu(false)}
+                style={{ display: 'flex', alignItems: 'center', width: '100%', padding: '8px 12px', fontSize: '0.75rem', color: '#212529', textDecoration: 'none' }}
+              >
+                <i className="fas fa-cog me-2" style={{ color: '#007bff', width: '14px' }}></i>
+                Admin
+              </Link>
+            )}
+            <button
+              onClick={() => { handleLogout(); setShowUserMenu(false); }}
+              style={{ display: 'flex', alignItems: 'center', width: '100%', padding: '8px 12px', fontSize: '0.75rem', background: 'transparent', border: 'none', textAlign: 'left', color: '#212529', cursor: 'pointer', borderTop: '1px solid #f1f3f5' }}
+            >
+              <i className="fas fa-sign-out-alt me-2" style={{ color: '#6c757d', width: '14px' }}></i>
+              Logg ut
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Login Modal */}
