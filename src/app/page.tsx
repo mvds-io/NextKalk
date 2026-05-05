@@ -32,7 +32,7 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
   const [hazards, setHazards] = useState<Hazard[]>([]);
   const [focusHazardId, setFocusHazardId] = useState<number | null>(null);
   const [counterData, setCounterData] = useState<CounterData>({ remaining: 0, done: 0, totalTonn: 0, doneTonn: 0 });
-  const [filterState, setFilterState] = useState<FilterState>({ county: '', showConnections: false });
+  const [filterState, setFilterState] = useState<FilterState>({ county: [], showConnections: false });
   const [counties, setCounties] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [appConfig, setAppConfig] = useState<{ active_year: string; active_prefix: string } | null>(null);
@@ -494,8 +494,8 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
     let visibleAirports = airports;
     
     // Apply county filter like original
-    if (filterState.county) {
-      visibleAirports = airports.filter(airport => airport.fylke === filterState.county);
+    if (filterState.county.length > 0) {
+      visibleAirports = airports.filter(airport => filterState.county.includes(airport.fylke));
     }
     
     const remaining = visibleAirports.filter(a => !a.done).length;

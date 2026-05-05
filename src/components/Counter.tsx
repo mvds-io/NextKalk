@@ -58,6 +58,11 @@ export default function Counter({
   const userMenuRef = useRef<HTMLDivElement | null>(null);
   const userMenuTriggerEl = useRef<HTMLButtonElement | null>(null);
 
+  const [showCountyMenu, setShowCountyMenu] = useState(false);
+  const [countyMenuPos, setCountyMenuPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+  const countyMenuRef = useRef<HTMLDivElement | null>(null);
+  const countyMenuTriggerEl = useRef<HTMLButtonElement | null>(null);
+
   const toggleUserMenu = (e: React.MouseEvent<HTMLButtonElement>) => {
     if (showUserMenu) {
       setShowUserMenu(false);
@@ -84,6 +89,54 @@ export default function Counter({
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showUserMenu]);
+
+  const toggleCountyMenu = (e: React.MouseEvent<HTMLButtonElement>) => {
+    if (showCountyMenu) {
+      setShowCountyMenu(false);
+      return;
+    }
+    const trigger = e.currentTarget;
+    countyMenuTriggerEl.current = trigger;
+    const rect = trigger.getBoundingClientRect();
+    setCountyMenuPos({ top: rect.bottom + 4, left: rect.left });
+    setShowCountyMenu(true);
+  };
+
+  useEffect(() => {
+    if (!showCountyMenu) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (
+        countyMenuRef.current && !countyMenuRef.current.contains(target) &&
+        countyMenuTriggerEl.current && !countyMenuTriggerEl.current.contains(target)
+      ) {
+        setShowCountyMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showCountyMenu]);
+
+  const toggleCounty = (county: string) => {
+    const next = filterState.county.includes(county)
+      ? filterState.county.filter(c => c !== county)
+      : [...filterState.county, county];
+    onFilterChange({ ...filterState, county: next });
+  };
+
+  const selectAllCounties = () => {
+    onFilterChange({ ...filterState, county: [...counties] });
+  };
+
+  const clearCounties = () => {
+    onFilterChange({ ...filterState, county: [] });
+  };
+
+  const countyLabel =
+    filterState.county.length === 0 ? 'Alle fylker'
+      : filterState.county.length === 1 ? filterState.county[0]
+      : filterState.county.length === counties.length ? 'Alle fylker'
+      : `${filterState.county.length} fylker`;
 
   const getUserPermissions = useCallback(async () => {
     if (!user) return {};
@@ -140,14 +193,6 @@ export default function Counter({
     };
     loadActiveDatabase();
   }, []);
-
-  const handleCountyChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const county = e.target.value;
-    onFilterChange({
-      ...filterState,
-      county
-    });
-  };
 
   const handleConnectionsToggle = async () => {
     if (isLoadingConnections) return; // Prevent multiple clicks while loading
@@ -295,20 +340,17 @@ export default function Counter({
                 <i className="fas fa-check-circle" style={{ fontSize: '0.6rem', color: '#6c757d' }}></i>
                 <span className="badge bg-success text-white" style={{ fontSize: '0.6rem', fontWeight: 500 }}>{counterData.done}</span>
               </div>
-              <div className="d-flex align-items-center gap-1 px-2 py-1 rounded" style={{ background: '#f8f9fa', border: '1px solid #e9ecef', color: '#495057', fontSize: '0.7rem', fontWeight: 500, minWidth: 0 }}>
+              <button
+                type="button"
+                onClick={toggleCountyMenu}
+                aria-expanded={showCountyMenu}
+                className="d-flex align-items-center gap-1 px-2 py-1 rounded"
+                style={{ background: '#f8f9fa', border: '1px solid #e9ecef', color: '#495057', fontSize: '0.7rem', fontWeight: 500, minWidth: 0, cursor: 'pointer' }}
+              >
                 <i className="fas fa-map-marker-alt" style={{ fontSize: '0.6rem', color: '#6c757d', flexShrink: 0 }}></i>
-                <select
-                  value={filterState.county}
-                  onChange={handleCountyChange}
-                  className="form-select form-select-sm"
-                  style={{ fontSize: '0.65rem', minWidth: 0, maxWidth: '110px', border: 'none', padding: '0 1.25rem 0 0.25rem', background: 'transparent', boxShadow: 'none' }}
-                >
-                  <option value="">Alle fylker</option>
-                  {counties.map(county => (
-                    <option key={county} value={county}>{county}</option>
-                  ))}
-                </select>
-              </div>
+                <span className="text-truncate" style={{ maxWidth: '110px' }}>{countyLabel}</span>
+                <i className="fas fa-caret-down" style={{ fontSize: '0.6rem', color: '#6c757d', flexShrink: 0 }}></i>
+              </button>
             </div>
 
             {user ? (
@@ -448,21 +490,18 @@ export default function Counter({
               </div>
             </div>
             <div className="counter-item">
-              <div className="d-flex align-items-center gap-2 px-2 py-1 rounded-2" style={{ background: '#f8f9fa', border: '1px solid #e9ecef', color: '#495057', fontSize: '0.75rem', fontWeight: 500 }}>
+              <button
+                type="button"
+                onClick={toggleCountyMenu}
+                aria-expanded={showCountyMenu}
+                className="d-flex align-items-center gap-2 px-2 py-1 rounded-2"
+                style={{ background: '#f8f9fa', border: '1px solid #e9ecef', color: '#495057', fontSize: '0.75rem', fontWeight: 500, cursor: 'pointer' }}
+              >
                 <i className="fas fa-map-marker-alt" style={{ fontSize: '0.7rem', color: '#6c757d' }}></i>
                 <span>Fylke:</span>
-                <select 
-                  value={filterState.county} 
-                  onChange={handleCountyChange}
-                  className="form-select form-select-sm" 
-                  style={{ fontSize: '0.7rem', minWidth: '120px', maxWidth: '150px', border: '1px solid #dee2e6' }}
-                >
-                  <option value="">Alle fylker</option>
-                  {counties.map(county => (
-                    <option key={county} value={county}>{county}</option>
-                  ))}
-                </select>
-              </div>
+                <span className="text-truncate" style={{ maxWidth: '150px' }}>{countyLabel}</span>
+                <i className="fas fa-caret-down" style={{ fontSize: '0.7rem', color: '#6c757d' }}></i>
+              </button>
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '24px', flex: 1, justifyContent: 'center' }}>
@@ -608,6 +647,47 @@ export default function Counter({
             </div>
           )}
         </div>
+
+        {/* Shared county multi-select dropdown (mobile + desktop) */}
+        {showCountyMenu && (
+          <div ref={countyMenuRef} style={{ position: 'fixed', top: countyMenuPos.top, left: countyMenuPos.left, background: 'white', border: '1px solid #dee2e6', borderRadius: '6px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 2000, minWidth: '180px', maxHeight: '60vh', overflowY: 'auto', padding: '4px 0' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 12px', borderBottom: '1px solid #f1f3f5', gap: '8px' }}>
+              <button
+                type="button"
+                onClick={selectAllCounties}
+                style={{ background: 'transparent', border: 'none', color: '#007bff', fontSize: '0.7rem', fontWeight: 500, padding: 0, cursor: 'pointer' }}
+                disabled={filterState.county.length === counties.length}
+              >
+                Velg alle
+              </button>
+              <button
+                type="button"
+                onClick={clearCounties}
+                style={{ background: 'transparent', border: 'none', color: '#6c757d', fontSize: '0.7rem', fontWeight: 500, padding: 0, cursor: 'pointer' }}
+                disabled={filterState.county.length === 0}
+              >
+                Fjern alle
+              </button>
+            </div>
+            {counties.map(county => {
+              const checked = filterState.county.includes(county);
+              return (
+                <label
+                  key={county}
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 12px', fontSize: '0.75rem', color: '#212529', cursor: 'pointer', userSelect: 'none' }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggleCounty(county)}
+                    style={{ cursor: 'pointer' }}
+                  />
+                  {county}
+                </label>
+              );
+            })}
+          </div>
+        )}
 
         {/* Shared user menu dropdown (mobile + desktop) */}
         {showUserMenu && user && (

@@ -161,7 +161,7 @@ export interface MarkerStyle {
 export type MarkerType = 'airport' | 'landingsplass' | 'kalk' | 'done' | 'user';
 
 export interface FilterState {
-  county: string;
+  county: string[];
   showConnections: boolean;
 }
 

@@ -10,7 +10,7 @@ import { parseEuropeanDecimal } from '@/lib/utils';
 interface ProgressPlanProps {
   landingsplasser: Landingsplass[];
   airports?: Airport[];
-  filterState: { county: string; showConnections: boolean };
+  filterState: { county: string[]; showConnections: boolean };
   user: User | null;
   onDataUpdate?: () => void;
   onMarkerSelect?: (marker: { type: 'airport' | 'landingsplass'; id: number }) => void;
@@ -252,8 +252,8 @@ export default function ProgressPlan({
 
   const sorted = useMemo(() => {
     let list = landingsplasser;
-    if (filterState.county) {
-      list = list.filter((lp) => lp.fylke === filterState.county);
+    if (filterState.county.length > 0) {
+      list = list.filter((lp) => filterState.county.includes(lp.fylke));
     }
     return [...list].sort((a, b) => {
       const ap = a.priority || 999;
@@ -273,7 +273,7 @@ export default function ProgressPlan({
   // Matches the "Totalt i år" counter so the two numbers agree.
   const { totalTonn, doneTonn } = useMemo(() => {
     const list = (airports || []).filter(
-      (a) => !filterState.county || a.fylke === filterState.county
+      (a) => filterState.county.length === 0 || filterState.county.includes(a.fylke)
     );
     let total = 0;
     let doneSum = 0;
@@ -466,7 +466,7 @@ export default function ProgressPlan({
         <div className="text-center py-4 text-muted">
           <i className="fas fa-helicopter-symbol fa-2x mb-2"></i>
           <p>Ingen landingsplasser funnet</p>
-          {filterState.county && <small>Prøv å endre fylkesfilter</small>}
+          {filterState.county.length > 0 && <small>Prøv å endre fylkesfilter</small>}
         </div>
       </div>
     );

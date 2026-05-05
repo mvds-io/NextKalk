@@ -272,8 +272,8 @@ export default function MapContainer({
 
              // Filter landingsplasser based on current filter
        let filteredLandingsplasser = landingsplasser;
-       if (filterState.county && filterState.county !== 'all') {
-         filteredLandingsplasser = landingsplasser.filter(lp => lp.fylke === filterState.county);
+       if (filterState.county.length > 0) {
+         filteredLandingsplasser = landingsplasser.filter(lp => filterState.county.includes(lp.fylke));
        }
 
       const totalMarkers = filteredLandingsplasser.length;
@@ -3334,15 +3334,15 @@ ${waypointElements}
 
   // Memoize filtered data to prevent unnecessary recalculations
   const filteredAirports = useMemo(() => {
-    if (filterState.county) {
-      return airports.filter(airport => airport.fylke === filterState.county);
+    if (filterState.county.length > 0) {
+      return airports.filter(airport => filterState.county.includes(airport.fylke));
     }
     return airports;
   }, [airports, filterState.county]);
 
   const filteredLandingsplasser = useMemo(() => {
-    if (filterState.county) {
-      return landingsplasser.filter(lp => lp.fylke === filterState.county);
+    if (filterState.county.length > 0) {
+      return landingsplasser.filter(lp => filterState.county.includes(lp.fylke));
     }
     return landingsplasser;
   }, [landingsplasser, filterState.county]);
