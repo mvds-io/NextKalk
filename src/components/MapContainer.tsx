@@ -3447,14 +3447,27 @@ ${waypointElements}
     markersLayerRef.current.clearLayers();
     clusterGroupRef.current.clearLayers();
 
+    // Map marker_color names (AwesomeMarker palette used by the picker) to hex pairs
+    const MARKER_COLOR_MAP: Record<string, { fill: string; border: string }> = {
+      red:        { fill: '#CB2B3E', border: '#A0202F' },
+      orange:     { fill: '#FF7F00', border: '#CC6600' },
+      blue:       { fill: '#3b82f6', border: '#2563eb' },
+      purple:     { fill: '#663399', border: '#4D2673' },
+      darkgreen:  { fill: '#006400', border: '#004D00' },
+      cadetblue:  { fill: '#5F9EA0', border: '#4A7B7D' },
+      darkred:    { fill: '#8B0000', border: '#660000' },
+      darkpurple: { fill: '#4B0082', border: '#380063' },
+    };
+
     // Add airport markers
     filteredAirports.forEach(airport => {
       if (!airport.latitude || !airport.longitude) return;
 
-      // Determine color based on done status
+      // User-picked color wins; otherwise fall back to done/not-done defaults
       const isDone = airport.is_done || airport.done;
-      const fillColor = isDone ? '#10b981' : '#3b82f6'; // Green if done, blue if not
-      const borderColor = isDone ? '#059669' : '#2563eb';
+      const customColor = airport.marker_color ? MARKER_COLOR_MAP[airport.marker_color] : null;
+      const fillColor = customColor?.fill ?? (isDone ? '#10b981' : '#3b82f6');
+      const borderColor = customColor?.border ?? (isDone ? '#059669' : '#2563eb');
 
       // Tonnage label (rounded; "—" when unknown)
       const tonnNum = parseEuropeanDecimal(airport.tonn as unknown as string | number);
@@ -3465,8 +3478,8 @@ ${waypointElements}
         const vannIcon = L.divIcon({
           html: `<div class="vann-marker-inner" style="background:${fillColor};border-color:${borderColor};">${tonnLabel}</div>`,
           className: 'vann-marker',
-          iconSize: [28, 28],
-          iconAnchor: [14, 14],
+          iconSize: [22, 22],
+          iconAnchor: [11, 11],
         });
         const marker = L.marker([airport.latitude, airport.longitude], { icon: vannIcon });
 
@@ -3772,14 +3785,14 @@ ${waypointElements}
             <i class="fas fa-palette me-1"></i>Marker farge:
           </div>
           <div class="d-flex flex-wrap gap-1" style="margin-bottom: 0.5rem;">
-            <button class="color-option ${(airport.marker_color || 'red') === 'red' ? 'active' : ''}" style="width: 24px; height: 24px; border: 2px solid ${(airport.marker_color || 'red') === 'red' ? '#333' : '#ccc'}; border-radius: 4px; background: #CB2B3E; cursor: pointer;" onclick="window.handleColorChange && window.handleColorChange(${airport.id}, 'red')"></button>
-            <button class="color-option ${(airport.marker_color || 'red') === 'orange' ? 'active' : ''}" style="width: 24px; height: 24px; border: 2px solid ${(airport.marker_color || 'red') === 'orange' ? '#333' : '#ccc'}; border-radius: 4px; background: #FF7F00; cursor: pointer;" onclick="window.handleColorChange && window.handleColorChange(${airport.id}, 'orange')"></button>
-            <button class="color-option ${(airport.marker_color || 'red') === 'blue' ? 'active' : ''}" style="width: 24px; height: 24px; border: 2px solid ${(airport.marker_color || 'red') === 'blue' ? '#333' : '#ccc'}; border-radius: 4px; background: #2E8B57; cursor: pointer;" onclick="window.handleColorChange && window.handleColorChange(${airport.id}, 'blue')"></button>
-            <button class="color-option ${(airport.marker_color || 'red') === 'purple' ? 'active' : ''}" style="width: 24px; height: 24px; border: 2px solid ${(airport.marker_color || 'red') === 'purple' ? '#333' : '#ccc'}; border-radius: 4px; background: #663399; cursor: pointer;" onclick="window.handleColorChange && window.handleColorChange(${airport.id}, 'purple')"></button>
-            <button class="color-option ${(airport.marker_color || 'red') === 'darkgreen' ? 'active' : ''}" style="width: 24px; height: 24px; border: 2px solid ${(airport.marker_color || 'red') === 'darkgreen' ? '#333' : '#ccc'}; border-radius: 4px; background: #006400; cursor: pointer;" onclick="window.handleColorChange && window.handleColorChange(${airport.id}, 'darkgreen')"></button>
-            <button class="color-option ${(airport.marker_color || 'red') === 'cadetblue' ? 'active' : ''}" style="width: 24px; height: 24px; border: 2px solid ${(airport.marker_color || 'red') === 'cadetblue' ? '#333' : '#ccc'}; border-radius: 4px; background: #5F9EA0; cursor: pointer;" onclick="window.handleColorChange && window.handleColorChange(${airport.id}, 'cadetblue')"></button>
-            <button class="color-option ${(airport.marker_color || 'red') === 'darkred' ? 'active' : ''}" style="width: 24px; height: 24px; border: 2px solid ${(airport.marker_color || 'red') === 'darkred' ? '#333' : '#ccc'}; border-radius: 4px; background: #8B0000; cursor: pointer;" onclick="window.handleColorChange && window.handleColorChange(${airport.id}, 'darkred')"></button>
-            <button class="color-option ${(airport.marker_color || 'red') === 'darkpurple' ? 'active' : ''}" style="width: 24px; height: 24px; border: 2px solid ${(airport.marker_color || 'red') === 'darkpurple' ? '#333' : '#ccc'}; border-radius: 4px; background: #4B0082; cursor: pointer;" onclick="window.handleColorChange && window.handleColorChange(${airport.id}, 'darkpurple')"></button>
+            <button class="color-option ${(airport.marker_color || 'blue') === 'red' ? 'active' : ''}" style="width: 24px; height: 24px; border: 2px solid ${(airport.marker_color || 'blue') === 'red' ? '#333' : '#ccc'}; border-radius: 4px; background: #CB2B3E; cursor: pointer;" onclick="window.handleColorChange && window.handleColorChange(${airport.id}, 'red')"></button>
+            <button class="color-option ${(airport.marker_color || 'blue') === 'orange' ? 'active' : ''}" style="width: 24px; height: 24px; border: 2px solid ${(airport.marker_color || 'blue') === 'orange' ? '#333' : '#ccc'}; border-radius: 4px; background: #FF7F00; cursor: pointer;" onclick="window.handleColorChange && window.handleColorChange(${airport.id}, 'orange')"></button>
+            <button class="color-option ${(airport.marker_color || 'blue') === 'blue' ? 'active' : ''}" style="width: 24px; height: 24px; border: 2px solid ${(airport.marker_color || 'blue') === 'blue' ? '#333' : '#ccc'}; border-radius: 4px; background: #3b82f6; cursor: pointer;" onclick="window.handleColorChange && window.handleColorChange(${airport.id}, 'blue')"></button>
+            <button class="color-option ${(airport.marker_color || 'blue') === 'purple' ? 'active' : ''}" style="width: 24px; height: 24px; border: 2px solid ${(airport.marker_color || 'blue') === 'purple' ? '#333' : '#ccc'}; border-radius: 4px; background: #663399; cursor: pointer;" onclick="window.handleColorChange && window.handleColorChange(${airport.id}, 'purple')"></button>
+            <button class="color-option ${(airport.marker_color || 'blue') === 'darkgreen' ? 'active' : ''}" style="width: 24px; height: 24px; border: 2px solid ${(airport.marker_color || 'blue') === 'darkgreen' ? '#333' : '#ccc'}; border-radius: 4px; background: #006400; cursor: pointer;" onclick="window.handleColorChange && window.handleColorChange(${airport.id}, 'darkgreen')"></button>
+            <button class="color-option ${(airport.marker_color || 'blue') === 'cadetblue' ? 'active' : ''}" style="width: 24px; height: 24px; border: 2px solid ${(airport.marker_color || 'blue') === 'cadetblue' ? '#333' : '#ccc'}; border-radius: 4px; background: #5F9EA0; cursor: pointer;" onclick="window.handleColorChange && window.handleColorChange(${airport.id}, 'cadetblue')"></button>
+            <button class="color-option ${(airport.marker_color || 'blue') === 'darkred' ? 'active' : ''}" style="width: 24px; height: 24px; border: 2px solid ${(airport.marker_color || 'blue') === 'darkred' ? '#333' : '#ccc'}; border-radius: 4px; background: #8B0000; cursor: pointer;" onclick="window.handleColorChange && window.handleColorChange(${airport.id}, 'darkred')"></button>
+            <button class="color-option ${(airport.marker_color || 'blue') === 'darkpurple' ? 'active' : ''}" style="width: 24px; height: 24px; border: 2px solid ${(airport.marker_color || 'blue') === 'darkpurple' ? '#333' : '#ccc'}; border-radius: 4px; background: #4B0082; cursor: pointer;" onclick="window.handleColorChange && window.handleColorChange(${airport.id}, 'darkpurple')"></button>
           </div>
           <div class="text-muted" style="font-size: 0.65rem;">
             <i class="fas fa-info-circle me-1"></i>Klikk på en farge for å endre markørens farge

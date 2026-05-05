@@ -299,7 +299,7 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
         // Use correct field names from original
         done: airport.is_done || false, // Map is_done to done for React compatibility
         priority: airport.priority || 999,
-        marker_color: airport.marker_color || 'red'
+        marker_color: airport.marker_color || 'blue'
       }));
 
       setAirports(validAirports);

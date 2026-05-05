@@ -1562,16 +1562,16 @@ ${waypointsXml}
               <Section title="Markør farge" icon="palette">
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                   {[
+                    { key: 'blue', hex: '#3b82f6', label: 'Blå' },
                     { key: 'red', hex: '#CB2B3E', label: 'Rød' },
                     { key: 'orange', hex: '#FF7F00', label: 'Oransje' },
-                    { key: 'blue', hex: '#2E8B57', label: 'Grønn' },
                     { key: 'purple', hex: '#663399', label: 'Lilla' },
                     { key: 'darkgreen', hex: '#006400', label: 'Mørkegrønn' },
                     { key: 'cadetblue', hex: '#5F9EA0', label: 'Cadetblå' },
                     { key: 'darkred', hex: '#8B0000', label: 'Mørkerød' },
                     { key: 'darkpurple', hex: '#4B0082', label: 'Mørkelilla' },
                   ].map(({ key, hex, label }) => {
-                    const isActive = ((markerData as any).marker_color || 'red') === key;
+                    const isActive = ((markerData as any).marker_color || 'blue') === key;
                     return (
                       <button
                         key={key}

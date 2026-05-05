@@ -26,6 +26,17 @@ import { ChangelogTab } from '@/components/admin/ChangelogTab';
 import HazardsTab from '@/components/admin/HazardsTab';
 import { ArrowLeft, Plus, MapPin, Trash2, Edit, CheckCircle, XCircle, Database, RefreshCw, AlertTriangle, Info } from 'lucide-react';
 
+const MARKER_COLOR_HEX: Record<string, string> = {
+  blue: '#3b82f6',
+  red: '#CB2B3E',
+  orange: '#FF7F00',
+  purple: '#663399',
+  darkgreen: '#006400',
+  cadetblue: '#5F9EA0',
+  darkred: '#8B0000',
+  darkpurple: '#4B0082',
+};
+
 interface Landingsplass {
   id: number;
   lp: string;
@@ -473,7 +484,7 @@ export default function AdminPage() {
       longitude: null,
       fylke: '',
       tonn: '',
-      marker_color: 'red',
+      marker_color: 'blue',
       kontaktperson: '',
       forening: '',
       phone: null,
@@ -604,7 +615,7 @@ export default function AdminPage() {
             longitude: currentVann.longitude,
             fylke: currentVann.fylke,
             tonn: currentVann.tonn,
-            marker_color: currentVann.marker_color || 'red',
+            marker_color: currentVann.marker_color || 'blue',
             kontaktperson: currentVann.kontaktperson,
             forening: currentVann.forening,
             phone: currentVann.phone,
@@ -1286,8 +1297,8 @@ export default function AdminPage() {
                       <TableCell>
                         <div
                           className="w-4 h-4 rounded-full border border-gray-200 shadow-sm"
-                          style={{ backgroundColor: vann.marker_color || 'red' }}
-                          title={vann.marker_color || 'red'}
+                          style={{ backgroundColor: MARKER_COLOR_HEX[vann.marker_color || 'blue'] || MARKER_COLOR_HEX.blue }}
+                          title={vann.marker_color || 'blue'}
                         />
                       </TableCell>
                       <TableCell>
@@ -1860,17 +1871,21 @@ export default function AdminPage() {
             <div className="space-y-2">
               <Label htmlFor="marker_color">Marker Color</Label>
               <Select
-                value={currentVann?.marker_color || 'red'}
+                value={currentVann?.marker_color || 'blue'}
                 onValueChange={(value) => setCurrentVann({ ...currentVann, marker_color: value })}
               >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="red">Red</SelectItem>
-                  <SelectItem value="green">Green</SelectItem>
-                  <SelectItem value="blue">Blue</SelectItem>
-                  <SelectItem value="orange">Orange</SelectItem>
+                  <SelectItem value="blue">Blå</SelectItem>
+                  <SelectItem value="red">Rød</SelectItem>
+                  <SelectItem value="orange">Oransje</SelectItem>
+                  <SelectItem value="purple">Lilla</SelectItem>
+                  <SelectItem value="darkgreen">Mørkegrønn</SelectItem>
+                  <SelectItem value="cadetblue">Cadetblå</SelectItem>
+                  <SelectItem value="darkred">Mørkerød</SelectItem>
+                  <SelectItem value="darkpurple">Mørkelilla</SelectItem>
                 </SelectContent>
               </Select>
             </div>
