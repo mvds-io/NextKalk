@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
-import { useTableNames } from '@/contexts/TableNamesContext';
 import { exportVektseddelToPDF } from '@/lib/pdfExport';
 import type { User, VektseddelEntry, Landingsplass } from '@/types';
 
@@ -10,6 +9,7 @@ interface VektseddelModalProps {
   isOpen: boolean;
   onClose: () => void;
   user: User | null;
+  landingsplasser: Landingsplass[];
 }
 
 type DraftEntry = {
@@ -118,12 +118,10 @@ function draftFromEntry(e: VektseddelEntry): DraftEntry {
   };
 }
 
-export default function VektseddelModal({ isOpen, onClose, user }: VektseddelModalProps) {
-  const { tableNames } = useTableNames();
+export default function VektseddelModal({ isOpen, onClose, user, landingsplasser }: VektseddelModalProps) {
   const canEdit = !!user?.can_edit_markers;
 
   const [entries, setEntries] = useState<VektseddelEntry[]>([]);
-  const [landingsplasser, setLandingsplasser] = useState<Landingsplass[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -165,20 +163,6 @@ export default function VektseddelModal({ isOpen, onClose, user }: VektseddelMod
       setLoading(false);
     }
   }, []);
-
-  const loadLandingsplasser = useCallback(async () => {
-    if (!tableNames) return;
-    try {
-      const { data, error } = await supabase
-        .from(tableNames.vass_lasteplass)
-        .select('id, lp, kode, tonn_lp, latitude, longitude')
-        .order('kode', { ascending: true });
-      if (error) throw error;
-      setLandingsplasser((data as Landingsplass[]) || []);
-    } catch (e) {
-      console.error('Error loading landingsplasser:', e);
-    }
-  }, [tableNames]);
 
   const loadImageCounts = useCallback(async () => {
     try {
@@ -226,9 +210,8 @@ export default function VektseddelModal({ isOpen, onClose, user }: VektseddelMod
   useEffect(() => {
     if (!isOpen) return;
     loadEntries();
-    loadLandingsplasser();
     loadImageCounts();
-  }, [isOpen, loadEntries, loadLandingsplasser, loadImageCounts]);
+  }, [isOpen, loadEntries, loadImageCounts]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -282,7 +265,7 @@ export default function VektseddelModal({ isOpen, onClose, user }: VektseddelMod
       ...d,
       lp_id: lp.id,
       lp_nr: kodeNumber || lp.lp || '',
-      lp_tonn: lp.tonn_lp !== null && lp.tonn_lp !== undefined ? String(lp.tonn_lp) : d.lp_tonn,
+      lp_tonn: lp.calculated_tonn !== null && lp.calculated_tonn !== undefined ? fmt(lp.calculated_tonn) : d.lp_tonn,
       prosjekt: prosjektPrefix || d.prosjekt,
     }));
     setLpSearch(lp.kode ? `${lp.kode} — LP ${lp.lp || ''}` : `LP ${lp.lp || ''}`);
@@ -671,9 +654,9 @@ export default function VektseddelModal({ isOpen, onClose, user }: VektseddelMod
                           >
                             <strong>{lp.kode || '—'}</strong>{' '}
                             <span className="text-muted">LP {lp.lp || '—'}</span>
-                            {lp.tonn_lp ? (
+                            {lp.calculated_tonn !== null && lp.calculated_tonn !== undefined ? (
                               <span className="text-muted ms-2" style={{ fontSize: '0.7rem' }}>
-                                ({lp.tonn_lp} tonn)
+                                ({fmt(lp.calculated_tonn)} tonn)
                               </span>
                             ) : null}
                           </div>

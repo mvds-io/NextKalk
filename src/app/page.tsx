@@ -714,6 +714,7 @@ function AuthenticatedApp({ user, onLogout }: AuthenticatedAppProps) {
             isLoading={loadingStates.initialLoad}
             onHideAll={toggleFullScreen}
             onZoomToLocation={mapZoomFunction}
+            landingsplasser={landingsplasser}
           />
         </div>
       )}

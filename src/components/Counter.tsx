@@ -23,18 +23,20 @@ interface CounterProps {
   isLoading?: boolean;
   onHideAll?: () => void;
   onZoomToLocation?: ((lat: number, lng: number, zoom?: number) => void) | null;
+  landingsplasser: Landingsplass[];
 }
 
-export default function Counter({ 
-  counterData, 
-  counties, 
-  filterState, 
-  onFilterChange, 
-  user, 
+export default function Counter({
+  counterData,
+  counties,
+  filterState,
+  onFilterChange,
+  user,
   onUserUpdate,
   isLoading = false,
   onHideAll,
-  onZoomToLocation
+  onZoomToLocation,
+  landingsplasser
 }: CounterProps) {
   
   const [isLoadingConnections, setIsLoadingConnections] = useState(false);
@@ -856,6 +858,7 @@ export default function Counter({
         isOpen={showVektseddelModal}
         onClose={() => setShowVektseddelModal(false)}
         user={user ?? null}
+        landingsplasser={landingsplasser}
       />
 
       {/* Search Modal */}
