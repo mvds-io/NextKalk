@@ -1061,8 +1061,20 @@ export default function VektseddelModal({ isOpen, onClose, user, landingsplasser
                       </td>
                     </tr>
                   )}
-                  {!loading &&
-                    filteredEntries.map((e, i) => {
+                  {!loading && (() => {
+                    const rowColorIndex = new Map<number, 0 | 1>();
+                    {
+                      let group = -1;
+                      let prevGroupNum = '';
+                      filteredEntries.forEach((entry, idx) => {
+                        const n = (entry.vektseddel_nr || '').trim();
+                        if (!n) return;
+                        if (n !== prevGroupNum) group += 1;
+                        rowColorIndex.set(idx, (group % 2) as 0 | 1);
+                        prevGroupNum = n;
+                      });
+                    }
+                    return filteredEntries.map((e, i) => {
                       const num = (e.vektseddel_nr || '').trim();
                       const prevNum = i > 0 ? (filteredEntries[i - 1].vektseddel_nr || '').trim() : '';
                       const nextNum =
@@ -1072,6 +1084,15 @@ export default function VektseddelModal({ isOpen, onClose, user, landingsplasser
                       const sameAsPrev = !!num && num === prevNum;
                       const sameAsNext = !!num && num === nextNum;
                       const grouped = sameAsPrev || sameAsNext;
+                      const groupColor = rowColorIndex.get(i);
+                      const groupBg =
+                        editingId === e.id
+                          ? undefined
+                          : groupColor === 0
+                            ? 'rgba(13, 110, 253, 0.14)'
+                            : groupColor === 1
+                              ? 'rgba(40, 167, 69, 0.14)'
+                              : undefined;
                       const handleRowClick = () => {
                         if (editingId === e.id) return;
                         setDraft((d) => ({
@@ -1087,7 +1108,10 @@ export default function VektseddelModal({ isOpen, onClose, user, landingsplasser
                       <tr
                         key={e.id}
                         className={editingId === e.id ? 'table-warning' : ''}
-                        style={{ cursor: editingId === e.id ? 'default' : 'pointer' }}
+                        style={{
+                          cursor: editingId === e.id ? 'default' : 'pointer',
+                          ...(groupBg ? ({ ['--bs-table-bg' as string]: groupBg } as React.CSSProperties) : {}),
+                        }}
                         onClick={handleRowClick}
                       >
                         <td style={{ width: '14px', padding: 0, position: 'relative' }}>
@@ -1179,7 +1203,8 @@ export default function VektseddelModal({ isOpen, onClose, user, landingsplasser
                         )}
                       </tr>
                       );
-                    })}
+                    });
+                  })()}
                 </tbody>
               </table>
             </div>
