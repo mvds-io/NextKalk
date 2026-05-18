@@ -3463,20 +3463,21 @@ ${waypointElements}
     filteredAirports.forEach(airport => {
       if (!airport.latitude || !airport.longitude) return;
 
-      // User-picked color wins; otherwise fall back to done/not-done defaults
+      // Done state wins (green + check); otherwise user-picked color, then default blue
       const isDone = airport.is_done || airport.done;
       const customColor = airport.marker_color ? MARKER_COLOR_MAP[airport.marker_color] : null;
-      const fillColor = customColor?.fill ?? (isDone ? '#10b981' : '#3b82f6');
-      const borderColor = customColor?.border ?? (isDone ? '#059669' : '#2563eb');
+      const fillColor = isDone ? '#10b981' : (customColor?.fill ?? '#3b82f6');
+      const borderColor = isDone ? '#059669' : (customColor?.border ?? '#2563eb');
 
       // Tonnage label (rounded; "—" when unknown)
       const tonnNum = parseEuropeanDecimal(airport.tonn as unknown as string | number);
       const tonnLabel = tonnNum > 0 ? Math.round(tonnNum).toString() : '—';
+      const innerContent = isDone ? '<i class="fa fa-check" aria-hidden="true"></i>' : tonnLabel;
 
-      // Create circular divIcon with tonnage number inside
+      // Create circular divIcon with tonnage number (or check when done) inside
       try {
         const vannIcon = L.divIcon({
-          html: `<div class="vann-marker-inner" style="background:${fillColor};border-color:${borderColor};">${tonnLabel}</div>`,
+          html: `<div class="vann-marker-inner" style="background:${fillColor};border-color:${borderColor};">${innerContent}</div>`,
           className: 'vann-marker',
           iconSize: [22, 22],
           iconAnchor: [11, 11],

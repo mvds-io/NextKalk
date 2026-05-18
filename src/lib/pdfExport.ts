@@ -49,7 +49,7 @@ export async function exportCompletedLandingsplassToPDF(): Promise<PDFExportResu
       .select('*')
       .eq('is_done', true)
       .eq('is_active', true)
-      .order('completed_at', { ascending: false });
+      .order('completed_at', { ascending: true });
 
     if (error) {
       throw new Error(`Database error: ${error.message}`);
